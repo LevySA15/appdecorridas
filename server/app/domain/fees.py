@@ -44,6 +44,7 @@ class RiderAccount:
     completed_rides: int = 0
     entry_paid: bool = False
     cash_debt_cents: int = 0
+    debt_reserved_cents: int = 0  # parte da dívida já "prometida" a cobranças Pix ainda não pagas
 
 
 def offer_block_reason(acc: RiderAccount, cfg: FeeConfig = _DEFAULT) -> str | None:
@@ -60,10 +61,21 @@ def can_receive_cash_offers(acc: RiderAccount, cfg: FeeConfig = _DEFAULT) -> boo
     return can_receive_offers(acc, cfg) and acc.cash_debt_cents < cfg.cash_debt_limit_cents
 
 
-def register_completed_ride(acc: RiderAccount, method: PaymentMethod, fee_cents: int) -> None:
-    """Conta a corrida concluída; se foi em dinheiro, a taxa vira dívida do motoqueiro."""
+def register_completed_ride(
+    acc: RiderAccount,
+    method: PaymentMethod,
+    fee_cents: int,
+    fee_collected_by_split: bool | None = None,
+) -> None:
+    """Conta a corrida concluída.
+
+    Se a taxa não foi cobrada pela divisão do pagamento, ela vira dívida do motoqueiro.
+    Corrida Pix pré-paga sempre teve a taxa cobrada pela divisão. Corrida "dinheiro" só teve
+    se o passageiro pagou pelo QR do fim (`fee_collected_by_split=True`), não em dinheiro vivo.
+    """
     acc.completed_rides += 1
-    if method is PaymentMethod.CASH:
+    collected = (method is PaymentMethod.PIX) if fee_collected_by_split is None else fee_collected_by_split
+    if not collected:
         acc.cash_debt_cents += fee_cents
 
 

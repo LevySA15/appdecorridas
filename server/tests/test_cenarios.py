@@ -8,7 +8,7 @@ from app.domain.fees import (
     register_completed_ride,
 )
 from app.domain.ledger import Ledger
-from app.domain.payments import ProcessedEvents, compute_split, settle_pix_ride
+from app.domain.payments import ProcessedEvents, compute_split, confirm_charge_debt, reserve_pix_split
 from app.domain.pricing import final_price_cents, smooth_factor, target_factor
 from app.domain.rides import (
     Ride,
@@ -47,11 +47,12 @@ def test_corrida_pix_completa_fecha_as_contas():
     accept(ride, best.rider_id, now=10, rider_busy=False)
 
     provider = FakePaymentProvider()
-    split = settle_pix_ride(acc, price, fee)
+    split = reserve_pix_split(acc, price, fee)
     charge = provider.create_pix_charge(ride.ride_id, best.rider_id, price, split)
     event = provider.mark_paid(charge.charge_id)
     events = ProcessedEvents()
     assert events.first_time(event["event_id"]) is True
+    confirm_charge_debt(acc, charge)
     confirm_pix_paid(ride)
 
     ledger = Ledger()
@@ -82,10 +83,15 @@ def test_corrida_em_dinheiro_gera_divida_que_a_proxima_corrida_pix_abate():
     assert acc.cash_debt_cents == 100
 
     price = 700
-    split = settle_pix_ride(acc, price, fee_for_ride(2))
+    split = reserve_pix_split(acc, price, fee_for_ride(2))
     assert split.debt_paid_cents == 100
     assert split.rider_cents == 500
     assert split.company_cents == 200
+    assert acc.cash_debt_cents == 100  # a divida so cai quando o Pix for pago
+    provider = FakePaymentProvider()
+    charge = provider.create_pix_charge("ride-2", "rider-1", price, split)
+    provider.mark_paid(charge.charge_id)
+    confirm_charge_debt(acc, charge)
     assert acc.cash_debt_cents == 0
 
     ledger = Ledger()

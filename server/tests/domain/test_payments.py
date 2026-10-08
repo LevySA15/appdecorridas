@@ -2,7 +2,16 @@ import pytest
 
 from app.adapters.fake_payments import FakePaymentProvider
 from app.domain.fees import RiderAccount
-from app.domain.payments import ProcessedEvents, Split, compute_split, settle_pix_ride
+from app.domain.payments import (
+    DebtState,
+    ProcessedEvents,
+    Split,
+    compute_split,
+    confirm_charge_debt,
+    release_charge_debt,
+    reserve_pix_split,
+    restore_charge_debt,
+)
 
 
 def test_divisao_sem_divida():
@@ -42,11 +51,79 @@ def test_divisao_soma_sempre_o_preco():
         assert s.rider_cents + s.company_cents == 950
 
 
-def test_settle_pix_ride_abate_a_divida_da_conta():
+def _charge_com_reserva(acc: RiderAccount, price: int = 700, fee: int = 100):
+    split = reserve_pix_split(acc, price, fee)
+    return FakePaymentProvider().create_pix_charge("ride-1", acc.rider_id, price, split)
+
+
+def test_reservar_a_divisao_nao_mexe_na_divida_ainda():
     acc = RiderAccount("r1", cash_debt_cents=1000)
-    split = settle_pix_ride(acc, 700, 100)
+    split = reserve_pix_split(acc, 700, 100)
     assert split.debt_paid_cents == 300
+    assert acc.cash_debt_cents == 1000
+    assert acc.debt_reserved_cents == 300
+
+
+def test_duas_reservas_juntas_nunca_passam_da_divida():
+    acc = RiderAccount("r1", cash_debt_cents=400)
+    first = reserve_pix_split(acc, 700, 100)
+    second = reserve_pix_split(acc, 700, 100)
+    assert first.debt_paid_cents == 300
+    assert second.debt_paid_cents == 100
+    assert acc.debt_reserved_cents == 400
+
+
+def test_cobranca_nova_comeca_com_a_divida_reservada():
+    acc = RiderAccount("r1", cash_debt_cents=1000)
+    assert _charge_com_reserva(acc).debt_state is DebtState.RESERVED
+
+
+def test_aviso_de_pago_abate_a_divida_uma_vez_so():
+    # Review final, item 6: aviso repetido nao pode abater duas vezes.
+    acc = RiderAccount("r1", cash_debt_cents=1000)
+    charge = _charge_com_reserva(acc)
+    confirm_charge_debt(acc, charge)
+    confirm_charge_debt(acc, charge)
     assert acc.cash_debt_cents == 700
+    assert acc.debt_reserved_cents == 0
+    assert charge.debt_state is DebtState.APPLIED
+
+
+def test_pix_que_vence_sem_pagar_libera_a_reserva_e_a_divida_fica_igual():
+    # Review final, item 1 (critico): Pix nunca pago nao pode perdoar a divida.
+    acc = RiderAccount("r1", cash_debt_cents=1000)
+    charge = _charge_com_reserva(acc)
+    release_charge_debt(acc, charge)
+    release_charge_debt(acc, charge)
+    assert acc.cash_debt_cents == 1000
+    assert acc.debt_reserved_cents == 0
+    assert charge.debt_state is DebtState.RELEASED
+
+
+def test_estorno_de_pix_pago_restaura_a_divida():
+    # Review final, item 1 (critico): estorno nao pode perdoar a divida.
+    acc = RiderAccount("r1", cash_debt_cents=1000)
+    charge = _charge_com_reserva(acc)
+    confirm_charge_debt(acc, charge)
+    restore_charge_debt(acc, charge)
+    restore_charge_debt(acc, charge)
+    assert acc.cash_debt_cents == 1000
+    assert charge.debt_state is DebtState.RESTORED
+
+
+def test_ordem_errada_das_etapas_da_divida_e_recusada():
+    acc = RiderAccount("r1", cash_debt_cents=1000)
+    charge = _charge_com_reserva(acc)
+    with pytest.raises(ValueError, match="ainda não foi abatida"):
+        restore_charge_debt(acc, charge)
+    confirm_charge_debt(acc, charge)
+    with pytest.raises(ValueError, match="já foi paga"):
+        release_charge_debt(acc, charge)
+    other_acc = RiderAccount("r2", cash_debt_cents=1000)
+    other = _charge_com_reserva(other_acc)
+    release_charge_debt(other_acc, other)
+    with pytest.raises(ValueError, match="desfeita"):
+        confirm_charge_debt(other_acc, other)
 
 
 def test_evento_repetido_so_vale_uma_vez():

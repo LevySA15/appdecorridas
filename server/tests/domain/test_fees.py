@@ -80,6 +80,14 @@ def test_corrida_em_dinheiro_vira_divida_e_pix_nao():
     assert acc.completed_rides == 2
 
 
+def test_corrida_em_dinheiro_paga_pelo_qr_do_fim_nao_vira_divida():
+    # Review final, item 7: se o QR do fim ja dividiu o pagamento, a taxa ja foi cobrada.
+    acc = RiderAccount("r1")
+    register_completed_ride(acc, PaymentMethod.CASH, 100, fee_collected_by_split=True)
+    assert acc.cash_debt_cents == 0
+    assert acc.completed_rides == 1
+
+
 def test_limite_de_divida_bloqueia_so_corridas_em_dinheiro():
     acc = RiderAccount("r1", cash_debt_cents=999)
     assert can_receive_cash_offers(acc) is True
