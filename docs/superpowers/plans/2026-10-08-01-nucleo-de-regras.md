@@ -2502,3 +2502,18 @@ git add tests/test_cenarios.py && git commit -m "test: cenários de ponta a pont
 3. Padrões provisórios: compensação de cancelamento de R$ 2,00, limite de dívida de R$ 10,00, faixas de taxa 100/90/80 centavos, espera máxima de 5 minutos na chegada.
 
 **Varredura de lacunas e nomes:** nenhum passo tem "a definir", "tratar erros depois" ou "similar à tarefa N". Os nomes usados nas tarefas seguintes (`PaymentMethod`, `RiderAccount`, `Split`, `compute_split`, `settle_pix_ride`, `Ledger`, `Ride`, `RideState`, `RiderStatus`, `Candidate`, `PositionSample`, `SafetyResult`, `StraightLineEta`, `FakePaymentProvider`) são os mesmos definidos nas tarefas que os produzem.
+
+---
+
+## Correções feitas depois da revisão final (2026-10-08)
+
+Um revisor independente leu a branch inteira e achou falhas que o plano original não previa. Elas foram corrigidas com teste que falhava antes (RED→GREEN). Onde o texto das tarefas acima diverge, **vale o código**:
+
+1. **Dívida de dinheiro (crítico).** `settle_pix_ride` abatia a dívida ao criar a cobrança, e ela nunca voltava se o Pix vencia ou era devolvido. Agora há duas fases: `reserve_pix_split` (reserva, sem mexer na dívida), depois `confirm_charge_debt` (Pix pago), `release_charge_debt` (venceu ou cancelou antes de pagar) e `restore_charge_debt` (Pix pago devolvido). Cada passo é idempotente por cobrança (`PixCharge.debt_state`). `RiderAccount` ganhou `debt_reserved_cents`.
+2. **Livro-caixa por cobrança.** `post_ride_payment(ride_id, ...)` virou `post_charge_payment(charge_id, ...)` e `post_refund(charge_id)`. Uma corrida que troca de moto pode ter uma cobrança devolvida e outra paga.
+3. **Cancelamentos avisam sobre estorno.** `cancel` e `cancel_after_arrival_timeout` devolvem `CancelResult(compensation_cents, refund_needed)`. Novo `on_pix_paid(ride)` trata aviso de Pix atrasado. `cancel_unpaid_pix` recusa Pix já pago e corrida que não é Pix.
+4. **GPS.** Retomada de sinal ou primeira amostra errada não conta mais como suspeita de localização falsa: só "picos isolados" que voltam à trilha contam.
+5. **Calote do passageiro** não pode ser denunciado duas vezes nem confirmado depois de denunciado (`Ride.non_payment_reported`).
+6. **Corrida "dinheiro" paga pelo QR do fim** não gera dívida de taxa: `register_completed_ride(..., fee_collected_by_split=True)`.
+
+Itens menores adiados estão no livro de execução e no resumo entregue ao Levy.

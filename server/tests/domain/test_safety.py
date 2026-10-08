@@ -74,20 +74,41 @@ def test_retomada_de_sinal_em_outro_lugar_volta_a_ser_aceita():
     # Review Focus 4: depois de 3 saltos seguidos o sistema aceita a nova posição.
     samples = walk(3) + [PositionSample(pt(200, 30_000), 30 + i * 10) for i in range(4)]
     good, jumps = clean_samples(samples)
-    assert jumps == 3
+    assert jumps == 0  # retomada de sinal não é pico isolado
     assert len(good) == 5
     assert good[-1].t == 60
+    assert evaluate(samples, ROUTE).suspected_mock_location is False
 
 
 def test_primeira_amostra_errada_nao_trava_o_sistema():
     # Review Focus 4: a primeira amostra veio de longe; as seguintes, corretas, não podem ser jogadas fora para sempre.
     samples = [PositionSample(pt(0, 50_000), 0)] + [PositionSample(pt(0, 0), 10 * i) for i in range(1, 7)]
-    good, _ = clean_samples(samples)
+    good, jumps = clean_samples(samples)
     assert good[-1].t == 60
-    assert evaluate(samples, ROUTE).alert is None
+    assert jumps == 0
+    result = evaluate(samples, ROUTE)
+    assert result.alert is None
+    assert result.suspected_mock_location is False
 
 
 def test_amostras_fora_de_ordem_sao_descartadas():
     good, jumps = clean_samples([PositionSample(pt(0, 0), 10), PositionSample(pt(10, 0), 5)])
     assert [s.t for s in good] == [10]
     assert jumps == 0
+
+
+def test_pico_de_dois_pontos_ruins_que_volta_a_trilha_conta_como_um_salto():
+    samples = walk(5) + [
+        PositionSample(pt(400, 50_000), 50),
+        PositionSample(pt(400, 50_100), 60),
+        PositionSample(pt(500, 0), 70),
+    ]
+    good, jumps = clean_samples(samples)
+    assert jumps == 1
+    assert good[-1].t == 70
+
+
+def test_pico_no_fim_sem_desfecho_ainda_nao_conta():
+    good, jumps = clean_samples(walk(5) + [PositionSample(pt(400, 50_000), 50)])
+    assert jumps == 0
+    assert good[-1].t == 40

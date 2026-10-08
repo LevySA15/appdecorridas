@@ -37,14 +37,17 @@ def speed_kmh(a: PositionSample, b: PositionSample) -> float:
 def clean_samples(
     samples: list[PositionSample], cfg: SafetyConfig = _DEFAULT
 ) -> tuple[list[PositionSample], int]:
-    """Descarta amostras fora de ordem e saltos impossíveis. Devolve (aceitas, saltos rejeitados).
+    """Descarta amostras fora de ordem e saltos impossíveis. Devolve (aceitas, picos isolados).
 
-    Depois de `reanchor_after_rejects` saltos seguidos, aceita a nova posição: o sinal pode ter
-    voltado em outro lugar, ou a primeira amostra pode ter sido a errada.
+    Um "pico isolado" é uma ou duas amostras impossíveis seguidas de uma volta à trilha anterior;
+    só isso conta para a suspeita de localização falsa. Depois de `reanchor_after_rejects`
+    amostras impossíveis seguidas, aceita a nova posição sem contar pico: o sinal pode ter
+    voltado em outro lugar, ou a primeira amostra pode ter sido a errada. Um pico que ainda
+    não teve desfecho no fim da lista também não conta.
     """
     good: list[PositionSample] = []
-    jumps = 0
-    consecutive_rejects = 0
+    spikes = 0
+    pending_rejects = 0
     for s in samples:
         if not good:
             good.append(s)
@@ -53,15 +56,16 @@ def clean_samples(
         if s.t <= last.t:
             continue
         if speed_kmh(last, s) > cfg.max_plausible_speed_kmh:
-            jumps += 1
-            consecutive_rejects += 1
-            if consecutive_rejects >= cfg.reanchor_after_rejects:
+            pending_rejects += 1
+            if pending_rejects >= cfg.reanchor_after_rejects:
                 good.append(s)
-                consecutive_rejects = 0
+                pending_rejects = 0
             continue
-        consecutive_rejects = 0
+        if pending_rejects > 0:
+            spikes += 1
+        pending_rejects = 0
         good.append(s)
-    return good, jumps
+    return good, spikes
 
 
 def is_stopped_too_long(samples: list[PositionSample], cfg: SafetyConfig = _DEFAULT) -> bool:
