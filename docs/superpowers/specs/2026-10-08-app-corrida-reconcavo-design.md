@@ -3,7 +3,7 @@
 **Data:** 2026-10-08
 **Dono do projeto:** Levy
 **Nome do app:** provisório ("App de corrida do Recôncavo"). O nome final ainda não foi escolhido e a pasta do projeto também usa um nome provisório.
-**Estado:** especificação aprovada por partes na conversa de brainstorming; este documento aguarda a revisão do Levy antes do plano de implementação.
+**Estado:** aprovada pelo Levy em 2026-10-08. Próximo passo: plano de implementação.
 
 Legenda usada ao longo do texto:
 - **Decidido** = o Levy escolheu.
@@ -39,7 +39,9 @@ Ordem de produtos: **moto → carro → entregas**. Esta especificação cobre a
 ### Taxa por corrida
 - **Decidido:** a taxa é menor quando o motoqueiro roda mais no dia.
 - **Proposta de estrutura:** taxa cheia como base, com **descontos por faixas** de corridas no dia (por exemplo 1ª a 5ª taxa cheia, 6ª a 10ª menor, da 11ª em diante a menor). No dia seguinte volta à base. É a mesma conta que "descer e subir", mas aparece para o motoqueiro como prêmio e não como castigo por parar.
-- **Em aberto:** os valores. O Levy decide depois de ver o custo do provedor de pagamento e o lucro (seção 7.4).
+- **Decidido:** a taxa deve ser **a menor possível, desde que haja lucro** por corrida.
+- **Proposta:** como ponto de partida, uma taxa base de **R$ 1,00** por corrida (cerca de 14% de uma corrida de R$ 7), que deixa cerca de R$ 0,31 por corrida depois da cota grátis de mapas (seção 7.4). Os descontos por faixa precisam respeitar o piso de lucro. O valor final é confirmado com a proposta comercial da Woovi.
+- **Em aberto:** os valores das faixas e o piso. O Levy decide depois de ver o custo do provedor de pagamento e o lucro (seção 7.4).
 
 ### Preço para o passageiro (decidido)
 - Um **preço final único**, mostrado antes do pedido. Não há taxa de serviço separada para o passageiro; os custos de pagamento e a taxa da empresa estão dentro desse valor.
@@ -235,9 +237,9 @@ Uma conta pessoal nova precisa de um teste fechado com pelo menos **12 pessoas p
 9. **Quem paga o saque do motoqueiro** na Woovi (R$ 1,00 abaixo de R$ 500). Em aberto; confirmar na proposta comercial.
 10. **Preço do código de WhatsApp:** fontes divergem (US$ 0,0068 × US$ 0,0315). Confirmar na tabela oficial da Meta.
 11. **Proposta comercial e teste da Woovi** (divisão em ambiente de teste) ainda não feitos.
-12. **Empresa aberta (CNPJ):** o Levy já tem? WhatsApp comercial, Woovi e Google Play provavelmente pedem.
+12. **Empresa (CNPJ):** o Levy **ainda não tem**, só CPF. Ele vai conversar com um advogado **antes** de abrir o CNPJ. WhatsApp comercial, Woovi e Google Play provavelmente pedem CNPJ, então **dinheiro real e publicação nas lojas dependem disso**. Construir o servidor, o simulador e os apps de teste não depende.
 13. **Tipo de conta na Google Play** (pessoal × empresa).
-14. **Nome do app** e identidade visual (logo).
+14. **Nome do app** e logo: o Levy ainda não tem ideia de nome. Decidir antes de publicar nas lojas; até lá o nome é provisório.
 15. **Custo de servidor** (R$ 50 a R$ 150) e de mapas são estimativas minhas.
 
 ### Técnicos
