@@ -1,6 +1,6 @@
 """Livro-caixa que só acrescenta (spec, seção 7.6).
 
-Cada `ref` (uma corrida, uma entrada) soma zero: o provedor é a origem do dinheiro
+Cada `ref` (uma cobrança Pix, uma entrada de R$ 50) soma zero: o provedor é a origem do dinheiro
 (valor negativo); o motoqueiro e a empresa são o destino (valores positivos).
 A dívida de corridas em dinheiro vive na conta do motoqueiro (`RiderAccount`), não aqui.
 """
@@ -46,23 +46,27 @@ class Ledger:
     def _has(self, ref: str, kind: EntryKind) -> bool:
         return any(e.ref == ref and e.kind is kind for e in self._entries)
 
-    def post_ride_payment(self, ride_id: str, rider_id: str, price_cents: int, split: Split) -> None:
+    def post_charge_payment(
+        self, charge_id: str, rider_id: str, price_cents: int, split: Split
+    ) -> None:
+        """Lança um Pix pago. A chave é a cobrança, não a corrida: uma corrida que troca de moto
+        pode ter uma cobrança estornada e outra paga."""
         if split.rider_cents + split.company_cents != price_cents:
             raise ValueError("a divisão não fecha com o preço da corrida")
-        ref = f"ride:{ride_id}"
+        ref = f"charge:{charge_id}"
         if self._has(ref, EntryKind.RIDE_PAYMENT):
-            raise ValueError(f"pagamento da corrida {ride_id} já lançado")
+            raise ValueError(f"pagamento da cobrança {charge_id} já lançado")
         self._append(ref, self.PROVIDER, -price_cents, EntryKind.RIDE_PAYMENT)
         self._append(ref, f"rider:{rider_id}", split.rider_cents, EntryKind.RIDE_PAYMENT)
         self._append(ref, self.COMPANY, split.company_cents, EntryKind.RIDE_PAYMENT)
 
-    def post_refund(self, ride_id: str) -> None:
-        ref = f"ride:{ride_id}"
+    def post_refund(self, charge_id: str) -> None:
+        ref = f"charge:{charge_id}"
         originals = [e for e in self._entries if e.ref == ref and e.kind is EntryKind.RIDE_PAYMENT]
         if not originals:
-            raise ValueError(f"pagamento da corrida {ride_id} não encontrado")
+            raise ValueError(f"pagamento da cobrança {charge_id} não encontrado")
         if self._has(ref, EntryKind.REFUND):
-            raise ValueError(f"corrida {ride_id} já devolvido")
+            raise ValueError(f"cobrança {charge_id} já devolvida")
         for e in originals:
             self._append(ref, e.account, -e.amount_cents, EntryKind.REFUND)
 

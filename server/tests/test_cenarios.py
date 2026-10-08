@@ -56,7 +56,7 @@ def test_corrida_pix_completa_fecha_as_contas():
     confirm_pix_paid(ride)
 
     ledger = Ledger()
-    ledger.post_ride_payment(ride.ride_id, best.rider_id, price, split)
+    ledger.post_charge_payment(charge.charge_id, best.rider_id, price, split)
 
     mark_arrived(ride, 100)
     confirm_helmet(ride)
@@ -70,7 +70,7 @@ def test_corrida_pix_completa_fecha_as_contas():
     assert ledger.balance(Ledger.COMPANY) == 100
     assert ledger.balance(Ledger.PROVIDER) == -600
     assert ledger.is_balanced() is True
-    assert ledger.reconcile({"ride:ride-1": 600}) == {}
+    assert ledger.reconcile({"charge:ch-1": 600}) == {}
 
     # o provedor repete o aviso: nada é contado duas vezes
     assert events.first_time(event["event_id"]) is False
@@ -95,6 +95,6 @@ def test_corrida_em_dinheiro_gera_divida_que_a_proxima_corrida_pix_abate():
     assert acc.cash_debt_cents == 0
 
     ledger = Ledger()
-    ledger.post_ride_payment("ride-2", "rider-1", price, split)
+    ledger.post_charge_payment(charge.charge_id, "rider-1", price, split)
     assert ledger.is_balanced() is True
     assert compute_split(price, 100, 0).rider_cents == 600
