@@ -2,6 +2,7 @@ import pytest
 
 from app.domain.config import RideConfig
 from app.domain.rides import (
+    CancelResult,
     InvalidTransition,
     PassengerAccount,
     Ride,
@@ -18,6 +19,7 @@ from app.domain.rides import (
     confirm_pix_paid,
     mark_arrived,
     mark_no_rider,
+    on_pix_paid,
     pix_window_expired,
     promote_from_queue,
     queue_wait_expired,
@@ -177,19 +179,19 @@ def test_cancelar_por_pix_nao_pago():
 def test_cancelar_durante_a_procura_e_gratis():
     ride = make_ride()
     start_search(ride, 0)
-    assert cancel(ride, now=5, cfg=CFG) == 0
+    assert cancel(ride, now=5, cfg=CFG) == CancelResult(0, False)
     assert ride.state is RideState.CANCELLED
 
 
 def test_cancelar_no_limite_de_60_segundos_ainda_e_gratis():
     # Review Focus 3
     ride = accepted_ride(now=10)
-    assert cancel(ride, now=70, cfg=CFG) == 0
+    assert cancel(ride, now=70, cfg=CFG) == CancelResult(0, False)
 
 
 def test_cancelar_depois_de_60_segundos_paga_compensacao():
     ride = accepted_ride(now=10)
-    assert cancel(ride, now=71, cfg=CFG) == 200
+    assert cancel(ride, now=71, cfg=CFG) == CancelResult(200, False)
     assert ride.state is RideState.CANCELLED
 
 
@@ -197,7 +199,7 @@ def test_cancelar_na_fila_e_sempre_gratis():
     ride = make_ride()
     start_search(ride, 0)
     accept(ride, "rider-1", now=10, rider_busy=True)
-    assert cancel(ride, now=10_000, cfg=CFG) == 0
+    assert cancel(ride, now=10_000, cfg=CFG) == CancelResult(0, False)
 
 
 def test_nao_cancela_corrida_em_andamento():
@@ -214,7 +216,7 @@ def test_espera_maxima_na_chegada():
     assert arrival_wait_expired(ride, 400, CFG) is True
     with pytest.raises(InvalidTransition):
         cancel_after_arrival_timeout(ride, 399, CFG)
-    assert cancel_after_arrival_timeout(ride, 400, CFG) == 200
+    assert cancel_after_arrival_timeout(ride, 400, CFG) == CancelResult(200, False)
     assert ride.state is RideState.CANCELLED
 
 
@@ -254,3 +256,94 @@ def test_nao_da_para_denunciar_calote_de_corrida_ja_paga():
 def test_pagar_mais_que_a_divida_do_passageiro_e_recusado():
     with pytest.raises(ValueError):
         settle_passenger_debt(PassengerAccount("p1", unpaid_cents=100), 200)
+
+
+def test_cancelar_corrida_com_pix_pago_pede_estorno():
+    # Review final, item 3: Pix pago e corrida cancelada: o dinheiro tem que voltar.
+    ride = accepted_ride(PaymentMethod.PIX, now=10)
+    confirm_pix_paid(ride)
+    assert cancel(ride, now=20, cfg=CFG) == CancelResult(0, True)
+
+
+def test_cancelar_depois_do_limite_com_pix_pago_paga_compensacao_e_pede_estorno():
+    ride = accepted_ride(PaymentMethod.PIX, now=10)
+    confirm_pix_paid(ride)
+    assert cancel(ride, now=71, cfg=CFG) == CancelResult(200, True)
+
+
+def test_cancelar_por_espera_na_chegada_com_pix_pago_pede_estorno():
+    ride = arrived_ride(PaymentMethod.PIX)
+    confirm_pix_paid(ride)
+    assert cancel_after_arrival_timeout(ride, 400, CFG) == CancelResult(200, True)
+
+
+def test_nao_cancela_por_pix_nao_pago_quando_o_pix_ja_foi_pago():
+    ride = accepted_ride(PaymentMethod.PIX)
+    confirm_pix_paid(ride)
+    with pytest.raises(InvalidTransition, match="já foi pago"):
+        cancel_unpaid_pix(ride)
+    assert ride.state is RideState.ACCEPTED
+
+
+def test_nao_cancela_por_pix_nao_pago_em_corrida_de_dinheiro():
+    ride = accepted_ride(PaymentMethod.CASH)
+    with pytest.raises(InvalidTransition):
+        cancel_unpaid_pix(ride)
+
+
+def test_aviso_de_pago_dentro_da_janela_confirma_o_pix():
+    ride = accepted_ride(PaymentMethod.PIX)
+    assert on_pix_paid(ride) is False
+    assert ride.pix_paid is True
+
+
+def test_aviso_de_pago_repetido_nao_pede_estorno():
+    ride = accepted_ride(PaymentMethod.PIX)
+    on_pix_paid(ride)
+    assert on_pix_paid(ride) is False
+
+
+def test_aviso_de_pago_atrasado_de_corrida_cancelada_pede_estorno():
+    ride = accepted_ride(PaymentMethod.PIX)
+    cancel_unpaid_pix(ride)
+    assert on_pix_paid(ride) is True
+    assert ride.pix_paid is False
+
+
+def test_aviso_de_pago_de_corrida_que_voltou_para_a_busca_pede_estorno():
+    ride = make_ride()
+    start_search(ride, 0)
+    accept(ride, "rider-1", now=10, rider_busy=True)
+    release_from_queue(ride, now=500)
+    assert on_pix_paid(ride) is True
+
+
+def test_aviso_de_pago_em_corrida_de_dinheiro_e_recusado():
+    ride = accepted_ride(PaymentMethod.CASH)
+    with pytest.raises(InvalidTransition):
+        on_pix_paid(ride)
+
+
+def _corrida_concluida_em_dinheiro() -> Ride:
+    ride = arrived_ride(PaymentMethod.CASH)
+    confirm_helmet(ride)
+    start_ride(ride, "4821")
+    complete(ride)
+    return ride
+
+
+def test_denunciar_o_calote_duas_vezes_nao_dobra_a_divida():
+    # Review final, item 5
+    ride = _corrida_concluida_em_dinheiro()
+    acc = PassengerAccount("p1")
+    report_non_payment(ride, acc)
+    with pytest.raises(InvalidTransition, match="já foi denunciado"):
+        report_non_payment(ride, acc)
+    assert acc.unpaid_cents == 700
+
+
+def test_nao_confirma_pagamento_de_corrida_ja_denunciada():
+    ride = _corrida_concluida_em_dinheiro()
+    report_non_payment(ride, PassengerAccount("p1"))
+    with pytest.raises(InvalidTransition, match="denunciado"):
+        confirm_end_payment(ride)

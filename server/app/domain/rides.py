@@ -43,6 +43,15 @@ class Ride:
     en_route_since: float | None = None
     arrived_at: float | None = None
     end_payment_confirmed: bool = False
+    non_payment_reported: bool = False
+
+
+@dataclass(frozen=True)
+class CancelResult:
+    """Resultado de um cancelamento: compensação ao motoqueiro e se há Pix pago para devolver."""
+
+    compensation_cents: int
+    refund_needed: bool
 
 
 def _require(ride: Ride, *states: RideState) -> None:
@@ -110,9 +119,34 @@ def pix_window_expired(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> bo
 
 
 def cancel_unpaid_pix(ride: Ride) -> None:
-    """Cancela porque o passageiro não pagou o Pix a tempo. Sem compensação."""
+    """Cancela porque o passageiro não pagou o Pix a tempo. Sem compensação.
+
+    Só vale para corrida Pix ainda não paga; se já foi paga, o cancelamento é `cancel`,
+    que avisa que há dinheiro para devolver.
+    """
     _require(ride, RideState.QUEUED, RideState.ACCEPTED, RideState.ARRIVED)
+    if ride.payment_method is not PaymentMethod.PIX:
+        raise InvalidTransition("esta corrida não é paga por Pix")
+    if ride.pix_paid:
+        raise InvalidTransition("o Pix já foi pago; cancele com devolução")
     ride.state = RideState.CANCELLED
+
+
+def on_pix_paid(ride: Ride) -> bool:
+    """Chegou o aviso de Pix pago. Devolve True se o dinheiro deve voltar para o passageiro.
+
+    O aviso pode chegar atrasado: depois de a corrida ser cancelada, de ficar sem moto ou de
+    voltar para a busca. Nesses casos o pagamento não tem mais a que servir e deve ser devolvido.
+    Aviso repetido de corrida já paga não pede nada.
+    """
+    if ride.payment_method is not PaymentMethod.PIX:
+        raise InvalidTransition("esta corrida não é paga por Pix")
+    if ride.pix_paid:
+        return False
+    if ride.state in (RideState.QUEUED, RideState.ACCEPTED, RideState.ARRIVED):
+        confirm_pix_paid(ride)
+        return False
+    return True
 
 
 def mark_arrived(ride: Ride, now: float) -> None:
@@ -142,8 +176,8 @@ def complete(ride: Ride) -> None:
     ride.state = RideState.COMPLETED
 
 
-def cancel(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> int:
-    """Cancelamento pelo passageiro. Devolve a compensação ao motoqueiro, em centavos."""
+def cancel(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> CancelResult:
+    """Cancelamento pelo passageiro: compensação ao motoqueiro e aviso se há Pix para devolver."""
     _require(
         ride,
         RideState.REQUESTED,
@@ -156,8 +190,9 @@ def cancel(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> int:
     if ride.state in (RideState.ACCEPTED, RideState.ARRIVED):
         if ride.en_route_since is not None and now - ride.en_route_since > cfg.free_cancel_after_accept_s:
             compensation = cfg.cancel_compensation_cents
+    refund_needed = ride.pix_paid
     ride.state = RideState.CANCELLED
-    return compensation
+    return CancelResult(compensation, refund_needed)
 
 
 def arrival_wait_expired(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> bool:
@@ -166,11 +201,14 @@ def arrival_wait_expired(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> 
     return now - ride.arrived_at >= cfg.max_wait_at_arrival_s
 
 
-def cancel_after_arrival_timeout(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> int:
+def cancel_after_arrival_timeout(
+    ride: Ride, now: float, cfg: RideConfig = _DEFAULT
+) -> CancelResult:
     if not arrival_wait_expired(ride, now, cfg):
         raise InvalidTransition("o tempo de espera na chegada ainda não acabou")
+    refund_needed = ride.pix_paid
     ride.state = RideState.CANCELLED
-    return cfg.cancel_compensation_cents
+    return CancelResult(cfg.cancel_compensation_cents, refund_needed)
 
 
 def mark_no_rider(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> None:
@@ -191,6 +229,8 @@ def confirm_end_payment(ride: Ride) -> None:
     _require(ride, RideState.COMPLETED)
     if ride.payment_method is not PaymentMethod.CASH:
         raise InvalidTransition("esta corrida foi paga por Pix antes de começar")
+    if ride.non_payment_reported:
+        raise InvalidTransition("o calote desta corrida já foi denunciado")
     ride.end_payment_confirmed = True
 
 
@@ -208,6 +248,9 @@ def report_non_payment(ride: Ride, acc: PassengerAccount) -> None:
     _require(ride, RideState.COMPLETED)
     if ride.payment_method is not PaymentMethod.CASH or ride.end_payment_confirmed:
         raise InvalidTransition("não há pagamento pendente nesta corrida")
+    if ride.non_payment_reported:
+        raise InvalidTransition("o calote desta corrida já foi denunciado")
+    ride.non_payment_reported = True
     acc.unpaid_cents += ride.price_cents
 
 
