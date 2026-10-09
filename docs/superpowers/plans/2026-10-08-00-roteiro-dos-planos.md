@@ -27,7 +27,8 @@ Ferramentas que ainda precisam ser instaladas no computador do Levy (não existe
 - Criar o cliente Redis sempre com `decode_responses=True` (as posições recusam cliente sem isso).
 - Limpar do Redis (`pos:geo`, `pos:seen`) as motos que somem sem avisar.
 - Acrescentar CHECKs em `pix_charges` e chave estrangeira em `rides.current_charge_id` numa migração nova; transformar o `compare_metadata` do Alembic em teste.
-- **Corrida em dinheiro com calote:** o motoqueiro **não deve taxa** (decisão do Levy, 09/10/2026). Hoje `register_completed_ride` soma a taxa à dívida sempre que `fee_collected_by_split` não é verdadeiro; no 2B, ao denunciar o calote, não somar a taxa (função ou parâmetro próprio, com teste) e decidir se essa corrida conta para as 10 do período de teste.
+- **Corrida em dinheiro sem pagamento (decisão do Levy, 09/10/2026):** não existe botão de "passageiro não pagou". Passados `cash_pay_wait_s` (5 min, ajustável) do fim da corrida, o servidor bloqueia o passageiro sozinho (`unpaid_cents`) e libera o motoqueiro; o motoqueiro **não deve taxa** daquela corrida. Quando o passageiro paga, gera-se uma cobrança Pix com a divisão normal (taxa para a empresa, resto para o motoqueiro daquela corrida) e o bloqueio cai. No código: trocar `report_non_payment` (hoje acionado pelo motoqueiro) por um bloqueio automático por tempo, criar `RideConfig.cash_pay_wait_s = 300` e um caso de uso no `PaymentService` para a cobrança da dívida (ligada à corrida antiga, que já está concluída, então `on_pix_paid` não serve). Hoje `register_completed_ride` soma a taxa à dívida do motoqueiro sempre que `fee_collected_by_split` não é verdadeiro: no calote não somar. Decidir se essa corrida conta para as 10 do período de teste.
+- **Pendente do Levy:** se o passageiro nunca pagar, o motoqueiro perde o valor ou a empresa cobre?
 
 ## Perguntas para o advogado (conversa na semana de 12/10/2026)
 
@@ -38,4 +39,4 @@ Ferramentas que ainda precisam ser instaladas no computador do Levy (não existe
 5. Recebimento de dinheiro de terceiros e saldo recarregável (regras do Banco Central), e o que precisa para a divisão automática de Pix com a Woovi.
 6. LGPD: base legal e aviso para coletar CPF, CNH, foto e localização.
 7. Seguro: vale contratar seguro de acidentes para passageiro e motoqueiro?
-
+8. Bloquear o passageiro que não pagou e repassar o valor ao motoqueiro quando ele pagar: há algum risco de cobrança indevida, de LGPD ou do Código de Defesa do Consumidor? O que precisa constar nos termos de uso?

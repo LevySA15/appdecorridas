@@ -154,7 +154,7 @@ p{margin:0}
 </div>
 
 <script>
-const S = { role: "pax", step: 0, pay: "pix", theme: "light", timer: null, stars: 0, online: true, helmet: true };
+const S = { role: "pax", step: 0, pay: "pix", theme: "light", timer: null, stars: 0, online: true, helmet: true, cashTimeout: false };
 
 /* ---------- peças reutilizáveis ---------- */
 function map(route, pin) {
@@ -284,6 +284,16 @@ const PAX = [
         ${go("inicio", "Concluir")}
       </div>
     </div>` },
+  { id: "pendente", label: "Pagamento pendente (bloqueado)", html: () => `
+    <div class="pad">
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:14px">
+        <h3>Falta pagar R$ 7,00</h3>
+        <p class="muted">A corrida com o Carlos não foi paga. Você só pede outra moto depois de pagar. O valor vai direto para ele.</p>
+        <div class="card"><div class="qrbox">${qr(41)}</div><div><b>Pague pelo Pix</b><p class="muted small">Escaneie o QR ou copie o código.</p></div></div>
+        ${go("inicio", "Já paguei (simular)")}
+        <button class="btn ghost" data-go="inicio">Copiar código Pix</button>
+      </div>
+    </div>` },
 ];
 
 /* ---------- telas do motoqueiro ---------- */
@@ -332,15 +342,19 @@ const RIDER = [
   { id: "receber", label: "Receber o pagamento", html: () => `
     <div class="pad">
       <div style="margin-top:auto;display:flex;flex-direction:column;gap:14px">
-        <h3>${S.pay === "pix" ? "Corrida concluída" : "Receber o pagamento"}</h3>
+        <h3>${S.pay === "pix" ? "Corrida concluída" : S.cashTimeout ? "Passageiro bloqueado" : "Receber o pagamento"}</h3>
         <div class="bignum">R$ 7,00</div>
         ${S.pay === "pix"
           ? `<div class="card"><div><b>Pix já pago</b><p class="muted small">O valor cai na sua conta. Nada para receber do passageiro.</p></div></div>${go("extrato", "Concluir")}`
-          : `<div class="card"><div class="qrbox">${qr(29)}</div><div><b>Passageiro paga pelo QR</b><p class="muted small">ou em dinheiro. Só confirme quando receber.</p></div></div>
-             ${go("extrato", "Confirmei o pagamento")}
-             ${go("online", "O passageiro não pagou", "line")}`}
+          : S.cashTimeout
+          ? `<div class="debt"><b>O pagamento não chegou em 5 minutos.</b><br>O passageiro fica sem pedir moto até pagar. Quando ele pagar, o valor cai na sua conta.</div>
+             ${go("online", "Voltar a ficar disponível")}`
+          : `<div class="card"><div class="qrbox">${qr(29)}</div><div><b>Passageiro paga pelo QR</b><p class="muted small">ou em dinheiro. Aguardando o pagamento: <span class="timer" id="cashw">5:00</span></p></div></div>
+             ${go("extrato", "Recebi em dinheiro")}
+             <button class="btn sim" data-skipwait>Pular a espera de 5 minutos (simular)</button>`}
       </div>
-    </div>` },
+    </div>`,
+    after: () => { if (S.pay === "cash" && !S.cashTimeout) countdown("cashw", 300, v => `${Math.floor(v / 60)}:${String(v % 60).padStart(2, "0")}`, () => { S.cashTimeout = true; render(); }); } },
 
   { id: "extrato", label: "Extrato do dia", html: () => `
     <div class="pad">
@@ -403,6 +417,7 @@ function goTo(id) {
   const list = steps();
   if (id === "next") S.step = Math.min(S.step + 1, list.length - 1);
   else { const i = list.findIndex(s => s.id === id); if (i >= 0) S.step = i; }
+  S.cashTimeout = false;
   render();
 }
 
@@ -416,11 +431,12 @@ function init() {
     if (t.dataset.star) { S.stars = Number(t.dataset.star); render(); return; }
     if (t.hasAttribute("data-online")) { S.online = !S.online; render(); return; }
     if (t.hasAttribute("data-helmet")) { S.helmet = !S.helmet; render(); return; }
+    if (t.hasAttribute("data-skipwait")) { S.cashTimeout = true; render(); return; }
     if (t.hasAttribute("data-sos")) { const m = document.getElementById("sosmsg"); if (m) m.style.display = "block"; return; }
     if (t.dataset.go) goTo(t.dataset.go);
   });
   document.getElementById("steps").addEventListener("click", e => {
-    const t = e.target.closest("button[data-i]"); if (t) { S.step = Number(t.dataset.i); render(); }
+    const t = e.target.closest("button[data-i]"); if (t) { S.step = Number(t.dataset.i); S.cashTimeout = false; render(); }
   });
   const role = r => () => { S.role = r; S.step = 0; setPressed(["r-pax", "r-rider"], r === "pax" ? "r-pax" : "r-rider"); render(); };
   document.getElementById("r-pax").addEventListener("click", role("pax"));
