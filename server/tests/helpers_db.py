@@ -90,3 +90,17 @@ def add_searching_ride(
         repo.RideDetails(pickup, destination or pt(1500, 0), "Rua A", "Feira livre", 1950, 1.0, "Preço normal."),
     )
     return ride
+
+
+def add_completed_rides_today(session, rider_id: str, n: int, now: float, passenger_id: str = "p1") -> None:
+    """`n` corridas concluídas hoje (nos últimos minutos antes de `now`) para contar a faixa de taxa do dia."""
+    from app.db.models import RideRow
+
+    for i in range(n):
+        session.add(
+            RideRow(
+                id=f"done-{rider_id}-{i}", passenger_id=passenger_id, rider_id=rider_id, price_cents=700,
+                payment_method="pix", pin="4821", state="completed", completed_at=now - 60 * (i + 1),
+            )
+        )
+    session.flush()

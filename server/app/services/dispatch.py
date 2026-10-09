@@ -1,0 +1,182 @@
+"""Procura da moto e ofertas, uma por vez (spec, seções 5.1, 5.2 e 12)."""
+from __future__ import annotations
+
+import dataclasses
+from typing import Protocol
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.db import queries
+from app.db import repositories as repo
+from app.db.config_store import AppConfig
+from app.db.models import RideOfferRow
+from app.domain.clock import local_day_start
+from app.domain.dispatch import RiderStatus, rank_candidates
+from app.domain.fees import can_receive_cash_offers, fee_for_ride, offer_block_reason
+from app.domain.maps import MapsProvider
+from app.domain.rides import Ride, RideState, accept
+from app.domain.types import PaymentMethod
+from app.infra.redis_store import PositionStore
+from app.services.events import EventCollector
+from app.services.payments import PaymentService
+
+
+class OfferGone(Exception):
+    """A oferta não existe mais para este motoqueiro (venceu, foi para outro, ou a corrida mudou)."""
+
+
+class Reservations(Protocol):
+    def reserve(self, rider_id: str, ride_id: str) -> bool: ...
+
+    def release(self, rider_id: str, ride_id: str) -> None: ...
+
+
+class DispatchService:
+    def __init__(
+        self,
+        positions: PositionStore,
+        reservations: Reservations,
+        maps: MapsProvider,
+        payments: PaymentService,
+        events: EventCollector,
+        cfg: AppConfig | None = None,
+    ) -> None:
+        self.positions = positions
+        self.reservations = reservations
+        self.maps = maps
+        self.payments = payments
+        self.events = events
+        self.cfg = cfg or AppConfig.defaults()
+
+    # --- procura ---------------------------------------------------------------------
+
+    def _statuses(self, session: Session, ride: Ride, near: list) -> list[RiderStatus]:
+        snapshots = queries.rider_snapshots(session, [rider_id for rider_id, _ in near])
+        statuses: list[RiderStatus] = []
+        for rider_id, point in near:
+            snap = snapshots.get(rider_id)
+            if snap is None or not snap.available:
+                continue
+            busy = snap.active_ride_id is not None
+            # a corrida que ele está fazendo conta para a entrada: a 10ª corrida em andamento já fecha o teste
+            gate = dataclasses.replace(snap.account, completed_rides=snap.account.completed_rides + (1 if busy else 0))
+            if offer_block_reason(gate, self.cfg.fees) is not None:
+                continue
+            if ride.payment_method is PaymentMethod.CASH and not can_receive_cash_offers(gate, self.cfg.fees):
+                continue
+            seconds = (
+                self.maps.eta_seconds(point, snap.active_destination) if busy and snap.active_destination else None
+            )
+            statuses.append(
+                RiderStatus(
+                    rider_id, point, True, snap.active_ride_id, snap.queued_ride_id, seconds, snap.active_destination
+                )
+            )
+        return statuses
+
+    def offer_next(self, session: Session, ride_id: str, now: float) -> str | None:
+        """Oferece o pedido à próxima moto. Devolve o motoqueiro com oferta pendente, ou None."""
+        ride = repo.get_ride(session, ride_id, for_update=True)
+        if ride.state is not RideState.SEARCHING:
+            return None
+        pending = queries.get_pending_offer(session, ride_id, for_update=True)
+        if pending is not None:
+            if pending.expires_at > now:
+                return pending.rider_id
+            pending.status = "expired"
+            session.flush()
+            self.reservations.release(pending.rider_id, ride_id)
+            self.events.add(pending.rider_id, "offer_expired", {"ride_id": ride_id})
+        details = repo.get_ride_details(session, ride_id)
+        dispatch_cfg = self.cfg.dispatch
+        near = self.positions.nearby(details.pickup, dispatch_cfg.search_radius_m, now, dispatch_cfg.position_max_age_s)
+        declined = queries.offered_rider_ids(session, ride_id)
+        statuses = [s for s in self._statuses(session, ride, near) if s.rider_id not in declined]
+        for candidate in rank_candidates(statuses, details.pickup, self.maps, dispatch_cfg):
+            if not self.reservations.reserve(candidate.rider_id, ride_id):
+                continue
+            try:
+                with session.begin_nested():
+                    session.add(
+                        RideOfferRow(
+                            ride_id=ride_id, rider_id=candidate.rider_id, status="pending",
+                            will_queue=candidate.will_queue, created_at=now, expires_at=now + dispatch_cfg.offer_timeout_s,
+                        )
+                    )
+                    session.flush()
+            except IntegrityError:
+                self.reservations.release(candidate.rider_id, ride_id)
+                continue
+            repo.log_ride_event(session, ride_id, "offered", {"rider_id": candidate.rider_id}, now)
+            self.events.add(
+                candidate.rider_id, "offer",
+                {
+                    "ride_id": ride_id, "price_cents": ride.price_cents, "payment_method": ride.payment_method.value,
+                    "pickup": {"lat": details.pickup.lat, "lng": details.pickup.lng, "text": details.pickup_text},
+                    "destination": {
+                        "lat": details.destination.lat, "lng": details.destination.lng, "text": details.destination_text,
+                    },
+                    "distance_m": details.distance_m, "seconds_to_pickup": candidate.eta_seconds,
+                    "will_queue": candidate.will_queue, "expires_at": now + dispatch_cfg.offer_timeout_s,
+                },
+            )
+            return candidate.rider_id
+        return None
+
+    # --- resposta do motoqueiro ----------------------------------------------------------
+
+    def accept_offer(self, session: Session, rider_id: str, ride_id: str, now: float) -> Ride:
+        ride = repo.get_ride(session, ride_id, for_update=True)
+        offer = queries.get_pending_offer(session, ride_id, for_update=True)
+        if (
+            ride.state is not RideState.SEARCHING
+            or offer is None
+            or offer.rider_id != rider_id
+            or offer.expires_at <= now
+        ):
+            raise OfferGone("Essa corrida já foi para outro motoqueiro.")
+        repo.get_rider_account(session, rider_id, for_update=True)
+        busy = queries.rider_active_ride_id(session, rider_id) is not None
+        number = queries.completed_rides_since(session, rider_id, local_day_start(now)) + (1 if busy else 0) + 1
+        fee = fee_for_ride(number, self.cfg.fees)
+        accept(ride, rider_id, now, rider_busy=busy)
+        ride.fee_cents = fee
+        repo.save_ride(session, ride)
+        offer.status = "accepted"
+        session.flush()
+        self.reservations.release(rider_id, ride_id)
+        charge = self.payments.start_pix_charge(session, ride_id, fee) if ride.payment_method is PaymentMethod.PIX else None
+        repo.log_ride_event(session, ride_id, "accepted", {"rider_id": rider_id, "queued": busy, "fee_cents": fee}, now)
+        card = queries.rider_card(session, rider_id)
+        self.events.add(rider_id, "ride_assigned", {"ride_id": ride_id, "queued": busy})
+        self.events.add(
+            ride.passenger_id, "rider_accepted",
+            {
+                "ride_id": ride_id, "queued": busy, "pin": ride.pin,
+                "rider": dataclasses.asdict(card),
+                "pay": None if charge is None else {
+                    "charge_id": charge.charge_id, "amount_cents": charge.amount_cents,
+                    "expires_at": now + self.cfg.rides.pix_window_s,
+                },
+            },
+        )
+        return repo.get_ride(session, ride_id)
+
+    def decline_offer(self, session: Session, rider_id: str, ride_id: str, now: float) -> str | None:
+        repo.get_ride(session, ride_id, for_update=True)
+        offer = queries.get_pending_offer(session, ride_id, for_update=True)
+        if offer is None or offer.rider_id != rider_id:
+            raise OfferGone("Essa corrida já foi para outro motoqueiro.")
+        offer.status = "declined"
+        session.flush()
+        self.reservations.release(rider_id, ride_id)
+        repo.log_ride_event(session, ride_id, "declined", {"rider_id": rider_id}, now)
+        return self.offer_next(session, ride_id, now)
+
+    def expire_offers(self, session: Session, now: float) -> int:
+        """Ofertas que passaram dos 15 segundos: expira e oferece à próxima moto. Devolve quantas venceram."""
+        due = queries.due_offer_ride_ids(session, now)
+        for ride_id in due:
+            self.offer_next(session, ride_id, now)
+        return len(due)
