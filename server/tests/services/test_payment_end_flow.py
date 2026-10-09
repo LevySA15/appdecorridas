@@ -126,13 +126,22 @@ def test_prazo_vencido_bloqueia_o_passageiro_sem_cobrar_taxa_do_motoqueiro(sessi
     assert service.block_unpaid_cash_ride(session, "ride-1", FIM + 400) is False  # só uma vez
 
 
-def test_motoqueiro_nao_confirma_dinheiro_depois_do_bloqueio(session, service):
-    # Review Focus 1
+def test_motoqueiro_corrige_confirmando_o_dinheiro_depois_do_bloqueio(session, service, provider, events):
+    # Revisão final do plano 2B (I7): o passageiro pagou em dinheiro, o motoqueiro esqueceu de confirmar e o
+    # bloqueio automático caiu. Confirmar depois desfaz o bloqueio, e um QR pago a mais ainda é devolvido.
     mundo(session)
-    service.start_end_charge(session, "ride-1", FEE)
+    charge = service.start_end_charge(session, "ride-1", FEE)
     service.block_unpaid_cash_ride(session, "ride-1", FIM + 300)
-    with pytest.raises(InvalidTransition, match="Pix"):
-        service.confirm_cash_received(session, "ride-1", now=FIM + 310)
+    assert pendente(session) == 700
+    service.confirm_cash_received(session, "ride-1", now=FIM + 310)
+    assert pendente(session) == 0
+    assert passenger_block_reason(session, "p1") is None
+    assert repo.get_ride(session, "ride-1").end_payment_confirmed is True
+    assert divida(session) == (100, 0)            # recebeu em dinheiro vivo: deve a taxa
+    assert "unblocked" in tipos(events, "p1")
+    assert service.on_provider_event(session, provider.mark_paid(charge.charge_id)) == "refunded"
+    ledger = PgLedger(session)
+    assert (ledger.balance("rider:r1"), ledger.balance(PgLedger.COMPANY), ledger.balance(PgLedger.PROVIDER)) == (0, 0, 0)
 
 
 def test_pagamento_atrasado_desbloqueia_o_passageiro_e_paga_o_motoqueiro_uma_vez(session, service, provider, events):

@@ -272,17 +272,21 @@ class PaymentService:
         return charge
 
     def confirm_cash_received(self, session: Session, ride_id: str, now: float) -> None:
-        """O motoqueiro recebeu o dinheiro na mão: a taxa da corrida vira dívida dele."""
+        """O motoqueiro recebeu o dinheiro na mão: a taxa da corrida vira dívida dele.
+
+        Vale também depois do bloqueio automático, como correção (o passageiro pagou em dinheiro e o
+        motoqueiro esqueceu de confirmar): o passageiro é desbloqueado. Um QR pago depois é devolvido.
+        """
         ride = repo.get_ride(session, ride_id, for_update=True)
         if ride.state is not RideState.COMPLETED or ride.payment_method is not PaymentMethod.CASH:
             raise InvalidTransition("só dá para confirmar o pagamento de uma corrida em dinheiro já concluída")
         if ride.end_payment_confirmed:
             raise InvalidTransition("o pagamento desta corrida já foi confirmado")
-        if ride.non_payment_reported:
-            raise InvalidTransition(
-                "o passageiro está com o pagamento pendente: ele paga pelo Pix e o valor cai na sua conta"
-            )
-        confirm_end_payment(ride)
+        was_blocked = ride.non_payment_reported
+        if was_blocked:
+            confirm_qr_payment(ride)
+        else:
+            confirm_end_payment(ride)
         acc, charge = self._rider_and_charge(session, ride)
         self._release_if_reserved(charge, acc)
         if acc is not None:
@@ -291,6 +295,13 @@ class PaymentService:
         if charge is not None:
             repo.save_charge(session, charge)
         repo.save_ride(session, ride)
+        if was_blocked:
+            passenger = repo.get_passenger_account(session, ride.passenger_id, for_update=True)
+            owed = min(passenger.unpaid_cents, ride.price_cents)
+            if owed > 0:
+                settle_passenger_debt(passenger, owed)
+            repo.save_passenger_account(session, passenger)
+            self._emit(ride.passenger_id, "unblocked", {"ride_id": ride_id})
         self._emit(ride.passenger_id, "payment_confirmed", {"ride_id": ride_id})
 
     def block_unpaid_cash_ride(self, session: Session, ride_id: str, now: float) -> bool:

@@ -4985,3 +4985,18 @@ git add server docs && git commit -m "feat(services): varreduras de tempo, cená
 **Limitações conhecidas:** (1) a chamada ao provedor de pagamento acontece dentro da transação (idempotência no plano 7); (2) a dívida reservada de um QR nunca pago fica reservada; (3) a rede de segurança da 10ª corrida na fila (Tarefa 8) só dispara se a contagem mudar depois do aceite, porque a procura já impede a oferta (Tarefa 6).
 
 **Varredura de lacunas e nomes:** nenhum passo tem "a definir", "tratar erros depois" ou "similar à tarefa N". Os nomes usados nas tarefas seguintes (`EventCollector`, `AuthService`, `RiderService`, `QuoteService`, `RideRequestService`, `DispatchService`, `TripService`, `SweepService`, `PaymentService` com `start_end_charge`, `confirm_cash_received`, `block_unpaid_cash_ride`, `start_entry_charge`, as funções de `queries`, `RideDetails`, `FakeMaps`, `FakeOtpSender`, `InMemoryFactorStore` e os ajudantes de `tests/helpers_db.py`) são os mesmos definidos nas tarefas que os produzem.
+
+---
+
+## Adendo: correções feitas depois da revisão final
+
+Uma revisão independente da branch inteira achou 7 problemas Importantes (nenhum Crítico). Todos foram corrigidos, cada um com um teste que falhou antes.
+
+1. **Impasse ao terminar a corrida com outra na fila.** A ordem das travas passou a ser corrida, corrida da fila, motoqueiro. `TripService.lock_queued_ride` é chamado ao terminar, ao cancelar e nas varreduras de Pix e de espera na chegada (que agora travam a própria corrida primeiro). Testes: `tests/services/test_ordem_de_travas.py` (registram a ordem real das travas). Resíduo: uma corrida que entre na fila entre a consulta sem trava e a trava do motoqueiro ainda pode inverter a ordem; o banco derruba uma das duas e quem chama repete (plano 2C).
+2. **Dois pedidos ao mesmo tempo do mesmo passageiro.** `request_ride` trava a linha do passageiro antes de conferir. Teste com duas conexões reais: `tests/services/test_concorrencia.py`.
+3. **Avisos de etapa desfeita na varredura.** `EventCollector.mark()` e `rollback_to()`; a varredura descarta os avisos de uma corrida que falhou junto com o banco. As reservas do Redis feitas na etapa ficam por conta da validade (TTL).
+4. **Corrida em dinheiro com o Pix fora do ar.** Novo `PaymentProviderError` (contrato dos adaptadores). `complete_trip` termina a corrida mesmo assim e registra `qr_failed`; a varredura cria o QR depois (`qr_created`, aviso `qr_ready`). Sem QR o passageiro não é bloqueado e o prazo de 5 minutos recomeça quando o QR nasce.
+5. **Custo de mapa na procura.** Não se pede rota de moto que já recusou, que tem fila ou que está longe de terminar.
+6. **Fator de preço.** `PricingConfig.factor_interval_s` (30 s): o fator da cidade muda no máximo uma vez por intervalo, não a cada cotação. `FactorStore` guarda `(fator, instante)`.
+7. **Dinheiro confirmado depois do bloqueio.** Decisão minha, não do Levy: o motoqueiro pode confirmar "recebi em dinheiro" depois do bloqueio automático, como correção. O passageiro é desbloqueado, o motoqueiro passa a dever a taxa, e um QR pago depois é devolvido.
+

@@ -38,6 +38,12 @@ Vindos do plano 2B:
 - O Pix que cria a cobrança e a chamada ao provedor continuam dentro da transação (idempotência no plano 7).
 - Aviso de segurança durante a corrida (usar `app.domain.safety.evaluate`), SOS e "tudo bem?" do passageiro.
 - Decidir se a corrida com bloqueio por falta de pagamento conta para as 10 corridas de teste (hoje conta).
+- Cada unidade de trabalho (requisição ou rodada de varredura) usa **um** `EventCollector`, compartilhado por todos os serviços dela; nunca um coletor global entre requisições.
+- Os adaptadores reais do provedor de pagamento traduzem erros de rede para `PaymentProviderError`.
+- Cadência da varredura (hoje cada rodada tenta de novo as procuras sem oferta) e um `commit` por corrida, para segurar as travas por menos tempo.
+- Repetir a transação quando o banco derrubar uma por impasse (resíduo da ordem de travas ao entrar na fila).
+- Quando o provedor de Pix estiver fora, oferecer só dinheiro na hora do pedido (spec, seção 12).
+- Menores adiados do 2B: motoqueiro na 10ª corrida sem entrada continua `online`; downgrade da migração 0002 falha com cobrança de entrada; códigos de login antigos continuam valendo; `accept_offer` não reconfere bloqueio; `register_rider` concorrente vaza `IntegrityError`; faltam índices em `rides(state, rider_id, passenger_id)` e `ride_offers(ride_id)`; taxa da corrida da fila fixada no aceite; índice único parcial de uma corrida aberta por passageiro.
 
 ## Decisões já tomadas
 
