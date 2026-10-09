@@ -8,7 +8,8 @@ A especificação cobre várias partes independentes. Cada parte vira um plano p
 |---|---|---|---|---|
 | 1 | **Núcleo de regras do servidor** (`2026-10-08-01-nucleo-de-regras.md`) | Biblioteca Python pura e testada: preço dinâmico, taxas por faixa, dívida de dinheiro, divisão do pagamento, livro-caixa, máquina de estados da corrida (com fila), escolha de moto, alertas de segurança. | nada | não |
 | 2A | **Banco, Redis e fluxo de dinheiro** (`2026-10-08-02a-banco-e-dinheiro.md`) | PostgreSQL com migrações, repositórios, livro-caixa persistente (só acrescenta, protegido no banco), configuração no banco, posições e reservas no Redis, e o serviço transacional de pagamentos (cobrança, aviso de pago, vencimento, cancelamento, estorno). Sem HTTP. | 1 | não |
-| 2B | **Corrida, API e tempo real** (plano escrito depois que o 2A estiver pronto) | FastAPI: login (WhatsApp falso), cadastro e aprovação do motoqueiro, pedido de corrida, procura e ofertas, corrida de ponta a ponta, WebSocket. Escrito depois do 2A porque usa o código real do banco. | 2A | não |
+| 2B | **Corrida de ponta a ponta, em serviços** (`2026-10-09-02b-corrida-de-ponta-a-ponta.md`) | Login por código, cadastro e aprovação do motoqueiro, preço e pedido, procura e ofertas (uma por vez, com fila), andamento da corrida, dinheiro do fim da corrida em dinheiro vivo (QR, bloqueio automático e repasse ao motoqueiro quando o passageiro paga), taxa de entrada, avaliações e varreduras de tempo. Sem HTTP. | 2A | não |
+| 2C | **API e tempo real** (plano escrito depois do 2B) | FastAPI sobre os serviços do 2B: rotas, autenticação por token, webhook do provedor (conferindo valor e corrida), WebSocket, publicação dos avisos depois do commit, repetição das varreduras e da checagem diária de documentos, aviso de segurança (parada longa e saída da rota) com o SOS, envio de documentos. | 2B | não |
 | 3 | **Simulador** | Motoqueiros e passageiros falsos andando por Santo Antônio de Jesus usando a API do plano 2. | 2 | não |
 | 4 | **Painel do dono** | Site para aprovar cadastros, ver corridas, dinheiro, taxas, bloqueios. | 2 | não |
 | 5 | **App do motoqueiro (Flutter, Android)** | Cadastro, ficar disponível, oferta, fila, capacete, QR, extrato. | 2 | não |
@@ -18,17 +19,29 @@ A especificação cobre várias partes independentes. Cada parte vira um plano p
 
 Ferramentas que ainda precisam ser instaladas no computador do Levy (não existem hoje): PostgreSQL com PostGIS e Redis (plano 2, por pacote do sistema ou Docker), Flutter e Android SDK (planos 5 e 6). O computador tem 7 GB de RAM e pouca memória livre, então os planos 5 e 6 vão pedir atenção ao consumo.
 
-## Itens obrigatórios para o plano 2B (vindos da revisão final do 2A)
+## Itens para o plano 2C
 
-- Aviso do provedor para cobrança desconhecida: hoje levanta `LookupError`; a camada HTTP decide se confirma ou falha (o provedor tenta de novo).
+Vindos da revisão final do 2A (ainda abertos):
+- Aviso do provedor para cobrança desconhecida levanta `LookupError`: a camada HTTP decide se confirma ou falha.
 - Conferir `amount_cents` e `ride_id` do aviso com a cobrança gravada e autenticar o webhook.
-- `save_rider_account` regrava as quatro colunas: só chamar depois de ler com `for_update=True` (inclusive ao registrar corrida concluída).
-- Pagar ou perdoar dívida respeitando a dívida reservada (`debt_reserved_cents`); travar corridas em ordem fixa quando uma operação envolver duas (promoção da fila).
+- `save_rider_account` regrava as quatro colunas: só chamar depois de ler com `for_update=True`.
 - Criar o cliente Redis sempre com `decode_responses=True` (as posições recusam cliente sem isso).
 - Limpar do Redis (`pos:geo`, `pos:seen`) as motos que somem sem avisar.
-- Acrescentar CHECKs em `pix_charges` e chave estrangeira em `rides.current_charge_id` numa migração nova; transformar o `compare_metadata` do Alembic em teste.
-- **Corrida em dinheiro sem pagamento (decisão do Levy, 09/10/2026):** não existe botão de "passageiro não pagou". Passados `cash_pay_wait_s` (5 min, ajustável) do fim da corrida, o servidor bloqueia o passageiro sozinho (`unpaid_cents`) e libera o motoqueiro; o motoqueiro **não deve taxa** daquela corrida. Quando o passageiro paga, gera-se uma cobrança Pix com a divisão normal (taxa para a empresa, resto para o motoqueiro daquela corrida) e o bloqueio cai. No código: trocar `report_non_payment` (hoje acionado pelo motoqueiro) por um bloqueio automático por tempo, criar `RideConfig.cash_pay_wait_s = 300` e um caso de uso no `PaymentService` para a cobrança da dívida (ligada à corrida antiga, que já está concluída, então `on_pix_paid` não serve). Hoje `register_completed_ride` soma a taxa à dívida do motoqueiro sempre que `fee_collected_by_split` não é verdadeiro: no calote não somar. Decidir se essa corrida conta para as 10 do período de teste.
-- **Pendente do Levy:** se o passageiro nunca pagar, o motoqueiro perde o valor ou a empresa cobre?
+- CHECKs em `pix_charges` e chave estrangeira em `rides.current_charge_id` numa migração nova; transformar o `compare_metadata` do Alembic em teste.
+
+Vindos do plano 2B:
+- Publicar os avisos do `EventCollector` somente depois do `commit` e rodar `SweepService.run` a cada poucos segundos (um commit por rodada, erros do relatório vão para o registro).
+- Rodar `RiderService.block_expired_documents` uma vez por dia.
+- Compensação do cancelamento tardio: hoje só fica registrada no histórico da corrida (`cancelled`), sem movimento de dinheiro. Decidir a política (valor em aberto na spec) e como cobrar.
+- Pagamento atrasado de corrida em dinheiro: a cobrança do QR do fim continua valendo; com a Woovi real ela expira, então será preciso recriá-la quando o passageiro abrir a tela "Pagamento pendente".
+- Dívida reservada de um QR que nunca é pago continua reservada até alguém pagar ou o Levy resolver no painel (ver plano 4).
+- O Pix que cria a cobrança e a chamada ao provedor continuam dentro da transação (idempotência no plano 7).
+- Aviso de segurança durante a corrida (usar `app.domain.safety.evaluate`), SOS e "tudo bem?" do passageiro.
+- Decidir se a corrida com bloqueio por falta de pagamento conta para as 10 corridas de teste (hoje conta).
+
+## Decisões já tomadas
+
+- Corrida em dinheiro sem pagamento: bloqueio automático após 5 minutos, sem taxa para o motoqueiro, repasse quando o passageiro pagar (feito no 2B). Em aberto, com o Levy: se o passageiro nunca pagar, quem arca com o prejuízo (por enquanto, o motoqueiro).
 
 ## Perguntas para o advogado (conversa na semana de 12/10/2026)
 

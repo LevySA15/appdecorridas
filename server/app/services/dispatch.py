@@ -15,7 +15,7 @@ from app.domain.clock import local_day_start
 from app.domain.dispatch import RiderStatus, rank_candidates
 from app.domain.fees import can_receive_cash_offers, fee_for_ride, offer_block_reason
 from app.domain.maps import MapsProvider
-from app.domain.rides import Ride, RideState, accept
+from app.domain.rides import Ride, RideState, accept, mark_no_rider
 from app.domain.types import PaymentMethod
 from app.infra.redis_store import PositionStore
 from app.services.events import EventCollector
@@ -183,6 +183,19 @@ class DispatchService:
         session.flush()
         self.reservations.release(pending.rider_id, ride_id)
         self.events.add(pending.rider_id, "offer_expired", {"ride_id": ride_id})
+
+    def give_up_if_expired(self, session: Session, ride_id: str, now: float) -> bool:
+        """Passaram `search_give_up_s` sem moto e sem oferta pendente: a corrida fica sem motoqueiro."""
+        ride = repo.get_ride(session, ride_id, for_update=True)
+        if ride.state is not RideState.SEARCHING or queries.get_pending_offer(session, ride_id) is not None:
+            return False
+        if ride.searching_since is None or now - ride.searching_since < self.cfg.rides.search_give_up_s:
+            return False
+        mark_no_rider(ride, now, self.cfg.rides)
+        repo.save_ride(session, ride)
+        repo.log_ride_event(session, ride_id, "no_rider", {}, now)
+        self.events.add(ride.passenger_id, "no_rider", {"ride_id": ride_id})
+        return True
 
     def expire_offers(self, session: Session, now: float) -> int:
         """Ofertas que passaram dos 15 segundos: expira e oferece à próxima moto. Devolve quantas venceram."""

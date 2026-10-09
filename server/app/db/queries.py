@@ -184,3 +184,64 @@ def queued_ride_id_of_rider(session: Session, rider_id: str) -> str | None:
     return session.execute(
         select(RideRow.id).where(RideRow.rider_id == rider_id, RideRow.state == RideState.QUEUED.value).limit(1)
     ).scalar_one_or_none()
+
+
+
+
+def pix_window_due_ride_ids(session: Session, now: float, window_s: float) -> list[str]:
+    return list(
+        session.execute(
+            select(RideRow.id)
+            .where(
+                RideRow.payment_method == "pix",
+                RideRow.pix_paid.is_(False),
+                RideRow.state.in_((RideState.QUEUED.value, RideState.ACCEPTED.value, RideState.ARRIVED.value)),
+                RideRow.pix_charge_created_at <= now - window_s,
+            )
+            .order_by(RideRow.id)
+        ).scalars()
+    )
+
+
+def searching_ride_ids(session: Session) -> list[str]:
+    return list(
+        session.execute(
+            select(RideRow.id).where(RideRow.state == RideState.SEARCHING.value).order_by(RideRow.searching_since)
+        ).scalars()
+    )
+
+
+def queued_ride_ids_due(session: Session, now: float, max_wait_s: float) -> list[str]:
+    return list(
+        session.execute(
+            select(RideRow.id)
+            .where(RideRow.state == RideState.QUEUED.value, RideRow.queued_since <= now - max_wait_s)
+            .order_by(RideRow.id)
+        ).scalars()
+    )
+
+
+def arrived_ride_ids_due(session: Session, now: float, max_wait_s: float) -> list[str]:
+    return list(
+        session.execute(
+            select(RideRow.id)
+            .where(RideRow.state == RideState.ARRIVED.value, RideRow.arrived_at <= now - max_wait_s)
+            .order_by(RideRow.id)
+        ).scalars()
+    )
+
+
+def cash_unpaid_ride_ids_due(session: Session, now: float, wait_s: float) -> list[str]:
+    return list(
+        session.execute(
+            select(RideRow.id)
+            .where(
+                RideRow.state == RideState.COMPLETED.value,
+                RideRow.payment_method == "cash",
+                RideRow.end_payment_confirmed.is_(False),
+                RideRow.non_payment_reported.is_(False),
+                RideRow.completed_at <= now - wait_s,
+            )
+            .order_by(RideRow.id)
+        ).scalars()
+    )
