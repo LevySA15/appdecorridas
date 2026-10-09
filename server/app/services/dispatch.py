@@ -14,12 +14,18 @@ from app.db.models import RideOfferRow
 from app.domain.clock import local_day_start
 from app.domain.dispatch import RiderStatus, rank_candidates
 from app.domain.fees import can_receive_cash_offers, fee_for_ride, offer_block_reason
+from app.domain.geo import haversine_m
 from app.domain.maps import MapsProvider
 from app.domain.rides import Ride, RideState, accept, mark_no_rider
 from app.domain.types import PaymentMethod
 from app.infra.redis_store import PositionStore
 from app.services.events import EventCollector
 from app.services.payments import PaymentService
+
+
+# Moto na cidade não passa de ~54 km/h por muito tempo: quem está mais longe do destino do que isso em
+# `finishing_max_s` segundos não pode estar "terminando", então nem vale pagar por uma rota.
+_MAX_PLAUSIBLE_SPEED_MPS = 15.0
 
 
 class OfferGone(Exception):
@@ -51,12 +57,14 @@ class DispatchService:
 
     # --- procura ---------------------------------------------------------------------
 
-    def _statuses(self, session: Session, ride: Ride, near: list) -> list[RiderStatus]:
+    def _statuses(self, session: Session, ride: Ride, near: list, declined: set[str]) -> list[RiderStatus]:
+        """Motos que podem receber este pedido. Só pede rota (que custa) de quem pode estar terminando."""
         snapshots = queries.rider_snapshots(session, [rider_id for rider_id, _ in near])
+        finish_bound_m = self.cfg.dispatch.finishing_max_s * _MAX_PLAUSIBLE_SPEED_MPS
         statuses: list[RiderStatus] = []
         for rider_id, point in near:
             snap = snapshots.get(rider_id)
-            if snap is None or not snap.available:
+            if snap is None or not snap.available or rider_id in declined or snap.queued_ride_id is not None:
                 continue
             busy = snap.active_ride_id is not None
             # a corrida que ele está fazendo conta para a entrada: a 10ª corrida em andamento já fecha o teste
@@ -65,9 +73,9 @@ class DispatchService:
                 continue
             if ride.payment_method is PaymentMethod.CASH and not can_receive_cash_offers(gate, self.cfg.fees):
                 continue
-            seconds = (
-                self.maps.eta_seconds(point, snap.active_destination) if busy and snap.active_destination else None
-            )
+            seconds = None
+            if busy and snap.active_destination and haversine_m(point, snap.active_destination) <= finish_bound_m:
+                seconds = self.maps.eta_seconds(point, snap.active_destination)
             statuses.append(
                 RiderStatus(
                     rider_id, point, True, snap.active_ride_id, snap.queued_ride_id, seconds, snap.active_destination
@@ -92,7 +100,7 @@ class DispatchService:
         dispatch_cfg = self.cfg.dispatch
         near = self.positions.nearby(details.pickup, dispatch_cfg.search_radius_m, now, dispatch_cfg.position_max_age_s)
         declined = queries.offered_rider_ids(session, ride_id)
-        statuses = [s for s in self._statuses(session, ride, near) if s.rider_id not in declined]
+        statuses = self._statuses(session, ride, near, declined)
         for candidate in rank_candidates(statuses, details.pickup, self.maps, dispatch_cfg):
             if not self.reservations.reserve(candidate.rider_id, ride_id):
                 continue

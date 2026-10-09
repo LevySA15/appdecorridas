@@ -278,3 +278,70 @@ def test_so_oferece_corrida_que_ainda_esta_em_procura(dispatch, session, positio
     ride.state = RideState.CANCELLED
     repo.save_ride(session, ride)
     assert dispatch.offer_next(session, "ride-1", AGORA) is None
+
+
+class MapaContador(FakeMaps):
+    """Mapa falso que conta quantas vezes o tempo de rota foi pedido (cada pedido custa dinheiro no Google)."""
+
+    def __init__(self):
+        super().__init__()
+        self.chamadas = 0
+
+    def eta_seconds(self, origin, destination):
+        self.chamadas += 1
+        return super().eta_seconds(origin, destination)
+
+
+@pytest.fixture()
+def mapa():
+    return MapaContador()
+
+
+@pytest.fixture()
+def dispatch_contando(positions, reservas, provider, events, mapa):
+    return DispatchService(positions, reservas, mapa, PaymentService(provider), events)
+
+
+def test_nao_calcula_rota_para_moto_ocupada_que_esta_longe_de_terminar(dispatch_contando, session, positions, mapa):
+    # Revisão final do plano 2B (I5): a rota só vale a pena para quem pode estar terminando.
+    add_passenger(session)
+    _moto_terminando(session, positions)
+    repo.set_ride_details(session, "ride-0", repo.RideDetails(pt(-2000, 0), pt(5000, 0), "A", "B", 7000, 1.0, ""))
+    add_searching_ride(session, now=AGORA)
+    mapa.chamadas = 0
+    assert dispatch_contando.offer_next(session, "ride-1", AGORA) is None
+    assert mapa.chamadas == 0
+
+
+def test_nao_calcula_rota_para_moto_que_ja_recusou_o_pedido(dispatch_contando, session, positions, mapa):
+    add_passenger(session)
+    rider = _moto_terminando(session, positions)
+    add_searching_ride(session, now=AGORA)
+    session.add(RideOfferRow(ride_id="ride-1", rider_id=rider, status="declined", will_queue=True,
+                             created_at=AGORA - 5, expires_at=AGORA + 10))
+    session.flush()
+    mapa.chamadas = 0
+    assert dispatch_contando.offer_next(session, "ride-1", AGORA) is None
+    assert mapa.chamadas == 0
+
+
+def test_nao_calcula_rota_para_moto_que_ja_tem_corrida_na_fila(dispatch_contando, session, positions, mapa):
+    add_passenger(session)
+    _moto_terminando(session, positions)
+    add_searching_ride(session, "ride-1", now=AGORA)
+    dispatch_contando.offer_next(session, "ride-1", AGORA)
+    dispatch_contando.accept_offer(session, "r1", "ride-1", AGORA + 1)
+    add_passenger(session, "p2", "+5575900000012")
+    add_searching_ride(session, "ride-2", "p2", now=AGORA)
+    mapa.chamadas = 0
+    assert dispatch_contando.offer_next(session, "ride-2", AGORA + 2) is None
+    assert mapa.chamadas == 0
+
+
+def test_ainda_calcula_a_rota_da_moto_que_esta_terminando_perto(dispatch_contando, session, positions, mapa):
+    add_passenger(session)
+    rider = _moto_terminando(session, positions)
+    add_searching_ride(session, now=AGORA)
+    mapa.chamadas = 0
+    assert dispatch_contando.offer_next(session, "ride-1", AGORA) == rider
+    assert mapa.chamadas >= 1
