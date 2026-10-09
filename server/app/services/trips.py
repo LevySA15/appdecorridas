@@ -80,6 +80,7 @@ class TripService:
 
     def complete_trip(self, session: Session, rider_id: str, ride_id: str, now: float) -> None:
         ride = self._rider_ride(session, rider_id, ride_id)
+        self.lock_queued_ride(session, rider_id)
         acc = repo.get_rider_account(session, rider_id, for_update=True)
         complete(ride, now)
         count_completed_ride(acc)
@@ -104,6 +105,17 @@ class TripService:
 
     # --- fila -----------------------------------------------------------------------------------
 
+    def lock_queued_ride(self, session: Session, rider_id: str) -> None:
+        """Trava já a corrida da fila do motoqueiro, se houver.
+
+        A ordem das travas é sempre: corrida, corrida da fila, motoqueiro. Quem termina ou cancela a
+        corrida atual chama isto antes de travar o motoqueiro; senão o Pix ou o cancelamento da corrida
+        da fila (que travam a fila e depois o motoqueiro) podem travar um ao outro (impasse).
+        """
+        queued_id = queries.queued_ride_id_of_rider(session, rider_id)
+        if queued_id is not None:
+            repo.get_ride(session, queued_id, for_update=True)
+
     def after_ride_ends(self, session: Session, rider_id: str, now: float) -> None:
         """O motoqueiro ficou livre: assume a corrida da fila, ou a devolve se ele não pode continuar."""
         if queries.rider_active_ride_id(session, rider_id) is not None:
@@ -111,8 +123,8 @@ class TripService:
         queued_id = queries.queued_ride_id_of_rider(session, rider_id)
         if queued_id is None:
             return
-        acc = repo.get_rider_account(session, rider_id, for_update=True)
         queued = repo.get_ride(session, queued_id, for_update=True)
+        acc = repo.get_rider_account(session, rider_id, for_update=True)
         if offer_block_reason(acc, self.cfg.fees) is not None:
             refunded = self.payments.release_queued_ride(session, queued_id, now)
             repo.log_ride_event(
@@ -134,6 +146,8 @@ class TripService:
         if ride.passenger_id != passenger_id:
             raise NotYourRide("Essa corrida não é sua.")
         state_before, rider_id = ride.state, ride.rider_id
+        if rider_id is not None and state_before in (RideState.ACCEPTED, RideState.ARRIVED):
+            self.lock_queued_ride(session, rider_id)
         result = self.payments.cancel_ride(session, ride_id, now)
         repo.log_ride_event(
             session, ride_id, "cancelled",

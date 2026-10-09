@@ -68,7 +68,9 @@ class SweepService:
             return True
 
         def pix(ride_id: str) -> bool:
-            ride = repo.get_ride(session, ride_id)
+            ride = repo.get_ride(session, ride_id, for_update=True)
+            if ride.rider_id is not None:
+                self.trips.lock_queued_ride(session, ride.rider_id)
             if not self.payments.expire_unpaid_pix(session, ride_id, now):
                 return False
             repo.log_ride_event(session, ride_id, "cancelled", {"by": "timeout", "reason": "pix_expired"}, now)
@@ -91,9 +93,11 @@ class SweepService:
             return True
 
         def arrival(ride_id: str) -> bool:
-            ride = repo.get_ride(session, ride_id)
+            ride = repo.get_ride(session, ride_id, for_update=True)
             if not arrival_wait_expired(ride, now, rides):
                 return False
+            if ride.rider_id is not None:
+                self.trips.lock_queued_ride(session, ride.rider_id)
             result = self.payments.cancel_after_arrival_timeout(session, ride_id, now)
             repo.log_ride_event(
                 session, ride_id, "cancelled",
