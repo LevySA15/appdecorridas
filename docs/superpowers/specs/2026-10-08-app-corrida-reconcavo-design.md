@@ -188,11 +188,11 @@ Usuário (passageiro e motoqueiro) · Perfil do motoqueiro e documentos · Moto 
 ## 11. Visual e voz do app
 
 - **Decidido:** estilo **A "claro e direto"** no modo claro (branco, preto e uma cor de destaque; letras grandes; poucas escolhas) e estilo **C "escuro e ousado"** no modo escuro. O app acompanha a configuração do celular.
-- **Decidido:** cor de destaque **verde #54CF57** (um verde-limão puxado para o esmeralda).
-- **Regra de contraste:** a cor de destaque é usada como **fundo** de botões, pinos e detalhes, com **texto escuro por cima**. Não usar o verde como cor de texto sobre fundo branco (contraste fraco).
+- **Decidido (Levy, 09/10/2026):** cor de destaque **vermelho #D92D27**, no lugar do verde #54CF57 escolhido antes. Valor visto no protótipo `docs/prototipo/index.html`.
+- **Regra de contraste:** a cor de destaque é usada como **fundo** de botões, pinos, barra de progresso e detalhes, com **texto branco por cima** (contraste de 4,8 para 1). Em texto sobre fundo branco também passa (mesmo contraste). No modo escuro, o vermelho serve como fundo de botão e pino, não como texto pequeno sobre o preto. O vermelho também sinaliza alerta; por isso o aviso de segurança usa tela inteira vermelha e nenhum erro comum usa essa cor sozinha (sempre com texto explicando).
 - **Mapa em primeiro plano**, com a faixa de controles embaixo, como nos apps grandes.
 - **Voz:** frases curtas e simples, jeito de falar da região ("Pra onde vamos?"). O texto exato é definido na implementação.
-- Os mockups das escolhas estão em `.superpowers/brainstorm/` (pasta local, fora do controle de versão).
+- Os mockups das escolhas antigas estão em `.superpowers/brainstorm/` (pasta local, fora do controle de versão). O protótipo atual, com o vermelho, está em `docs/prototipo/index.html`.
 
 ## 12. Erros e resiliência
 
