@@ -45,3 +45,12 @@ def add_accepted_ride(
     accept(ride, rider_id, now, rider_busy=busy)
     repo.add_ride(session, ride)
     return ride
+
+
+def make_cpf(base: str) -> str:
+    """CPF válido a partir de 9 dígitos (calcula os dois dígitos verificadores)."""
+    d = [int(c) for c in base]
+    for n in (9, 10):
+        total = sum(d[i] * (n + 1 - i) for i in range(n))
+        d.append((total * 10 % 11) % 10)
+    return "".join(map(str, d))
