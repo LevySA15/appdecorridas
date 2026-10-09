@@ -176,3 +176,11 @@ def completed_rides_since(session: Session, rider_id: str, since: float) -> int:
             RideRow.rider_id == rider_id, RideRow.state == RideState.COMPLETED.value, RideRow.completed_at >= since
         )
     ).scalar_one()
+
+
+
+
+def queued_ride_id_of_rider(session: Session, rider_id: str) -> str | None:
+    return session.execute(
+        select(RideRow.id).where(RideRow.rider_id == rider_id, RideRow.state == RideState.QUEUED.value).limit(1)
+    ).scalar_one_or_none()

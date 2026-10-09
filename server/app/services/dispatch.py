@@ -174,6 +174,16 @@ class DispatchService:
         repo.log_ride_event(session, ride_id, "declined", {"rider_id": rider_id}, now)
         return self.offer_next(session, ride_id, now)
 
+    def withdraw_offer(self, session: Session, ride_id: str) -> None:
+        """A corrida saiu da procura (por exemplo, o passageiro cancelou): tira a oferta e solta a moto."""
+        pending = queries.get_pending_offer(session, ride_id, for_update=True)
+        if pending is None:
+            return
+        pending.status = "expired"
+        session.flush()
+        self.reservations.release(pending.rider_id, ride_id)
+        self.events.add(pending.rider_id, "offer_expired", {"ride_id": ride_id})
+
     def expire_offers(self, session: Session, now: float) -> int:
         """Ofertas que passaram dos 15 segundos: expira e oferece à próxima moto. Devolve quantas venceram."""
         due = queries.due_offer_ride_ids(session, now)
