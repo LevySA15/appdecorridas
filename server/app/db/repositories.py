@@ -315,3 +315,15 @@ def ride_events(session: Session, ride_id: str) -> list[tuple[str, dict]]:
         select(RideEventRow).where(RideEventRow.ride_id == ride_id).order_by(RideEventRow.id)
     ).scalars()
     return [(r.kind, r.data) for r in rows]
+
+
+
+
+def find_open_entry_charge(session: Session, rider_id: str) -> PixCharge | None:
+    """Cobrança da entrada de R$ 50 que o motoqueiro ainda não pagou, se houver."""
+    row = session.execute(
+        select(PixChargeRow)
+        .where(PixChargeRow.rider_id == rider_id, PixChargeRow.purpose == "entry", PixChargeRow.paid.is_(False))
+        .limit(1)
+    ).scalar_one_or_none()
+    return _charge_to_domain(row) if row is not None else None

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.db import repositories as repo
 from app.db.models import RiderProfileRow
 from app.domain.geo import GeoPoint
-from app.domain.rides import Ride, accept, start_search
+from app.domain.rides import Ride, accept, complete, confirm_helmet, mark_arrived, start_ride, start_search
 from app.domain.types import PaymentMethod
 from tests.helpers import ORIGIN, pt
 
@@ -104,3 +104,28 @@ def add_completed_rides_today(session, rider_id: str, n: int, now: float, passen
             )
         )
     session.flush()
+
+
+def add_completed_ride(
+    session,
+    ride_id: str = "ride-1",
+    passenger_id: str = "p1",
+    rider_id: str = "r1",
+    method: PaymentMethod = PaymentMethod.CASH,
+    price: int = 700,
+    fee: int = 100,
+    completed_at: float = 1000.0,
+) -> Ride:
+    """Corrida que já terminou. A taxa decidida no aceite fica em `fee_cents`."""
+    ride = Ride(ride_id, passenger_id, price, method, pin="4821")
+    start_search(ride, 0)
+    accept(ride, rider_id, 1, rider_busy=False)
+    mark_arrived(ride, 2)
+    confirm_helmet(ride)
+    if method is PaymentMethod.PIX:
+        ride.pix_paid = True
+    start_ride(ride, "4821")
+    complete(ride, completed_at)
+    ride.fee_cents = fee
+    repo.add_ride(session, ride)
+    return ride
