@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Protótipo do app de corrida</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --acc:#D92D27; --on:#ffffff;
+  --page:#e9ebee; --panel:#ffffff; --bg:#ffffff; --ink:#14161a; --muted:#5f6672;
+  --card:#f1f2f4; --line:#e2e4e8; --map:#e7eaee; --road:#ffffff; --block:#dde1e6; --shadow:rgba(20,22,26,.14);
+  --font:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+[data-theme="dark"]{
+  --page:#06080b; --panel:#10141a; --bg:#0c0f14; --ink:#f3f5f8; --muted:#9aa3b2;
+  --card:#171c25; --line:#232a36; --map:#10151c; --road:#1a212c; --block:#141a23; --shadow:rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--page);color:var(--ink);font-family:var(--font);font-optical-sizing:auto;line-height:1.35}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+
+/* ---------- moldura da página ---------- */
+.wrap{max-width:980px;margin:0 auto;padding:20px 16px 40px}
+.top{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;justify-content:space-between;margin-bottom:22px}
+.top h1{font-size:20px;margin:0;font-weight:800;letter-spacing:-.01em}
+.controls{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.group{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:3px}
+.group button{border:0;background:transparent;padding:8px 14px;border-radius:9px;font-weight:600;font-size:14px;cursor:pointer;color:var(--muted)}
+.group button[aria-pressed="true"]{background:var(--acc);color:var(--on)}
+.color{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:5px 8px;font-size:14px}
+.color input[type=color]{width:34px;height:30px;border:0;padding:0;background:none;cursor:pointer}
+.sw{width:24px;height:24px;border-radius:50%;border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line);cursor:pointer;padding:0}
+.stage{display:grid;grid-template-columns:230px 1fr;gap:28px;align-items:start}
+.steps{display:flex;flex-direction:column;gap:6px}
+.steps h2{font-size:14px;margin:0 0 6px;color:var(--muted);font-weight:600}
+.steps button{display:flex;gap:10px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:10px 12px;cursor:pointer;font-size:14px;font-weight:600}
+.steps button[aria-current="true"]{border-color:var(--acc);box-shadow:inset 4px 0 0 var(--acc)}
+.steps .n{width:22px;height:22px;border-radius:50%;background:var(--card);display:grid;place-items:center;font-size:12px;flex:none}
+.steps button[aria-current="true"] .n{background:var(--acc);color:var(--on)}
+.foot{margin-top:24px;color:var(--muted);font-size:13px;max-width:60ch}
+.phonebox{display:flex;justify-content:center}
+
+/* ---------- celular ---------- */
+.phone{position:relative;width:min(360px,100%);height:740px;border-radius:44px;border:10px solid #0b0d11;background:var(--bg);color:var(--ink);overflow:hidden;box-shadow:0 30px 60px -24px var(--shadow)}
+.status{position:absolute;z-index:6;top:0;left:0;right:0;height:36px;display:flex;justify-content:space-between;align-items:center;padding:0 26px 0 28px;font-size:12px;font-weight:600;pointer-events:none}
+.bat{width:22px;height:11px;border:1.5px solid currentColor;border-radius:3px;position:relative}
+.bat::after{content:"";position:absolute;inset:1.5px 5px 1.5px 1.5px;background:currentColor;border-radius:1px}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column}
+.map{position:absolute;inset:0;width:100%;height:100%}
+.m-bg{fill:var(--map)} .m-block{fill:var(--block)} .m-road{stroke:var(--road);fill:none;stroke-linecap:round}
+.m-route{stroke:var(--acc);fill:none;stroke-linecap:round;stroke-linejoin:round}
+.sheet{position:relative;margin-top:auto;background:var(--bg);border-radius:28px 28px 0 0;padding:20px 18px 22px;box-shadow:0 -12px 32px var(--shadow);display:flex;flex-direction:column;gap:12px}
+.pad{position:relative;padding:50px 20px 20px;display:flex;flex-direction:column;gap:14px;height:100%}
+h3{margin:0;font-size:22px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+p{margin:0}
+.muted{color:var(--muted)} .small{font-size:13px}
+.btn{display:block;width:100%;border:0;border-radius:16px;padding:16px;font-weight:800;font-size:16px;background:var(--acc);color:var(--on);cursor:pointer;text-align:center}
+.btn.ghost{background:var(--card);color:var(--ink)}
+.btn.line{background:transparent;color:var(--acc);box-shadow:inset 0 0 0 2px var(--acc)}
+.btn.sim{background:transparent;color:var(--muted);font-weight:600;font-size:14px;padding:10px;box-shadow:inset 0 0 0 1px var(--line);border-radius:12px}
+.field{width:100%;text-align:left;border:0;background:var(--card);border-radius:16px;padding:16px;font-size:16px;color:var(--muted);cursor:pointer}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chips button{border:0;background:var(--card);border-radius:999px;padding:9px 14px;font-weight:600;font-size:14px;cursor:pointer}
+.route{display:grid;grid-template-columns:14px 1fr;gap:6px 10px;align-items:center;font-size:14px}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--acc)} .sq{width:12px;height:12px;background:var(--ink)}
+.price{font-size:60px;font-weight:800;letter-spacing:-.04em;line-height:.95;font-variant-numeric:tabular-nums}
+.price small{font-size:26px;letter-spacing:-.02em;margin-right:4px;font-weight:600;color:var(--muted)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--card);border-radius:14px;padding:4px}
+.seg button{border:0;background:transparent;padding:11px;border-radius:11px;font-weight:700;cursor:pointer;color:var(--muted)}
+.seg button.sel{background:var(--bg);color:var(--ink);box-shadow:0 1px 4px var(--shadow)}
+.rider{display:flex;gap:12px;align-items:center}
+.av{width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-weight:800;flex:none}
+.rider .eta{margin-left:auto;text-align:right;font-weight:800;font-size:20px;line-height:1}
+.rider .eta span{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-top:3px}
+.card{background:var(--card);border-radius:18px;padding:14px;display:flex;gap:14px;align-items:center}
+.qrbox{background:#fff;border-radius:12px;padding:8px;flex:none;width:112px;height:112px}
+.qrbox svg{display:block;width:100%;height:100%}
+.timer{font-variant-numeric:tabular-nums;font-weight:800;color:var(--acc)}
+.code{display:flex;gap:10px;justify-content:center}
+.code b{width:62px;height:76px;border-radius:16px;background:var(--card);display:grid;place-items:center;font-size:40px;font-weight:800;font-variant-numeric:tabular-nums}
+.code.in b{border:2px dashed var(--line);background:transparent;color:var(--muted)}
+.progress{height:8px;background:var(--card);border-radius:99px;overflow:hidden}
+.progress i{display:block;height:100%;width:62%;background:var(--acc);border-radius:99px}
+.stars{display:flex;gap:6px;justify-content:center}
+.stars button{border:0;background:none;font-size:38px;line-height:1;cursor:pointer;color:var(--line);padding:2px}
+.stars button.on{color:var(--acc)}
+.chip{align-self:flex-start;background:var(--ink);color:var(--bg);font-size:12px;font-weight:700;padding:5px 10px;border-radius:99px}
+.sw-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--card);border-radius:16px;padding:14px 16px;font-weight:700}
+.switch{width:52px;height:30px;border-radius:99px;border:0;background:var(--line);position:relative;cursor:pointer;flex:none}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:transform .15s}
+.switch[aria-checked="true"]{background:var(--acc)}
+.switch[aria-checked="true"]::after{transform:translateX(22px)}
+.ringbox{position:relative;width:84px;height:84px;flex:none}
+.ring{width:100%;height:100%;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:7}
+.ring .bg{stroke:var(--card)}
+.ring .fg{stroke:var(--acc);stroke-linecap:round;stroke-dasharray:213.6;stroke-dashoffset:0;animation:ring 15s linear forwards}
+.ringn{position:absolute;inset:0;display:grid;place-items:center;font-size:26px;font-weight:800;font-variant-numeric:tabular-nums}
+@keyframes ring{to{stroke-dashoffset:213.6}}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.facts div{background:var(--card);border-radius:14px;padding:12px}
+.facts b{display:block;font-size:20px;letter-spacing:-.01em}
+.pulse{position:absolute;left:50%;top:33%;width:20px;height:20px;margin:-10px;border-radius:50%;background:var(--acc);box-shadow:0 0 0 4px var(--bg)}
+.pulse::before,.pulse::after{content:"";position:absolute;inset:0;border-radius:50%;border:3px solid var(--acc);animation:pulse 2.4s ease-out infinite}
+.pulse::after{animation-delay:1.2s}
+@keyframes pulse{from{transform:scale(1);opacity:.9}to{transform:scale(7);opacity:0}}
+.alert{background:var(--acc);color:var(--on);height:100%;padding:70px 24px 24px;display:flex;flex-direction:column;gap:14px;justify-content:flex-end}
+.alert h3{font-size:34px}
+.alert .btn{background:var(--on);color:#14161a}
+.alert .btn.line{background:transparent;color:var(--on);box-shadow:inset 0 0 0 2px var(--on)}
+.list{display:flex;flex-direction:column}
+.list div{display:flex;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);font-size:15px}
+.list div b{font-variant-numeric:tabular-nums}
+.debt{background:var(--card);border-left:5px solid var(--acc);border-radius:12px;padding:12px 14px;font-size:14px}
+.bignum{font-size:46px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1}
+.sosmsg{display:none;font-weight:700;text-align:center}
+@media (max-width:760px){.stage{grid-template-columns:1fr}.steps{flex-direction:row;flex-wrap:wrap}.steps h2{width:100%}}
+@media (prefers-reduced-motion:reduce){.ring .fg,.pulse::before,.pulse::after{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Protótipo do app de corrida</h1>
+    <div class="controls">
+      <div class="group" role="group" aria-label="App">
+        <button id="r-pax" aria-pressed="true">Passageiro</button>
+        <button id="r-rider" aria-pressed="false">Motoqueiro</button>
+      </div>
+      <div class="group" role="group" aria-label="Tema">
+        <button id="t-light" aria-pressed="true">Claro</button>
+        <button id="t-dark" aria-pressed="false">Escuro</button>
+      </div>
+      <div class="color">
+        <label for="acc">Cor</label>
+        <input id="acc" type="color" value="#d92d27">
+        <button class="sw" data-c="#D92D27" style="background:#D92D27" aria-label="Vermelho"></button>
+        <button class="sw" data-c="#E8312B" style="background:#E8312B" aria-label="Vermelho vivo"></button>
+        <button class="sw" data-c="#B3202A" style="background:#B3202A" aria-label="Vinho"></button>
+        <button class="sw" data-c="#54CF57" style="background:#54CF57" aria-label="Verde antigo"></button>
+      </div>
+    </div>
+  </header>
+  <div class="stage">
+    <nav class="steps" id="steps" aria-label="Telas"></nav>
+    <div class="phonebox"><div class="phone" id="phone"></div></div>
+  </div>
+  <p class="foot">Só a aparência, com dados de exemplo. Ainda não está ligado ao servidor. Toque nos botões do celular para avançar, ou escolha a tela na lista.</p>
+</div>
+
+<script>
+const S = { role: "pax", step: 0, pay: "pix", theme: "light", timer: null, stars: 0, online: true, helmet: true };
+
+/* ---------- peças reutilizáveis ---------- */
+function map(route, pin) {
+  return `<svg class="map" viewBox="0 0 360 740" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <rect class="m-bg" width="360" height="740"/>
+    <g class="m-block">
+      <rect x="100" y="165" width="90" height="105" rx="8"/><rect x="215" y="165" width="85" height="105" rx="8"/>
+      <rect x="-10" y="320" width="60" height="130" rx="8"/><rect x="100" y="320" width="75" height="130" rx="8"/><rect x="215" y="320" width="85" height="130" rx="8"/>
+      <rect x="100" y="520" width="75" height="120" rx="8"/><rect x="215" y="520" width="85" height="120" rx="8"/><rect x="335" y="165" width="40" height="105" rx="8"/>
+    </g>
+    <g class="m-road" stroke-width="14">
+      <path d="M-10 120 L370 140"/><path d="M-10 300 L370 285"/><path d="M-10 480 L370 500"/><path d="M-10 660 L370 650"/>
+      <path d="M70 -10 L85 750"/><path d="M200 -10 L195 750"/><path d="M320 -10 L335 750"/>
+    </g>
+    ${route ? `<path class="m-route" stroke-width="6" d="M85 480 L80 300 L200 292 L198 140"/>
+      <circle cx="85" cy="480" r="10" fill="var(--acc)" stroke="var(--bg)" stroke-width="4"/>
+      <rect x="188" y="130" width="20" height="20" fill="var(--ink)" stroke="var(--bg)" stroke-width="4"/>` : ""}
+    ${pin ? `<circle cx="180" cy="245" r="10" fill="var(--acc)" stroke="var(--bg)" stroke-width="4"/>` : ""}
+  </svg>`;
+}
+
+function qr(seed) {
+  const n = 21; let s = seed;
+  const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  let out = "";
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const corners = [[0, 0], [n - 7, 0], [0, n - 7]];
+    let dark = null;
+    for (const [ox, oy] of corners) {
+      const lx = x - ox, ly = y - oy;
+      if (lx >= -1 && lx <= 7 && ly >= -1 && ly <= 7) {
+        dark = (lx >= 0 && lx <= 6 && ly >= 0 && ly <= 6) &&
+          (lx === 0 || lx === 6 || ly === 0 || ly === 6 || (lx >= 2 && lx <= 4 && ly >= 2 && ly <= 4));
+      }
+    }
+    if (dark === null) dark = rnd() > 0.52;
+    if (dark) out += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+  }
+  return `<svg viewBox="0 0 ${n} ${n}" fill="#111" shape-rendering="crispEdges" role="img" aria-label="QR code de exemplo">${out}</svg>`;
+}
+
+const go = (to, text, cls = "") => `<button class="btn ${cls}" data-go="${to}">${text}</button>`;
+
+/* ---------- telas do passageiro ---------- */
+const PAX = [
+  { id: "inicio", label: "Início", html: () => `
+    ${map(false, true)}
+    <div class="sheet">
+      <h3>Para onde você vai?</h3>
+      <button class="field" data-go="confirmar">Digite o destino</button>
+      <div class="chips"><button data-go="confirmar">Casa</button><button data-go="confirmar">Trabalho</button><button data-go="confirmar">Feira livre</button></div>
+    </div>` },
+
+  { id: "confirmar", label: "Confirmar e escolher pagamento", html: () => `
+    ${map(true)}
+    <div class="sheet">
+      <div class="route"><i class="dot"></i><span>Sua localização</span><i class="sq"></i><span>Feira livre</span></div>
+      <div class="price"><small>R$</small>7,00</div>
+      <p class="muted small">Moto · 2,1 km · chega em cerca de 4 min. Preço fechado, taxas incluídas.</p>
+      <div class="seg" role="group" aria-label="Forma de pagamento">
+        <button data-pay="pix" class="${S.pay === "pix" ? "sel" : ""}">Pix</button>
+        <button data-pay="cash" class="${S.pay === "cash" ? "sel" : ""}">Dinheiro</button>
+      </div>
+      <p class="muted small">${S.pay === "pix" ? "Você paga o Pix assim que um motoqueiro aceitar." : "Você paga ao motoqueiro no fim da corrida."}</p>
+      ${go("procurando", "Pedir moto")}
+    </div>` },
+
+  { id: "procurando", label: "Procurando motoqueiro", html: () => `
+    ${map(false, false)}<div class="pulse"></div>
+    <div class="sheet">
+      <h3>Procurando um motoqueiro</h3>
+      <p class="muted">Você vê quem aceitou assim que alguém aceitar.</p>
+      ${go("caminho", "Um motoqueiro aceitou (simular)", "sim")}
+      ${go("inicio", "Cancelar pedido", "ghost")}
+    </div>` },
+
+  { id: "caminho", label: "Motoqueiro a caminho", html: () => `
+    ${map(true)}
+    <div class="sheet">
+      <div class="rider"><div class="av">CM</div><div><b>Carlos M.</b><div class="muted small">4,9 de nota · Honda CG 160 · ABC1D23</div></div><div class="eta">3 min<span>até você</span></div></div>
+      ${S.pay === "pix" ? `
+      <div class="card"><div class="qrbox">${qr(11)}</div>
+        <div><b>Pague R$ 7,00 no Pix</b><p class="muted small">para confirmar a corrida.</p><p class="small" style="margin-top:6px">Vence em <span class="timer" id="pixt">2:00</span></p></div></div>
+      ${go("chegou", "Já paguei (simular)")}
+      <button class="btn ghost" data-go="inicio">Cancelar corrida</button>` : `
+      <div class="card"><div><b>Pagamento em dinheiro</b><p class="muted small">Você paga R$ 7,00 ao motoqueiro no fim da corrida.</p></div></div>
+      ${go("chegou", "A moto chegou (simular)")}
+      <button class="btn ghost" data-go="inicio">Cancelar corrida</button>`}
+    </div>`,
+    after: () => { if (S.pay === "pix") countdown("pixt", 120, v => `${Math.floor(v / 60)}:${String(v % 60).padStart(2, "0")}`); } },
+
+  { id: "chegou", label: "Moto chegou: mostrar o código", html: () => `
+    ${map(false, true)}
+    <div class="sheet">
+      <h3>Carlos chegou</h3>
+      <p class="muted">Diga este código antes de subir. O motoqueiro também confere o capacete.</p>
+      <div class="code" aria-label="Código 4 8 2 1"><b>4</b><b>8</b><b>2</b><b>1</b></div>
+      ${go("viagem", "Embarcar (simular)")}
+    </div>` },
+
+  { id: "viagem", label: "Em viagem", html: () => `
+    ${map(true)}
+    <div class="sheet">
+      <h3>A caminho da Feira livre</h3>
+      <div class="progress"><i></i></div>
+      <div class="rider"><div class="av">CM</div><div><b>Carlos M.</b><div class="muted small">ABC1D23 · Honda CG 160</div></div><div class="eta">3 min<span>para chegar</span></div></div>
+      ${go("fim", "Chegamos (simular)")}
+      ${go("aviso", "A moto parou fora do trajeto (simular)", "sim")}
+    </div>` },
+
+  { id: "aviso", label: "Aviso de segurança", html: () => `
+    <div class="alert">
+      <h3>Tudo bem com a corrida?</h3>
+      <p>A moto está parada fora do trajeto. Responda para o app saber que está tudo certo.</p>
+      ${go("viagem", "Estou bem")}
+      <button class="btn line" data-sos>Preciso de ajuda</button>
+      <p class="sosmsg" id="sosmsg">Pedido de ajuda enviado ao suporte. (exemplo)</p>
+    </div>` },
+
+  { id: "fim", label: "Fim da corrida e nota", html: () => `
+    <div class="pad">
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:14px">
+        <h3>Você chegou</h3>
+        <div class="price"><small>R$</small>7,00</div>
+        <p class="muted">${S.pay === "pix" ? "Pago com Pix." : "Pagamento em dinheiro."} Como foi a corrida com o Carlos?</p>
+        <div class="stars" role="group" aria-label="Nota">${[1, 2, 3, 4, 5].map(i => `<button data-star="${i}" class="${i <= S.stars ? "on" : ""}" aria-label="${i} estrelas">★</button>`).join("")}</div>
+        ${go("inicio", "Concluir")}
+      </div>
+    </div>` },
+];
+
+/* ---------- telas do motoqueiro ---------- */
+const RIDER = [
+  { id: "online", label: "Disponível", html: () => `
+    ${map(false, true)}
+    <div class="sheet">
+      <div class="sw-row"><span>${S.online ? "Você está disponível" : "Você está offline"}</span><button class="switch" role="switch" aria-checked="${S.online}" aria-label="Ficar disponível" data-online></button></div>
+      <div class="facts"><div><b>9</b><span class="muted small">corridas hoje</span></div><div><b>R$ 54,00</b><span class="muted small">recebido hoje</span></div></div>
+      ${S.online ? `<p class="muted small">Você recebe corridas por perto enquanto estiver disponível.</p>${go("oferta", "Chegou uma corrida (simular)", "sim")}` : `<p class="muted small">Ligue a chave para voltar a receber corridas.</p>`}
+      ${go("extrato", "Ver extrato do dia", "ghost")}
+    </div>` },
+
+  { id: "oferta", label: "Nova corrida", html: () => `
+    ${map(true)}
+    <div class="sheet">
+      <div class="rider"><div class="ringbox"><svg class="ring" viewBox="0 0 80 80" aria-hidden="true"><circle class="bg" cx="40" cy="40" r="34"/><circle class="fg" cx="40" cy="40" r="34"/></svg><div class="ringn" id="offn">15</div></div>
+        <div><h3>Nova corrida</h3><div class="muted small">${S.pay === "pix" ? "Pix, pago pelo passageiro" : "Dinheiro, no fim da corrida"}</div></div></div>
+      <div class="price"><small>R$</small>7,00</div>
+      <div class="facts"><div><b>600 m</b><span class="muted small">até o passageiro</span></div><div><b>2,1 km</b><span class="muted small">de corrida</span></div></div>
+      ${go("buscar", "Aceitar")}
+      ${go("online", "Recusar", "ghost")}
+    </div>`,
+    after: () => countdown("offn", 15, v => String(v), () => { S.step = 0; render(); }) },
+
+  { id: "buscar", label: "Buscar o passageiro", html: () => `
+    ${map(true)}
+    <div class="sheet">
+      <div class="rider"><div class="av">AL</div><div><b>Ana L.</b><div class="muted small">Rua das Flores, 120</div></div><div class="eta">600 m<span>3 min</span></div></div>
+      <span class="chip">${S.pay === "pix" ? "Pix a pagar em até 2 min" : "Pagamento em dinheiro"}</span>
+      ${go("embarque", "Cheguei ao ponto")}
+      ${go("online", "Cancelar corrida", "ghost")}
+    </div>` },
+
+  { id: "embarque", label: "Código e capacete", html: () => `
+    <div class="pad">
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:14px">
+        <h3>Código da Ana</h3>
+        <p class="muted">Peça os 4 números que aparecem no celular dela.</p>
+        <div class="code in" aria-label="Código do passageiro"><b>4</b><b>8</b><b>2</b><b>_</b></div>
+        <div class="sw-row"><span>Passageiro com capacete</span><button class="switch" role="switch" aria-checked="${S.helmet}" aria-label="Capacete confirmado" data-helmet></button></div>
+        ${go("receber", "Iniciar corrida")}
+      </div>
+    </div>` },
+
+  { id: "receber", label: "Receber o pagamento", html: () => `
+    <div class="pad">
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:14px">
+        <h3>${S.pay === "pix" ? "Corrida concluída" : "Receber o pagamento"}</h3>
+        <div class="bignum">R$ 7,00</div>
+        ${S.pay === "pix"
+          ? `<div class="card"><div><b>Pix já pago</b><p class="muted small">O valor cai na sua conta. Nada para receber do passageiro.</p></div></div>${go("extrato", "Concluir")}`
+          : `<div class="card"><div class="qrbox">${qr(29)}</div><div><b>Passageiro paga pelo QR</b><p class="muted small">ou em dinheiro. Só confirme quando receber.</p></div></div>
+             ${go("extrato", "Confirmei o pagamento")}
+             ${go("online", "O passageiro não pagou", "line")}`}
+      </div>
+    </div>` },
+
+  { id: "extrato", label: "Extrato do dia", html: () => `
+    <div class="pad">
+      <h3>Hoje</h3>
+      <div><div class="bignum">R$ 54,00</div><p class="muted small" style="margin-top:6px">9 corridas</p></div>
+      <div class="debt"><b>Taxa pendente: R$ 3,00</b><br>Das corridas pagas em dinheiro. Será descontada da próxima corrida paga por Pix. Limite: R$ 10,00.</div>
+      <div class="list">
+        <div><span>14:02 · Feira livre</span><b>R$ 7,00 Pix</b></div>
+        <div><span>13:25 · Centro</span><b>R$ 6,00 dinheiro</b></div>
+        <div><span>12:48 · Rodoviária</span><b>R$ 8,00 Pix</b></div>
+        <div><span>12:10 · Bairro Irmã Dulce</span><b>R$ 7,00 dinheiro</b></div>
+      </div>
+      ${go("online", "Voltar", "ghost")}
+    </div>` },
+];
+
+/* ---------- motor da página ---------- */
+function steps() { return S.role === "pax" ? PAX : RIDER; }
+
+function countdown(id, from, fmt, done) {
+  let v = from;
+  const tick = () => { const el = document.getElementById(id); if (el) el.textContent = fmt(v); };
+  tick();
+  S.timer = setInterval(() => {
+    v -= 1; tick();
+    if (v <= 0) { clearInterval(S.timer); if (done) done(); }
+  }, 1000);
+}
+
+function onColor(hex) {
+  // Texto branco sempre que o contraste for bom (4 ou mais); senão, o que tiver mais contraste.
+  const n = parseInt(hex.slice(1), 16);
+  const c = [n >> 16, (n >> 8) & 255, n & 255].map(v => {
+    v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  const L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const withWhite = 1.05 / (L + 0.05);
+  const withDark = (L + 0.05) / 0.058;
+  return withWhite >= 4 || withWhite >= withDark ? "#ffffff" : "#14161a";
+}
+
+function setAccent(hex) {
+  const root = document.documentElement.style;
+  root.setProperty("--acc", hex);
+  root.setProperty("--on", onColor(hex));
+  document.getElementById("acc").value = hex.toLowerCase();
+}
+
+function render() {
+  clearInterval(S.timer);
+  const list = steps(), step = list[S.step];
+  document.getElementById("phone").innerHTML =
+    `<div class="status"><span>14:02</span><span class="bat" aria-hidden="true"></span></div><div class="screen">${step.html()}</div>`;
+  document.getElementById("steps").innerHTML = `<h2>Telas</h2>` + list.map((s, i) =>
+    `<button data-i="${i}" ${i === S.step ? 'aria-current="true"' : ""}><span class="n">${i + 1}</span>${s.label}</button>`).join("");
+  if (step.after) step.after();
+}
+
+function goTo(id) {
+  const list = steps();
+  if (id === "next") S.step = Math.min(S.step + 1, list.length - 1);
+  else { const i = list.findIndex(s => s.id === id); if (i >= 0) S.step = i; }
+  render();
+}
+
+function setPressed(ids, on) { ids.forEach(id => document.getElementById(id).setAttribute("aria-pressed", String(id === on))); }
+
+function init() {
+  const phone = document.getElementById("phone");
+  phone.addEventListener("click", e => {
+    const t = e.target.closest("button"); if (!t) return;
+    if (t.dataset.pay) { S.pay = t.dataset.pay; render(); return; }
+    if (t.dataset.star) { S.stars = Number(t.dataset.star); render(); return; }
+    if (t.hasAttribute("data-online")) { S.online = !S.online; render(); return; }
+    if (t.hasAttribute("data-helmet")) { S.helmet = !S.helmet; render(); return; }
+    if (t.hasAttribute("data-sos")) { const m = document.getElementById("sosmsg"); if (m) m.style.display = "block"; return; }
+    if (t.dataset.go) goTo(t.dataset.go);
+  });
+  document.getElementById("steps").addEventListener("click", e => {
+    const t = e.target.closest("button[data-i]"); if (t) { S.step = Number(t.dataset.i); render(); }
+  });
+  const role = r => () => { S.role = r; S.step = 0; setPressed(["r-pax", "r-rider"], r === "pax" ? "r-pax" : "r-rider"); render(); };
+  document.getElementById("r-pax").addEventListener("click", role("pax"));
+  document.getElementById("r-rider").addEventListener("click", role("rider"));
+  const theme = t => () => { S.theme = t; document.documentElement.dataset.theme = t; setPressed(["t-light", "t-dark"], t === "light" ? "t-light" : "t-dark"); };
+  document.getElementById("t-light").addEventListener("click", theme("light"));
+  document.getElementById("t-dark").addEventListener("click", theme("dark"));
+  document.getElementById("acc").addEventListener("input", e => setAccent(e.target.value));
+  document.querySelectorAll(".sw").forEach(b => b.addEventListener("click", () => setAccent(b.dataset.c)));
+  setAccent("#D92D27");
+  render();
+}
+
+if (typeof document !== "undefined" && document.getElementById) init();
+globalThis.__PROTO = { S, PAX, RIDER, onColor, qr, map };
+</script>
+</body>
+</html>
