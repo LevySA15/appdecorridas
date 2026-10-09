@@ -82,11 +82,13 @@ class QuoteService:
         )
         free = len(queries.free_online_rider_ids(session, [rider_id for rider_id, _ in near]))
         pending = queries.count_searching_rides(session)
-        previous = self.factors.get()
-        factor = smooth_factor(
-            previous if previous is not None else 1.0, target_factor(pending, free, self.cfg.pricing), self.cfg.pricing
-        )
-        self.factors.set(factor)
+        state = self.factors.get()
+        if state is None or now - state[1] >= self.cfg.pricing.factor_interval_s:
+            previous = state[0] if state is not None else 1.0
+            factor = smooth_factor(previous, target_factor(pending, free, self.cfg.pricing), self.cfg.pricing)
+            self.factors.set(factor, now)
+        else:
+            factor = state[0]     # o fator é da cidade: muda no máximo uma vez por intervalo, não a cada cotação
         price = final_price_cents(route.distance_m, factor, self.cfg.pricing)
         quote = Quote(
             quote_id=new_id("q"), price_cents=price, distance_m=route.distance_m, duration_s=route.duration_s,

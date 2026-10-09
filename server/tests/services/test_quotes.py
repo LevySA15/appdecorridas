@@ -42,7 +42,7 @@ def test_cotacao_normal_sem_demanda_e_sem_motos(service, session, factors):
     assert quote.expires_at == 1300.0
     row = session.execute(select(QuoteRow)).scalar_one()
     assert (row.id, row.passenger_id, row.price_cents, row.used) == (quote.quote_id, "p1", 600, False)
-    assert factors.get() == 1.0
+    assert factors.get() == (1.0, 1000.0)
 
 
 def test_muito_pedido_e_pouca_moto_sobe_o_preco_aos_poucos(service, session, factors):
@@ -52,9 +52,21 @@ def test_muito_pedido_e_pouca_moto_sobe_o_preco_aos_poucos(service, session, fac
         add_searching_ride(session, f"ride-{i}", f"p{i}")
     primeira = cotar(service, session, now=1000.0)
     assert primeira.factor == pytest.approx(1.1) and primeira.price_cents == 650
-    segunda = cotar(service, session, now=1010.0)
+    segunda = cotar(service, session, now=1031.0)
     assert segunda.factor == pytest.approx(1.2) and segunda.price_cents == 700
     assert segunda.reason == "Poucas motos agora, preço maior."
+
+
+def test_varias_cotacoes_seguidas_nao_aceleram_a_mudanca_do_preco(service, session):
+    # Revisão final do plano 2B (I6): o fator é da cidade; quem aperta "cotar" várias vezes não o move mais rápido.
+    add_passenger(session)
+    for i in (2, 3, 4):
+        add_passenger(session, f"p{i}", f"+5575900001{i:03d}")
+        add_searching_ride(session, f"ride-{i}", f"p{i}")
+    assert cotar(service, session, now=1000.0).factor == pytest.approx(1.1)
+    for agora in (1005.0, 1010.0, 1020.0, 1029.0):
+        assert cotar(service, session, now=agora).factor == pytest.approx(1.1)
+    assert cotar(service, session, now=1030.0).factor == pytest.approx(1.2)
 
 
 def test_muita_moto_livre_baixa_o_preco(service, session, positions):

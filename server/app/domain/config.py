@@ -18,6 +18,7 @@ class PricingConfig:
     factor_min: float = 0.8
     factor_max: float = 1.6
     max_factor_step: float = 0.1    # mudança máxima do fator por atualização
+    factor_interval_s: float = 30.0 # tempo mínimo entre duas atualizações do fator (o preço muda aos poucos)
 
 
 @dataclass(frozen=True)

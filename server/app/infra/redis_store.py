@@ -143,32 +143,36 @@ class RedisReservationBook:
 
 
 class FactorStore(Protocol):
-    def get(self) -> float | None: ...
+    def get(self) -> tuple[float, float] | None:
+        """(fator, instante da última atualização), ou None se nunca houve."""
 
-    def set(self, value: float) -> None: ...
+    def set(self, value: float, updated_at: float) -> None: ...
 
 
 class InMemoryFactorStore:
     def __init__(self) -> None:
-        self._value: float | None = None
+        self._state: tuple[float, float] | None = None
 
-    def get(self) -> float | None:
-        return self._value
+    def get(self) -> tuple[float, float] | None:
+        return self._state
 
-    def set(self, value: float) -> None:
-        self._value = value
+    def set(self, value: float, updated_at: float) -> None:
+        self._state = (value, updated_at)
 
 
 class RedisFactorStore:
-    """Fator de preço atual (muda aos poucos, então precisa lembrar o valor anterior)."""
+    """Fator de preço atual e quando mudou (o fator anda aos poucos, então precisa lembrar os dois)."""
 
     def __init__(self, client: redis.Redis, key: str = "price:factor") -> None:
         self.r = client
         self.key = key
 
-    def get(self) -> float | None:
-        value = self.r.get(self.key)
-        return float(value) if value is not None else None
+    def get(self) -> tuple[float, float] | None:
+        raw = self.r.get(self.key)
+        if raw is None:
+            return None
+        value, updated_at = raw.split(":")
+        return float(value), float(updated_at)
 
-    def set(self, value: float) -> None:
-        self.r.set(self.key, repr(value))
+    def set(self, value: float, updated_at: float) -> None:
+        self.r.set(self.key, f"{value!r}:{updated_at!r}")
