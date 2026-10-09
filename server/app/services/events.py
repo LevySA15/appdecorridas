@@ -22,6 +22,14 @@ class EventCollector:
     def events(self) -> tuple[Event, ...]:
         return tuple(self._events)
 
+    def mark(self) -> int:
+        """Marca o ponto atual. Quem desfaz uma parte do trabalho (ponto de salvamento) volta até aqui."""
+        return len(self._events)
+
+    def rollback_to(self, mark: int) -> None:
+        """Descarta os avisos anotados depois da marca (o banco e os avisos desfazem juntos)."""
+        del self._events[mark:]
+
     def drain(self) -> list[Event]:
         events, self._events = self._events, []
         return events

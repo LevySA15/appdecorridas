@@ -1,7 +1,8 @@
 """Tarefas de tempo, rodadas de poucos em poucos segundos pelo servidor (spec, seções 5 e 12).
 
-Cada corrida é tratada num ponto de salvamento: se uma falhar, o erro vai para o relatório e as
-outras seguem. Quem chama faz o commit (ou o rollback) do conjunto.
+Cada corrida é tratada num ponto de salvamento: se uma falhar, o banco volta ao que era, os avisos
+anotados naquela corrida são descartados, o erro vai para o relatório e as outras seguem. Os serviços
+e este precisam compartilhar o mesmo `EventCollector`. Quem chama faz o commit (ou o rollback) do conjunto.
 """
 from __future__ import annotations
 
@@ -51,11 +52,13 @@ class SweepService:
     ) -> int:
         done = 0
         for ride_id in ride_ids:
+            mark = self.events.mark()
             try:
                 with session.begin_nested():
                     if action(ride_id):
                         done += 1
             except Exception as exc:  # um pedido com problema não pode travar os outros
+                self.events.rollback_to(mark)   # os avisos desta corrida somem junto com o banco
                 report.errors.append(f"{label} {ride_id}: {exc}")
         return done
 

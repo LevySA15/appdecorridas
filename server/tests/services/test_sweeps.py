@@ -173,3 +173,21 @@ def test_erro_em_uma_corrida_nao_trava_as_outras(session, positions, provider, e
     assert len(relatorio.errors) == 1 and "ride-1" in relatorio.errors[0]
     assert repo.get_ride(session, "ride-2").state is RideState.NO_RIDER
     assert repo.get_ride(session, "ride-1").state is RideState.SEARCHING
+
+
+def test_aviso_de_etapa_desfeita_nao_fica_no_coletor(session, positions, provider, events):
+    # Revisão final do plano 2B (I3): o banco volta atrás, os avisos já anotados também.
+    class ViagensQuebradas(TripService):
+        def after_ride_ends(self, session, rider_id, now):
+            raise RuntimeError("falha de teste")
+
+    payments = PaymentService(provider, events=events)
+    dispatch = DispatchService(positions, ReservationBook(), FakeMaps(), payments, events)
+    sweeps = SweepService(payments, dispatch, ViagensQuebradas(payments, dispatch, events), events)
+    add_passenger(session)
+    aceitar(session, positions, SimpleNamespace(dispatch=dispatch))      # Pix que ninguém paga
+    events.drain()
+    relatorio = sweeps.run(session, AGORA + 1 + 120)
+    assert len(relatorio.errors) == 1 and "ride-1" in relatorio.errors[0]
+    assert repo.get_ride(session, "ride-1").state is RideState.ACCEPTED
+    assert events.events == ()
