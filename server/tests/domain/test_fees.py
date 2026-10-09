@@ -99,3 +99,9 @@ def test_limite_de_divida_bloqueia_so_corridas_em_dinheiro():
 def test_entrada_pendente_bloqueia_tambem_o_dinheiro():
     acc = RiderAccount("r1", completed_rides=10)
     assert can_receive_cash_offers(acc) is False
+
+
+def test_limite_de_abatimento_fora_de_0_a_1_e_invalido():
+    for ruim in (-0.1, 1.5):
+        with pytest.raises(ValueError, match="abatimento"):
+            validate_fee_config(FeeConfig(max_debt_share=ruim))

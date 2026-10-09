@@ -166,3 +166,9 @@ def test_provedor_falso_recusa_divisao_que_nao_fecha():
     provider = FakePaymentProvider()
     with pytest.raises(ValueError, match="divisão"):
         provider.create_pix_charge("ride-1", "rider-1", 700, Split(100, 100, 0))
+
+
+def test_divisao_com_limite_de_abatimento_invalido_da_erro():
+    for ruim in (-0.1, 1.5):
+        with pytest.raises(ValueError, match="abatimento"):
+            compute_split(700, 100, 300, max_debt_share=ruim)

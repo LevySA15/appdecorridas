@@ -6,6 +6,7 @@ A dívida de corridas em dinheiro vive na conta do motoqueiro (`RiderAccount`), 
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -35,6 +36,13 @@ class Ledger:
 
     def __init__(self) -> None:
         self._entries: list[LedgerEntry] = []
+
+    @classmethod
+    def from_entries(cls, entries: Iterable[LedgerEntry]) -> Ledger:
+        """Livro em memória montado a partir de lançamentos que já existem (por exemplo, do banco)."""
+        ledger = cls()
+        ledger._entries = list(entries)
+        return ledger
 
     @property
     def entries(self) -> tuple[LedgerEntry, ...]:

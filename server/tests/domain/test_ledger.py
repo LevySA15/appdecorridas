@@ -123,3 +123,14 @@ def test_conciliacao_depois_de_estorno_nao_acusa_diferenca():
     ledger = _ledger_com_cobranca()
     ledger.post_refund("ch-1")
     assert ledger.reconcile({}) == {}
+
+
+def test_livro_pode_ser_montado_a_partir_de_lancamentos_existentes():
+    original = _ledger_com_cobranca()
+    copia = Ledger.from_entries(original.entries)
+    assert copia.balance("rider:rider-1") == 600
+    with pytest.raises(ValueError, match="já lançado"):
+        copia.post_charge_payment("ch-1", "rider-1", 700, compute_split(700, 100))
+    copia.post_refund("ch-1")
+    assert copia.is_balanced() is True
+    assert len(original.entries) == 3  # o original não muda
