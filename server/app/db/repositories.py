@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -327,3 +327,10 @@ def find_open_entry_charge(session: Session, rider_id: str) -> PixCharge | None:
         .limit(1)
     ).scalar_one_or_none()
     return _charge_to_domain(row) if row is not None else None
+
+
+def ride_event_time(session: Session, ride_id: str, kind: str) -> float | None:
+    """Instante do último evento deste tipo na corrida, ou None."""
+    return session.execute(
+        select(func.max(RideEventRow.created_at)).where(RideEventRow.ride_id == ride_id, RideEventRow.kind == kind)
+    ).scalar_one()

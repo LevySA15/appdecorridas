@@ -10,6 +10,7 @@ from app.db import repositories as repo
 from app.db.models import RideOfferRow, RiderProfileRow
 from app.db.pg_ledger import PgLedger
 from app.domain.dispatch import ReservationBook
+from app.domain.payments import PaymentProviderError
 from app.domain.rides import CancelResult, InvalidTransition, RideState
 from app.domain.types import PaymentMethod
 from app.infra.redis_store import InMemoryPositionStore
@@ -264,3 +265,28 @@ def test_avaliacao_recusa_repetida_antes_do_fim_fora_da_faixa_e_de_estranho(w, s
     with pytest.raises(AlreadyRated):
         w.trips.rate(session, "p1", "ride-1", 5, AGORA + 601)
     assert queries.rider_card(session, "r1").rating_count == 1
+
+
+class ProvedorForaDoAr(FakePaymentProvider):
+    def create_pix_charge(self, *args, **kwargs):
+        raise PaymentProviderError("Woovi fora do ar")
+
+
+def test_corrida_em_dinheiro_termina_mesmo_com_o_provedor_de_pix_fora_do_ar(session, positions, reservas, events):
+    # Revisão final do plano 2B (I4) e spec, seção 12: com o provedor fora, o dinheiro é a saída.
+    provider = ProvedorForaDoAr()
+    payments = PaymentService(provider, events=events)
+    dispatch = DispatchService(positions, reservas, FakeMaps(), payments, events)
+    w = SimpleNamespace(payments=payments, dispatch=dispatch, trips=TripService(payments, dispatch, events),
+                        provider=provider)
+    add_passenger(session)
+    aceitar(session, positions, w, method=PaymentMethod.CASH)
+    ate_o_fim(session, w)
+    assert repo.get_ride(session, "ride-1").state is RideState.COMPLETED
+    assert repo.get_current_charge_id(session, "ride-1") is None
+    aviso = next(e for e in events.events if e.type == "trip_completed" and e.user_id == "p1")
+    assert aviso.payload["pay"] is None
+    assert [k for k, _ in repo.ride_events(session, "ride-1")][-2:] == ["completed", "qr_failed"]
+    w.trips.confirm_cash_received(session, "r1", "ride-1", AGORA + 600)       # o dinheiro continua valendo
+    assert repo.get_rider_account(session, "r1").cash_debt_cents == 100
+

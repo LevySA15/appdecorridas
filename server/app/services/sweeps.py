@@ -28,6 +28,7 @@ class SweepReport:
     queue_released: int = 0
     arrival_cancelled: int = 0
     cash_blocked: int = 0
+    qr_created: int = 0
     searches_given_up: int = 0
     errors: list[str] = field(default_factory=list)
 
@@ -114,6 +115,16 @@ class SweepService:
                 self.trips.after_ride_ends(session, ride.rider_id, now)
             return True
 
+        def qr(ride_id: str) -> bool:
+            ride = repo.get_ride(session, ride_id, for_update=True)
+            charge = self.payments.start_end_charge(session, ride_id, ride.fee_cents or 0)
+            repo.log_ride_event(session, ride_id, "qr_created", {}, now)
+            payload = {"ride_id": ride_id, "charge_id": charge.charge_id, "amount_cents": charge.amount_cents}
+            self.events.add(ride.passenger_id, "qr_ready", payload)
+            if ride.rider_id is not None:
+                self.events.add(ride.rider_id, "qr_ready", payload)
+            return True
+
         def cash(ride_id: str) -> bool:
             return self.payments.block_unpaid_cash_ride(session, ride_id, now)
 
@@ -131,6 +142,9 @@ class SweepService:
         )
         report.arrival_cancelled = self._each(
             session, report, "chegada", queries.arrived_ride_ids_due(session, now, rides.max_wait_at_arrival_s), arrival
+        )
+        report.qr_created = self._each(
+            session, report, "qr", queries.cash_rides_without_charge_ids(session), qr
         )
         report.cash_blocked = self._each(
             session, report, "dinheiro", queries.cash_unpaid_ride_ids_due(session, now, rides.cash_pay_wait_s), cash

@@ -11,6 +11,7 @@ from app.db import repositories as repo
 from app.db.config_store import AppConfig
 from app.db.models import RatingRow, RiderProfileRow
 from app.domain.fees import count_completed_ride, offer_block_reason
+from app.domain.payments import PaymentProviderError
 from app.domain.rides import (
     CancelResult,
     InvalidTransition,
@@ -89,8 +90,15 @@ class TripService:
         repo.log_ride_event(session, ride_id, "completed", {}, now)
         pay = None
         if ride.payment_method is PaymentMethod.CASH:
-            charge = self.payments.start_end_charge(session, ride_id, ride.fee_cents or 0)
-            pay = {"charge_id": charge.charge_id, "amount_cents": charge.amount_cents}
+            try:
+                with session.begin_nested():
+                    charge = self.payments.start_end_charge(session, ride_id, ride.fee_cents or 0)
+                pay = {"charge_id": charge.charge_id, "amount_cents": charge.amount_cents}
+                repo.log_ride_event(session, ride_id, "qr_created", {}, now)
+            except PaymentProviderError as exc:
+                # Pix fora do ar: a corrida termina do mesmo jeito e o dinheiro vivo continua valendo.
+                # A varredura cria o QR quando o provedor voltar.
+                repo.log_ride_event(session, ride_id, "qr_failed", {"error": str(exc)[:200]}, now)
         payload = {
             "ride_id": ride_id, "price_cents": ride.price_cents, "method": ride.payment_method.value, "pay": pay,
         }

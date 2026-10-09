@@ -245,3 +245,19 @@ def cash_unpaid_ride_ids_due(session: Session, now: float, wait_s: float) -> lis
             .order_by(RideRow.id)
         ).scalars()
     )
+
+
+def cash_rides_without_charge_ids(session: Session) -> list[str]:
+    """Corridas em dinheiro concluídas, ainda sem pagamento confirmado e sem QR (provedor estava fora)."""
+    return list(
+        session.execute(
+            select(RideRow.id)
+            .where(
+                RideRow.state == RideState.COMPLETED.value,
+                RideRow.payment_method == "cash",
+                RideRow.end_payment_confirmed.is_(False),
+                RideRow.current_charge_id.is_(None),
+            )
+            .order_by(RideRow.id)
+        ).scalars()
+    )

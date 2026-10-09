@@ -298,6 +298,11 @@ class PaymentService:
         ride = repo.get_ride(session, ride_id, for_update=True)
         if not cash_pay_wait_expired(ride, now, self.ride_cfg):
             return False
+        if repo.get_current_charge_id(session, ride_id) is None:
+            return False   # sem QR o passageiro não tem como pagar pelo Pix: não pode ser bloqueado
+        qr_at = repo.ride_event_time(session, ride_id, "qr_created")
+        if qr_at is not None and now - qr_at < self.ride_cfg.cash_pay_wait_s:
+            return False   # QR criado depois (provedor voltou): o prazo recomeça nele
         passenger = repo.get_passenger_account(session, ride.passenger_id, for_update=True)
         block_for_unpaid(ride, passenger, now, self.ride_cfg)
         repo.save_ride(session, ride)

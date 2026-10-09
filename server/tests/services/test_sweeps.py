@@ -9,6 +9,7 @@ from app.db import repositories as repo
 from app.db.models import RideOfferRow, UserRow
 from app.db.pg_ledger import PgLedger
 from app.domain.dispatch import ReservationBook
+from app.domain.payments import PaymentProviderError
 from app.domain.rides import RideState
 from app.domain.types import PaymentMethod
 from app.infra.redis_store import InMemoryPositionStore
@@ -191,3 +192,39 @@ def test_aviso_de_etapa_desfeita_nao_fica_no_coletor(session, positions, provide
     assert len(relatorio.errors) == 1 and "ride-1" in relatorio.errors[0]
     assert repo.get_ride(session, "ride-1").state is RideState.ACCEPTED
     assert events.events == ()
+
+
+class ProvedorInstavel(FakePaymentProvider):
+    fora = True
+
+    def create_pix_charge(self, *args, **kwargs):
+        if self.fora:
+            raise PaymentProviderError("Woovi fora do ar")
+        return super().create_pix_charge(*args, **kwargs)
+
+
+def test_qr_que_faltou_e_criado_depois_e_o_passageiro_ganha_um_prazo_novo(session, positions, events):
+    # Revisão final do plano 2B (I4): sem QR o passageiro não tinha como pagar pelo Pix, então não pode ser bloqueado.
+    provider = ProvedorInstavel()
+    payments = PaymentService(provider, events=events)
+    dispatch = DispatchService(positions, ReservationBook(), FakeMaps(), payments, events)
+    trips = TripService(payments, dispatch, events)
+    sweeps = SweepService(payments, dispatch, trips, events)
+    w = SimpleNamespace(payments=payments, dispatch=dispatch, trips=trips, provider=provider)
+    add_passenger(session)
+    aceitar(session, positions, w, method=PaymentMethod.CASH)
+    trips.arrive(session, "r1", "ride-1", AGORA + 50)
+    trips.confirm_helmet(session, "r1", "ride-1", AGORA + 51)
+    trips.start_trip(session, "r1", "ride-1", "4821", AGORA + 52)
+    trips.complete_trip(session, "r1", "ride-1", AGORA + 400)           # provedor fora: sem QR
+    fim = AGORA + 400
+    relatorio = sweeps.run(session, fim + 301)
+    assert relatorio.cash_blocked == 0 and relatorio.qr_created == 0 and len(relatorio.errors) == 1
+    assert repo.get_passenger_account(session, "p1").unpaid_cents == 0
+    provider.fora = False
+    assert sweeps.run(session, fim + 310).qr_created == 1
+    charge = repo.get_charge(session, repo.get_current_charge_id(session, "ride-1"))
+    assert charge.purpose == "end" and "qr_ready" in [e.type for e in events.events if e.user_id == "p1"]
+    assert sweeps.run(session, fim + 310 + 299).cash_blocked == 0       # o prazo de 5 minutos recomeça no QR
+    assert sweeps.run(session, fim + 310 + 300).cash_blocked == 1
+
