@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from app.domain.geo import GeoPoint, haversine_m
+from app.domain.maps import Route
 
 
 class StraightLineEta:
@@ -11,3 +12,15 @@ class StraightLineEta:
 
     def eta_seconds(self, origin: GeoPoint, destination: GeoPoint) -> int:
         return int(haversine_m(origin, destination) / self.speed_mps)
+
+
+class FakeMaps(StraightLineEta):
+    """Mapa falso: a rua é 30% mais longa que a linha reta e a rota é um segmento só."""
+
+    def route(self, origin: GeoPoint, destination: GeoPoint) -> Route:
+        distance = haversine_m(origin, destination) * 1.3
+        return Route(
+            distance_m=int(round(distance)),
+            duration_s=int(distance / self.speed_mps),
+            points=(origin, destination),
+        )

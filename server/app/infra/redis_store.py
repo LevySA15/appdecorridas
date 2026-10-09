@@ -140,3 +140,35 @@ class RedisReservationBook:
 
     def release(self, rider_id: str, ride_id: str) -> None:
         self._release(keys=[self._key(rider_id)], args=[ride_id])
+
+
+class FactorStore(Protocol):
+    def get(self) -> float | None: ...
+
+    def set(self, value: float) -> None: ...
+
+
+class InMemoryFactorStore:
+    def __init__(self) -> None:
+        self._value: float | None = None
+
+    def get(self) -> float | None:
+        return self._value
+
+    def set(self, value: float) -> None:
+        self._value = value
+
+
+class RedisFactorStore:
+    """Fator de preço atual (muda aos poucos, então precisa lembrar o valor anterior)."""
+
+    def __init__(self, client: redis.Redis, key: str = "price:factor") -> None:
+        self.r = client
+        self.key = key
+
+    def get(self) -> float | None:
+        value = self.r.get(self.key)
+        return float(value) if value is not None else None
+
+    def set(self, value: float) -> None:
+        self.r.set(self.key, repr(value))

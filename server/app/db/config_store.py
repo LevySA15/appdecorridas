@@ -38,6 +38,10 @@ class AppConfig:
     safety: SafetyConfig
     auth: AuthConfig = AuthConfig()
 
+    @classmethod
+    def defaults(cls) -> "AppConfig":
+        return cls(PricingConfig(), FeeConfig(), RideConfig(), DispatchConfig(), SafetyConfig())
+
 
 def _check_key(key: str) -> type:
     if key not in _TYPES:

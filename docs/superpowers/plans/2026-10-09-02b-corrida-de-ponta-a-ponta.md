@@ -2017,7 +2017,7 @@ def make_online_rider(session, positions, n: int, point: GeoPoint, now: float = 
     """Motoqueiro aprovado, disponível e com posição fresca. `n` torna CPF, CNH, placa e telefone únicos."""
     rider_id = f"r{n}"
     add_rider(
-        session, user_id=rider_id, phone=f"+55759{n:08d}", cpf=f"{n:011d}", cnh=f"{n:011d}", plate=f"ABC{n:04d}"
+        session, user_id=rider_id, phone=f"+5575977{n:06d}", cpf=f"{n:011d}", cnh=f"{n:011d}", plate=f"ABC{n:04d}"
     )
     profile = session.get(RiderProfileRow, rider_id)
     profile.status, profile.online = "approved", True
