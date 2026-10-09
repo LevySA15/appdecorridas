@@ -59,6 +59,11 @@ class RedisPositionStore:
     SEEN = "pos:seen"
 
     def __init__(self, client: redis.Redis) -> None:
+        if not client.connection_pool.connection_kwargs.get("decode_responses"):
+            raise ValueError(
+                "o cliente Redis precisa ser criado com decode_responses=True "
+                "(senão os ids dos motoqueiros voltam como bytes)"
+            )
         self.r = client
 
     def update(self, rider_id: str, point: GeoPoint, now: float) -> None:
@@ -101,6 +106,17 @@ class RedisPositionStore:
         return result
 
 
+# Reservar ou renovar numa só ida ao Redis: com GET e PEXPIRE separados, a reserva podia vencer
+# no meio e a renovação estender a reserva de outra corrida.
+_RESERVE_LUA = """
+if redis.call('set', KEYS[1], ARGV[1], 'NX', 'PX', ARGV[2]) then return 1 end
+if redis.call('get', KEYS[1]) == ARGV[1] then
+    redis.call('pexpire', KEYS[1], ARGV[2])
+    return 1
+end
+return 0
+"""
+
 _RELEASE_LUA = (
     "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
 )
@@ -113,19 +129,14 @@ class RedisReservationBook:
         self.r = client
         self.ttl_ms = ttl_ms
         self.prefix = prefix
+        self._reserve = client.register_script(_RESERVE_LUA)
         self._release = client.register_script(_RELEASE_LUA)
 
     def _key(self, rider_id: str) -> str:
         return f"{self.prefix}{rider_id}"
 
     def reserve(self, rider_id: str, ride_id: str) -> bool:
-        key = self._key(rider_id)
-        if self.r.set(key, ride_id, nx=True, px=self.ttl_ms):
-            return True
-        if self.r.get(key) == ride_id:
-            self.r.pexpire(key, self.ttl_ms)
-            return True
-        return False
+        return bool(self._reserve(keys=[self._key(rider_id)], args=[ride_id, self.ttl_ms]))
 
     def release(self, rider_id: str, ride_id: str) -> None:
         self._release(keys=[self._key(rider_id)], args=[ride_id])

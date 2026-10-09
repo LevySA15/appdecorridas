@@ -17,3 +17,14 @@ A especificação cobre várias partes independentes. Cada parte vira um plano p
 | 8 | **Etapa 2 e publicação** | Cartão pela Asaas; publicação na Google Play; iPhone. | 7 | **sim** |
 
 Ferramentas que ainda precisam ser instaladas no computador do Levy (não existem hoje): PostgreSQL com PostGIS e Redis (plano 2, por pacote do sistema ou Docker), Flutter e Android SDK (planos 5 e 6). O computador tem 7 GB de RAM e pouca memória livre, então os planos 5 e 6 vão pedir atenção ao consumo.
+
+## Itens obrigatórios para o plano 2B (vindos da revisão final do 2A)
+
+- Aviso do provedor para cobrança desconhecida: hoje levanta `LookupError`; a camada HTTP decide se confirma ou falha (o provedor tenta de novo).
+- Conferir `amount_cents` e `ride_id` do aviso com a cobrança gravada e autenticar o webhook.
+- `save_rider_account` regrava as quatro colunas: só chamar depois de ler com `for_update=True` (inclusive ao registrar corrida concluída).
+- Pagar ou perdoar dívida respeitando a dívida reservada (`debt_reserved_cents`); travar corridas em ordem fixa quando uma operação envolver duas (promoção da fila).
+- Criar o cliente Redis sempre com `decode_responses=True` (as posições recusam cliente sem isso).
+- Limpar do Redis (`pos:geo`, `pos:seen`) as motos que somem sem avisar.
+- Acrescentar CHECKs em `pix_charges` e chave estrangeira em `rides.current_charge_id` numa migração nova; transformar o `compare_metadata` do Alembic em teste.
+

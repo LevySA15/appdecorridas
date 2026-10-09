@@ -10,6 +10,7 @@ from app.domain.rides import (
     Ride,
     RideState,
     accept,
+    mark_arrived,
 )
 from app.domain.types import PaymentMethod
 from app.services.payments import PaymentService
@@ -225,3 +226,47 @@ def test_falha_do_provedor_no_estorno_nao_deixa_nada_pela_metade(session, provid
     assert ledger.balance("rider:r1") == 300
     assert divida(session) == (700, 0)
     assert repo.get_charge(session, charge.charge_id).refunded is False
+
+
+def _chegada(session, ride_id="ride-1", now=100.0):
+    ride = repo.get_ride(session, ride_id)
+    mark_arrived(ride, now)
+    repo.save_ride(session, ride)
+
+
+def test_espera_na_chegada_esgotada_com_pix_pago_devolve_o_dinheiro_e_a_divida(session, service, provider):
+    # Review final: sem este caso de uso o Pix pago ficava no livro quando o passageiro não aparecia.
+    mundo(session)
+    charge = service.start_pix_charge(session, "ride-1", FEE)
+    service.on_provider_event(session, provider.mark_paid(charge.charge_id))
+    _chegada(session)
+    resultado = service.cancel_after_arrival_timeout(session, "ride-1", now=100 + 300)
+    assert resultado == CancelResult(200, True)
+    assert provider.charges[charge.charge_id].refunded is True
+    ledger = PgLedger(session)
+    assert ledger.balance("rider:r1") == 0
+    assert ledger.is_balanced() is True
+    assert divida(session) == (1000, 0)
+    assert repo.get_ride(session, "ride-1").state is RideState.CANCELLED
+    salva = repo.get_charge(session, charge.charge_id)
+    assert salva.refunded is True and salva.debt_state is DebtState.RESTORED
+
+
+def test_espera_na_chegada_antes_do_prazo_nao_cancela_nada(session, service, provider):
+    mundo(session)
+    charge = service.start_pix_charge(session, "ride-1", FEE)
+    service.on_provider_event(session, provider.mark_paid(charge.charge_id))
+    _chegada(session)
+    with pytest.raises(InvalidTransition, match="espera"):
+        service.cancel_after_arrival_timeout(session, "ride-1", now=100 + 299)
+    assert repo.get_ride(session, "ride-1").state is RideState.ARRIVED
+    assert provider.charges[charge.charge_id].refunded is False
+    assert PgLedger(session).balance("rider:r1") == 300
+
+
+def test_espera_na_chegada_esgotada_em_dinheiro_so_cancela_com_compensacao(session, service):
+    mundo(session, method=PaymentMethod.CASH)
+    _chegada(session)
+    assert service.cancel_after_arrival_timeout(session, "ride-1", now=100 + 300) == CancelResult(200, False)
+    assert repo.get_ride(session, "ride-1").state is RideState.CANCELLED
+    assert divida(session) == (1000, 0)

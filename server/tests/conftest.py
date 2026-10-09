@@ -2,6 +2,7 @@
 desenvolvimento (nunca o `public`) e o banco 15 do Redis."""
 import uuid
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 import redis
@@ -68,9 +69,20 @@ def session(db_engine):
         connection.close()
 
 
+@pytest.fixture(scope="session")
+def redis_test_url(settings):
+    """URL do Redis de testes, sempre no banco 15. O `db=` de `from_url` perde para o número do
+    banco que já vem na URL (`.../0`), por isso o banco é trocado na própria URL."""
+    return urlparse(settings.redis_url)._replace(path="/15").geturl()
+
+
 @pytest.fixture()
-def redis_client(settings):
-    client = redis.Redis.from_url(settings.redis_url, db=15, decode_responses=True)
+def redis_client(redis_test_url):
+    client = redis.Redis.from_url(redis_test_url, decode_responses=True)
+    # Trava de segurança: nunca esvaziar outro banco que não o 15.
+    if client.connection_pool.connection_kwargs.get("db") != 15:
+        client.close()
+        raise RuntimeError("o Redis dos testes precisa ser o banco 15")
     client.flushdb()
     yield client
     client.flushdb()

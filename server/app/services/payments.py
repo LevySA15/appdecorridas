@@ -29,6 +29,7 @@ from app.domain.rides import (
     Ride,
     RideState,
     cancel,
+    cancel_after_arrival_timeout,
     cancel_unpaid_pix,
     on_pix_paid,
     pix_window_expired,
@@ -137,13 +138,17 @@ class PaymentService:
         repo.save_ride(session, ride)
         return True
 
-    def cancel_ride(self, session: Session, ride_id: str, now: float) -> CancelResult:
-        """Cancelamento pelo passageiro: devolve o Pix se já estava pago e solta a dívida reservada."""
-        ride = repo.get_ride(session, ride_id, for_update=True)
-        acc, charge = self._rider_and_charge(session, ride)
-        result = cancel(ride, now, self.ride_cfg)
+    def _settle_cancellation(
+        self,
+        session: Session,
+        ride: Ride,
+        acc: RiderAccount | None,
+        charge: PixCharge | None,
+        result: CancelResult,
+    ) -> None:
+        """Grava um cancelamento: devolve o Pix pago (e a dívida) ou solta a dívida reservada."""
         if result.refund_needed and (charge is None or acc is None):
-            raise RuntimeError(f"corrida {ride_id} tem Pix pago, mas nenhuma cobrança registrada")
+            raise RuntimeError(f"corrida {ride.ride_id} tem Pix pago, mas nenhuma cobrança registrada")
         if charge is not None and acc is not None:
             if result.refund_needed:
                 self._refund(charge, acc, PgLedger(session))
@@ -153,6 +158,21 @@ class PaymentService:
         if acc is not None:
             repo.save_rider_account(session, acc)
         repo.save_ride(session, ride)
+
+    def cancel_ride(self, session: Session, ride_id: str, now: float) -> CancelResult:
+        """Cancelamento pelo passageiro: devolve o Pix se já estava pago e solta a dívida reservada."""
+        ride = repo.get_ride(session, ride_id, for_update=True)
+        acc, charge = self._rider_and_charge(session, ride)
+        result = cancel(ride, now, self.ride_cfg)
+        self._settle_cancellation(session, ride, acc, charge, result)
+        return result
+
+    def cancel_after_arrival_timeout(self, session: Session, ride_id: str, now: float) -> CancelResult:
+        """Passageiro não apareceu dentro do tempo de espera: cancela e devolve o Pix, se pago."""
+        ride = repo.get_ride(session, ride_id, for_update=True)
+        acc, charge = self._rider_and_charge(session, ride)
+        result = cancel_after_arrival_timeout(ride, now, self.ride_cfg)
+        self._settle_cancellation(session, ride, acc, charge, result)
         return result
 
     def release_queued_ride(self, session: Session, ride_id: str, now: float) -> bool:
