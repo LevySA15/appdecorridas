@@ -27,4 +27,15 @@ Ferramentas que ainda precisam ser instaladas no computador do Levy (não existe
 - Criar o cliente Redis sempre com `decode_responses=True` (as posições recusam cliente sem isso).
 - Limpar do Redis (`pos:geo`, `pos:seen`) as motos que somem sem avisar.
 - Acrescentar CHECKs em `pix_charges` e chave estrangeira em `rides.current_charge_id` numa migração nova; transformar o `compare_metadata` do Alembic em teste.
+- **Corrida em dinheiro com calote:** o motoqueiro **não deve taxa** (decisão do Levy, 09/10/2026). Hoje `register_completed_ride` soma a taxa à dívida sempre que `fee_collected_by_split` não é verdadeiro; no 2B, ao denunciar o calote, não somar a taxa (função ou parâmetro próprio, com teste) e decidir se essa corrida conta para as 10 do período de teste.
+
+## Perguntas para o advogado (conversa na semana de 12/10/2026)
+
+1. Em Santo Antônio de Jesus não há lei de mototáxi nem permissão sendo emitida (informação da prefeitura). O que isso significa para quem presta o serviço e para um aplicativo que o intermedeia: é permitido, tolerado ou infração? Quem responde por multa e apreensão?
+2. A Lei federal 12.009/2009 exige autorização municipal. Um app pode começar antes de o município regulamentar? Que risco a empresa corre (multa, Procon, responsabilidade solidária)?
+3. Que tipo de empresa abrir (MEI não serve; ME/LTDA), e o CNAE correto para intermediação de transporte por aplicativo.
+4. Vínculo de emprego com o motoqueiro (STF Tema 1291 ainda indefinido): como estruturar termos de uso e o cadastro para reduzir o risco.
+5. Recebimento de dinheiro de terceiros e saldo recarregável (regras do Banco Central), e o que precisa para a divisão automática de Pix com a Woovi.
+6. LGPD: base legal e aviso para coletar CPF, CNH, foto e localização.
+7. Seguro: vale contratar seguro de acidentes para passageiro e motoqueiro?
 

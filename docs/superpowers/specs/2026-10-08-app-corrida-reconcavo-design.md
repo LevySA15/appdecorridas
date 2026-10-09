@@ -23,7 +23,7 @@ Ordem de produtos: **moto → carro → entregas**. Esta especificação cobre a
 | Tema | Decisão |
 |---|---|
 | Cidade piloto | **Decidido:** Santo Antônio de Jesus (~103 mil habitantes, polo regional de comércio e serviços, feira livre grande). |
-| Quem é o motoqueiro | **Decidido:** autônomos, na maioria com permissão da prefeitura (a prefeitura está regularizando a documentação deles). |
+| Quem é o motoqueiro | **Decidido:** autônomos. **Atualização de 09/10/2026 (informação do Levy, vinda da prefeitura):** a prefeitura diz que **não existe** lei municipal de mototáxi em Santo Antônio de Jesus e que **não emite mais** permissão desse tipo desde a posse do atual prefeito. A premissa antiga ("a prefeitura está regularizando a documentação deles") **não vale mais**; ver seção 14, itens 1 e 2. |
 | Prazo | **Decidido:** sem data. Prefere bem feito a rápido. |
 | Orçamento | **Decidido:** R$ 150 a R$ 500 por mês de custo fixo, mais ~R$ 2.500 de investimento inicial (detalhes do investimento não confirmados). |
 | Plataformas | **Decidido:** começar só no **Android** (único celular de teste do Levy). iPhone entra depois. |
@@ -109,6 +109,7 @@ O passageiro escolhe **antes de pedir**: **Pix** ou **dinheiro**. Cartão e sald
 - **Dinheiro.** No fim da corrida a tela do motoqueiro mostra um **QR do Pix** com o valor e um **botão de confirmar pagamento**. O passageiro paga em Pix (pelo QR) ou em dinheiro, e o motoqueiro confirma. O QR também faz a divisão automática.
 - **Divisão automática.** O provedor divide o pagamento na hora entre a conta do motoqueiro e a da empresa. O dinheiro do motoqueiro **não passa pela conta da empresa**. Cada motoqueiro tem uma subconta no provedor, aberta no cadastro com a verificação feita pelo próprio provedor.
 - **Taxa das corridas em dinheiro vivo.** Fica como dívida do motoqueiro e é descontada da **próxima corrida paga por Pix**. Há um limite de dívida (**proposta:** R$ 10,00); acima disso o app para de oferecer corridas em dinheiro até ele pagar por Pix.
+- **Decidido (Levy, 09/10/2026): o motoqueiro só deve a taxa quando o passageiro de fato pagou em dinheiro.** A dívida aparece na tela do motoqueiro. Se o passageiro vai embora sem pagar (calote), **o motoqueiro não deve taxa** daquela corrida; o calote fica como dívida do passageiro (`unpaid_cents`). Interpretação minha da resposta do Levy, a confirmar.
 - **Passageiro que sai sem pagar** fica bloqueado para novos pedidos até pagar o valor devido.
 
 ### 7.3 Provedores
@@ -224,8 +225,8 @@ Uma conta pessoal nova precisa de um teste fechado com pelo menos **12 pessoas p
 ## 14. Riscos e pontos em aberto
 
 ### Legais e regulatórios
-1. **Lei municipal de mototáxi (Lei 929/2008).** Existe e regula o mototáxi em Santo Antônio de Jesus, mas **não consegui ler o texto**. Não sei se limita permissões, exige associação ou aceita aplicativo. **Quem resolve:** o Levy pede uma cópia à prefeitura (setor de trânsito/transportes). **Quando:** antes do plano de implementação ficar fechado.
-2. **O app não confere a permissão da prefeitura (decisão do Levy).** Se algum motoqueiro rodar sem permissão, o motoqueiro pode receber multa e ter a moto removida, e a empresa pode ser responsabilizada (em São Paulo, o Procon multou Uber e 99 por mototáxi irregular). Recomendação mantida: conversar com a prefeitura e com um advogado antes de abrir. Sem a permissão no cadastro, o app não tem como impedir um motoqueiro irregular.
+1. **Não há lei municipal de mototáxi nem permissão sendo emitida (atualizado em 09/10/2026).** Eu tinha anotado a "Lei 929/2008" como existente, mas **nunca li o texto** e agora não achei nenhum registro dela para Santo Antônio de Jesus (busca de 09/10/2026), e a prefeitura disse ao Levy que essa lei não existe aqui e que não emite mais esse tipo de documento. **Tratar a anotação antiga como errada ou não confirmada.** A Lei federal 12.009/2009 deixa a regulamentação do mototáxi para cada município; sem regra local, **não sei dizer** se o serviço é permitido, tolerado ou infração. **Quem resolve:** o advogado (conversa marcada para a semana de 12/10/2026). **Pedir à prefeitura a resposta por escrito (ofício ou protocolo)**, porque o advogado vai precisar dela. Perguntas para o advogado estão no roteiro dos planos.
+2. **O app não confere permissão nenhuma (decisão do Levy), e agora não existe permissão para conferir.** Se a atividade for irregular no município, o motoqueiro pode receber multa e ter a moto removida, e a empresa pode ser responsabilizada (em São Paulo, o Procon multou Uber e 99 por mototáxi irregular). Recomendação mantida e reforçada: **não abrir ao público antes da conversa com o advogado**. O app não tem como impedir um motoqueiro irregular.
 3. **Saldo recarregável e recebimento de dinheiro de terceiros** (seção 7.5). Advogado/contador.
 4. **Vínculo de emprego de motoristas de aplicativo (STF, Tema 1291)** ainda sem decisão (adiado de novo em 27/08/2026). Quanto mais o app controla o motoqueiro, maior o risco. Por isso: aceitar/recusar sem penalidade, sem "próxima corrida" automática, descontos por faixa em vez de aumento por parar.
 5. **LGPD:** documentos pessoais exigem proteção e regra de guarda. Tempo de guarda **em aberto**, a definir com advogado.
