@@ -11,6 +11,8 @@ _DEFAULT = FeeConfig()
 
 def validate_fee_config(cfg: FeeConfig) -> None:
     """Confere que as faixas cobrem 1..∞ sem buracos e nenhuma fica abaixo do piso de lucro."""
+    if not 0 <= cfg.max_debt_share <= 1:
+        raise ValueError("o limite de abatimento da dívida precisa estar entre 0 e 1")
     if not cfg.tiers:
         raise ValueError("a configuração de taxas não tem faixas")
     expected_start = 1

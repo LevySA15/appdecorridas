@@ -29,6 +29,8 @@ def compute_split(
     A empresa fica com a taxa mais o que for abatido da dívida de corridas em dinheiro.
     O abatimento é limitado a `max_debt_share` do que o motoqueiro receberia.
     """
+    if not 0 <= max_debt_share <= 1:
+        raise ValueError("o limite de abatimento da dívida precisa estar entre 0 e 1")
     if price_cents <= 0 or fee_cents < 0 or debt_cents < 0:
         raise ValueError("preço, taxa e dívida precisam ser positivos")
     if fee_cents > price_cents:
