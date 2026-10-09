@@ -36,6 +36,9 @@ class RideRequestService:
         quote = session.execute(select(QuoteRow).where(QuoteRow.id == quote_id).with_for_update()).scalar_one_or_none()
         if quote is None or quote.passenger_id != passenger_id or quote.used or now > quote.expires_at:
             raise QuoteExpired("Esse preço não vale mais. Peça de novo.")
+        # Trava o passageiro antes de conferir: dois pedidos ao mesmo tempo (duas cotações) esperam um ao outro
+        # e o segundo já enxerga a corrida do primeiro.
+        repo.get_passenger_account(session, passenger_id, for_update=True)
         blocked = passenger_block_reason(session, passenger_id)
         if blocked:
             raise NotAllowed(blocked)
