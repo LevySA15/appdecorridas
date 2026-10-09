@@ -10,7 +10,7 @@ class FakePaymentProvider:
         self._counter = 0
 
     def create_pix_charge(
-        self, ride_id: str, rider_id: str, amount_cents: int, split: Split
+        self, ride_id: str, rider_id: str, amount_cents: int, split: Split, purpose: str = "ride"
     ) -> PixCharge:
         if split.rider_cents + split.company_cents != amount_cents:
             raise ValueError("a divisão não fecha com o valor da cobrança")
@@ -21,6 +21,7 @@ class FakePaymentProvider:
             rider_id=rider_id,
             amount_cents=amount_cents,
             split=split,
+            purpose=purpose,
         )
         self.charges[charge.charge_id] = charge
         return charge

@@ -44,6 +44,8 @@ class Ride:
     arrived_at: float | None = None
     end_payment_confirmed: bool = False
     non_payment_reported: bool = False
+    completed_at: float | None = None
+    fee_cents: int | None = None        # taxa por corrida decidida quando o motoqueiro aceitou
 
 
 @dataclass(frozen=True)
@@ -171,9 +173,10 @@ def start_ride(ride: Ride, pin: str) -> None:
     ride.state = RideState.IN_PROGRESS
 
 
-def complete(ride: Ride) -> None:
+def complete(ride: Ride, now: float | None = None) -> None:
     _require(ride, RideState.IN_PROGRESS)
     ride.state = RideState.COMPLETED
+    ride.completed_at = now
 
 
 def cancel(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> CancelResult:
@@ -258,3 +261,33 @@ def settle_passenger_debt(acc: PassengerAccount, amount_cents: int) -> None:
     if amount_cents <= 0 or amount_cents > acc.unpaid_cents:
         raise ValueError("valor inválido para quitar a dívida do passageiro")
     acc.unpaid_cents -= amount_cents
+
+
+def cash_pay_wait_expired(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> bool:
+    """A corrida em dinheiro acabou, ninguém pagou, e o prazo de espera passou."""
+    if ride.state is not RideState.COMPLETED or ride.payment_method is not PaymentMethod.CASH:
+        return False
+    if ride.end_payment_confirmed or ride.non_payment_reported or ride.completed_at is None:
+        return False
+    return now - ride.completed_at >= cfg.cash_pay_wait_s
+
+
+def block_for_unpaid(ride: Ride, acc: PassengerAccount, now: float, cfg: RideConfig = _DEFAULT) -> None:
+    """Passou o prazo sem pagamento: o passageiro fica devendo e bloqueado para novos pedidos.
+
+    É automático (decisão do Levy, 09/10/2026): o motoqueiro não tem botão de "não pagou".
+    """
+    if not cash_pay_wait_expired(ride, now, cfg):
+        raise InvalidTransition("o prazo de pagamento ainda não acabou")
+    ride.non_payment_reported = True
+    acc.unpaid_cents += ride.price_cents
+
+
+def confirm_qr_payment(ride: Ride) -> None:
+    """O Pix do QR do fim da corrida foi pago (dentro do prazo ou depois do bloqueio)."""
+    _require(ride, RideState.COMPLETED)
+    if ride.payment_method is not PaymentMethod.CASH:
+        raise InvalidTransition("esta corrida foi paga por Pix antes de começar")
+    if ride.end_payment_confirmed:
+        raise InvalidTransition("o pagamento desta corrida já foi confirmado")
+    ride.end_payment_confirmed = True

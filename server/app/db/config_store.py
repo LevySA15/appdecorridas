@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import AppConfigRow
 from app.domain.config import (
+    AuthConfig,
     DispatchConfig,
     FeeConfig,
     FeeTier,
@@ -24,6 +25,7 @@ _TYPES = {
     "rides": RideConfig,
     "dispatch": DispatchConfig,
     "safety": SafetyConfig,
+    "auth": AuthConfig,
 }
 
 
@@ -34,6 +36,7 @@ class AppConfig:
     rides: RideConfig
     dispatch: DispatchConfig
     safety: SafetyConfig
+    auth: AuthConfig = AuthConfig()
 
 
 def _check_key(key: str) -> type:
@@ -87,4 +90,5 @@ def load_app_config(session: Session) -> AppConfig:
         rides=load_config(session, "rides"),
         dispatch=load_config(session, "dispatch"),
         safety=load_config(session, "safety"),
+        auth=load_config(session, "auth"),
     )

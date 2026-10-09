@@ -127,6 +127,8 @@ def _ride_to_domain(row: RideRow) -> Ride:
         arrived_at=row.arrived_at,
         end_payment_confirmed=row.end_payment_confirmed,
         non_payment_reported=row.non_payment_reported,
+        completed_at=row.completed_at,
+        fee_cents=row.fee_cents,
     )
 
 
@@ -146,6 +148,8 @@ def _apply_ride(row: RideRow, ride: Ride) -> None:
     row.arrived_at = ride.arrived_at
     row.end_payment_confirmed = ride.end_payment_confirmed
     row.non_payment_reported = ride.non_payment_reported
+    row.completed_at = ride.completed_at
+    row.fee_cents = ride.fee_cents
 
 
 def add_ride(session: Session, ride: Ride) -> None:
@@ -192,7 +196,7 @@ def get_current_charge_id(session: Session, ride_id: str) -> str | None:
 def _charge_to_domain(row: PixChargeRow) -> PixCharge:
     return PixCharge(
         charge_id=row.charge_id,
-        ride_id=row.ride_id,
+        ride_id=row.ride_id or "",
         rider_id=row.rider_id,
         amount_cents=row.amount_cents,
         split=Split(
@@ -203,11 +207,12 @@ def _charge_to_domain(row: PixChargeRow) -> PixCharge:
         paid=row.paid,
         refunded=row.refunded,
         debt_state=DebtState(row.debt_state),
+        purpose=row.purpose,
     )
 
 
 def _apply_charge(row: PixChargeRow, charge: PixCharge) -> None:
-    row.ride_id = charge.ride_id
+    row.ride_id = charge.ride_id or None
     row.rider_id = charge.rider_id
     row.amount_cents = charge.amount_cents
     row.rider_cents = charge.split.rider_cents
@@ -216,6 +221,7 @@ def _apply_charge(row: PixChargeRow, charge: PixCharge) -> None:
     row.paid = charge.paid
     row.refunded = charge.refunded
     row.debt_state = charge.debt_state.value
+    row.purpose = charge.purpose
 
 
 def add_charge(session: Session, charge: PixCharge) -> None:
