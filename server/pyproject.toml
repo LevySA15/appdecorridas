@@ -3,7 +3,12 @@ name = "app-corrida-server"
 version = "0.1.0"
 description = "Servidor do app de corrida de moto do Recôncavo"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.13",
+    "redis>=5.0",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
