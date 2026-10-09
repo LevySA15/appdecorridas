@@ -38,7 +38,13 @@ def db_engine(settings):
     cfg = _alembic_config()
     with engine.begin() as conn:
         cfg.attributes["connection"] = conn
+        cfg.attributes["schema"] = schema
         command.upgrade(cfg, "head")
+    with engine.connect() as conn:
+        # Trava de segurança: se as tabelas não estão no esquema temporário, os testes cairiam
+        # nas tabelas reais do `public` pelo search_path.
+        if conn.execute(text("select to_regclass(:name)"), {"name": f'"{schema}".users'}).scalar() is None:
+            raise RuntimeError(f"a migração não criou as tabelas no esquema temporário {schema}")
     try:
         yield engine
     finally:

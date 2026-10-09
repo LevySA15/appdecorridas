@@ -13,7 +13,13 @@ target_metadata = Base.metadata
 def run_migrations_online() -> None:
     connection = config.attributes.get("connection")
     if connection is not None:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        # `schema` (só nos testes) isola a tabela de versões no esquema temporário; sem isso o
+        # Alembic enxerga o `alembic_version` do `public` pelo search_path e pula as migrações.
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            version_table_schema=config.attributes.get("schema"),
+        )
         with context.begin_transaction():
             context.run_migrations()
         return
