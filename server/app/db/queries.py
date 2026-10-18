@@ -24,6 +24,14 @@ class RiderCard:
     rating_count: int
     selfie_key: str | None
 
+    def public(self) -> dict:
+        """O que o app do passageiro recebe: a foto vem por endereço (com login), nunca pela chave interna."""
+        return {
+            "rider_id": self.rider_id, "name": self.name, "plate": self.plate, "moto_model": self.moto_model,
+            "rating": self.rating, "rating_count": self.rating_count,
+            "photo_url": f"/v1/riders/{self.rider_id}/documents/selfie" if self.selfie_key else None,
+        }
+
 
 def rider_card(session: Session, rider_id: str) -> RiderCard:
     found = session.execute(
@@ -409,3 +417,15 @@ def list_safety_alerts(session: Session, status: str, limit: int, offset: int) -
         )
         for a, passenger_name, rider_name, plate in rows
     ]
+
+
+def queue_info(session: Session, ride_id: str, rider_id: str) -> dict:
+    """Para o passageiro da fila: onde a moto termina a corrida de agora e em quanto tempo chega até ele."""
+    active_id = rider_active_ride_id(session, rider_id)
+    finishing_at = None
+    if active_id is not None:
+        finishing_at = session.execute(select(RideRow.dest_text).where(RideRow.id == active_id)).scalar_one_or_none()
+    eta = session.execute(
+        select(RideOfferRow.eta_seconds).where(RideOfferRow.ride_id == ride_id, RideOfferRow.status == "accepted")
+    ).scalar_one_or_none()
+    return {"finishing_at": finishing_at or "", "eta_seconds": eta}

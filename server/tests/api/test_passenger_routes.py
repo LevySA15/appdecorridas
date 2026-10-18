@@ -227,3 +227,23 @@ def test_rotas_do_passageiro_sao_so_do_passageiro(client, runtime):
     ):
         assert getattr(client, metodo)(url, headers=motoqueiro.headers).status_code == 403
         assert getattr(client, metodo)(url).status_code == 401
+
+
+def test_passageiro_na_fila_ve_onde_a_moto_termina_e_quanto_falta(client, pax, session, runtime, clock):
+    from app.db.models import RiderProfileRow
+    from tests.helpers_db import add_accepted_ride, add_passenger
+
+    rider_id = online_rider(session, runtime, clock, 1, pt(100, 0))
+    add_passenger(session, "p0", "+5575900000010")
+    add_accepted_ride(session, ride_id="ride-0", passenger_id="p0", rider_id=rider_id)
+    repo.set_ride_details(
+        session, "ride-0", repo.RideDetails(pt(-2000, 0), pt(300, 0), "Origem", "Mercado", 2300, 1.0, "")
+    )
+    session.get(RiderProfileRow, rider_id).online = True
+    session.flush()
+    corrida = pedir(client, pax, cotar(client, pax)["quote_id"]).json()
+    runtime.run(lambda u: u.dispatch.accept_offer(u.session, rider_id, corrida["ride_id"], u.now))
+    ride = client.get("/v1/passenger/state", headers=pax.headers).json()["ride"]
+    assert ride["state"] == "queued" and ride["queued"] is True
+    assert ride["queue"]["finishing_at"] == "Mercado" and ride["queue"]["eta_seconds"] > 0
+    assert client.get("/v1/passenger/state", headers=pax.headers).json()["ride"]["rider_position"] is None

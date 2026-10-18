@@ -62,12 +62,7 @@ def passenger_ride_view(unit: Unit, ride_id: str) -> dict:
     rider = None
     position = None
     if ride.rider_id is not None:
-        card = queries.rider_card(unit.session, ride.rider_id)
-        rider = {
-            "rider_id": card.rider_id, "name": card.name, "plate": card.plate, "moto_model": card.moto_model,
-            "rating": card.rating, "rating_count": card.rating_count,
-            "photo_url": f"/v1/riders/{card.rider_id}/documents/selfie" if card.selfie_key else None,
-        }
+        rider = queries.rider_card(unit.session, ride.rider_id).public()
         if ride.state in _WITH_RIDER_ON_THE_MOVE:
             found = unit.positions.get(ride.rider_id)
             position = None if found is None else {"lat": found.lat, "lng": found.lng}
@@ -78,6 +73,7 @@ def passenger_ride_view(unit: Unit, ride_id: str) -> dict:
         "pickup": place(details.pickup.lat, details.pickup.lng, details.pickup_text),
         "destination": place(details.destination.lat, details.destination.lng, details.destination_text),
         "distance_m": details.distance_m, "rider": rider, "rider_position": position,
+        "queue": queries.queue_info(unit.session, ride.ride_id, ride.rider_id) if ride.state is RideState.QUEUED else None,
         "pay": _pix_to_pay(unit, ride), "end_payment": _end_payment(unit, ride),
     }
 

@@ -157,8 +157,11 @@ def test_aceitar_corrida_pix_cria_a_cobranca_e_avisa_o_passageiro(dispatch, sess
     aviso = next(e for e in events.events if e.type == "rider_accepted")
     assert aviso.user_id == "p1"
     assert aviso.payload["pin"] == "4821" and aviso.payload["queued"] is False
-    assert aviso.payload["rider"]["plate"] == "ABC0001"
-    assert aviso.payload["pay"]["amount_cents"] == 700
+    assert aviso.payload["rider"] == {
+        "rider_id": "r1", "name": "Motoqueiro r1", "plate": "ABC0001", "moto_model": "Honda CG 160",
+        "rating": None, "rating_count": 0, "photo_url": None,
+    }                                          # a ficha pública: sem a chave interna da foto
+    assert aviso.payload["pay"]["amount_cents"] == 700 and aviso.payload["queue"] is None
     assert "ride_assigned" in tipos(events, "r1")
     assert [k for k, _ in repo.ride_events(session, "ride-1")] == ["offered", "accepted"]
 
@@ -207,6 +210,17 @@ def test_moto_terminando_recebe_pedido_para_a_fila(dispatch, session, positions,
     assert ride.state is RideState.QUEUED and ride.queued_since == AGORA + 2
     assert repo.get_current_charge_id(session, "ride-1") is not None  # o Pix nasce ao aceitar a da fila
     assert next(e for e in events.events if e.type == "rider_accepted").payload["queued"] is True
+
+
+def test_passageiro_da_fila_sabe_onde_a_moto_termina_e_quando_chega(dispatch, session, positions, events):
+    # Spec 5.2: "a moto está terminando uma corrida em [ponto] e chega em X minutos".
+    add_passenger(session)
+    _moto_terminando(session, positions)
+    add_searching_ride(session, now=AGORA)
+    dispatch.offer_next(session, "ride-1", AGORA)
+    dispatch.accept_offer(session, "r1", "ride-1", AGORA + 2)
+    fila = next(e for e in events.events if e.type == "rider_accepted").payload["queue"]
+    assert fila["finishing_at"] == "Destino" and fila["eta_seconds"] > 0
 
 
 def test_moto_que_ja_tem_corrida_na_fila_nao_recebe_outra(dispatch, session, positions):
@@ -370,3 +384,15 @@ def test_motoqueiro_que_ficou_indisponivel_depois_da_oferta_nao_consegue_aceitar
     with pytest.raises(OfferGone, match="disponível"):
         dispatch.accept_offer(session, "r1", "ride-1", AGORA + 3)
     assert repo.get_ride(session, "ride-1").state is RideState.SEARCHING
+
+
+def test_ficha_publica_aponta_para_a_selfie_quando_ela_existe(session, positions):
+    from app.db import queries
+    from app.db.models import RiderProfileRow
+
+    mundo(session, positions, n_motos=1)
+    assert queries.rider_card(session, "r1").public()["photo_url"] is None
+    session.get(RiderProfileRow, "r1").selfie_key = "r1/selfie-0123456789abcdef.jpg"
+    session.flush()
+    ficha = queries.rider_card(session, "r1").public()
+    assert ficha["photo_url"] == "/v1/riders/r1/documents/selfie" and "selfie_key" not in ficha

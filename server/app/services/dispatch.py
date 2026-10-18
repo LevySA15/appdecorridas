@@ -174,7 +174,8 @@ class DispatchService:
             ride.passenger_id, "rider_accepted",
             {
                 "ride_id": ride_id, "queued": busy, "pin": ride.pin,
-                "rider": dataclasses.asdict(card),
+                "queue": queries.queue_info(session, ride_id, rider_id) if busy else None,
+                "rider": card.public(),
                 "pay": None if charge is None else {
                     "charge_id": charge.charge_id, "amount_cents": charge.amount_cents,
                     "expires_at": now + self.cfg.rides.pix_window_s,
