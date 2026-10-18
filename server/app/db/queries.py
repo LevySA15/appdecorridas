@@ -261,3 +261,58 @@ def cash_rides_without_charge_ids(session: Session) -> list[str]:
             .order_by(RideRow.id)
         ).scalars()
     )
+
+
+@dataclass(frozen=True)
+class RiderListItem:
+    rider_id: str
+    name: str
+    phone: str
+    cpf: str
+    plate: str
+    moto_model: str
+    status: str
+    reason: str | None
+    cnh_expires_on: object
+    crlv_expires_on: object
+    documents: tuple[str, ...]          # quais fotos existem: selfie, cnh, crlv
+
+
+def list_riders(session: Session, status: str, limit: int, offset: int) -> list[RiderListItem]:
+    rows = session.execute(
+        select(RiderProfileRow, UserRow)
+        .join(UserRow, UserRow.id == RiderProfileRow.user_id)
+        .where(RiderProfileRow.status == status)
+        .order_by(UserRow.created_at, RiderProfileRow.user_id)
+        .limit(limit)
+        .offset(offset)
+    ).all()
+    return [
+        RiderListItem(
+            rider_id=p.user_id, name=u.name, phone=u.phone, cpf=p.cpf, plate=p.plate, moto_model=p.moto_model,
+            status=p.status, reason=p.rejected_reason, cnh_expires_on=p.cnh_expires_on,
+            crlv_expires_on=p.crlv_expires_on,
+            documents=tuple(
+                kind for kind, key in (("selfie", p.selfie_key), ("cnh", p.cnh_photo_key), ("crlv", p.crlv_key)) if key
+            ),
+        )
+        for p, u in rows
+    ]
+
+
+def rider_document_key(session: Session, rider_id: str, kind: str) -> str | None:
+    column = {"selfie": RiderProfileRow.selfie_key, "cnh": RiderProfileRow.cnh_photo_key, "crlv": RiderProfileRow.crlv_key}[kind]
+    return session.execute(select(column).where(RiderProfileRow.user_id == rider_id)).scalar_one_or_none()
+
+
+def passenger_rode_with(session: Session, passenger_id: str, rider_id: str) -> bool:
+    """O passageiro tem (ou teve) uma corrida aceita por este motoqueiro. Dá o direito de ver a selfie dele."""
+    return session.execute(
+        select(RideRow.id)
+        .where(
+            RideRow.passenger_id == passenger_id,
+            RideRow.rider_id == rider_id,
+            RideRow.state.notin_((RideState.CANCELLED.value, RideState.NO_RIDER.value)),
+        )
+        .limit(1)
+    ).first() is not None

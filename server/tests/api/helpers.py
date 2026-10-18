@@ -9,6 +9,7 @@ class Login:
     user_id: str
     token: str
     phone: str
+    role: str
 
     @property
     def headers(self) -> dict[str, str]:
@@ -22,7 +23,7 @@ def login(client, runtime, phone: str, role: str, name: str | None = None) -> Lo
     resposta = client.post("/v1/auth/verify", json={"phone": phone, "code": codigo, "role": role, "device": "teste"})
     assert resposta.status_code == 200, resposta.text
     corpo = resposta.json()
-    entrou = Login(corpo["user_id"], corpo["token"], normalize_phone(phone))
+    entrou = Login(corpo["user_id"], corpo["token"], normalize_phone(phone), role)
     if name:
         assert client.put("/v1/me", json={"name": name}, headers=entrou.headers).status_code == 200
     return entrou

@@ -5,6 +5,7 @@ import datetime as dt
 import re
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import queries
@@ -107,22 +108,38 @@ class RiderService:
             raise RegistrationError("Sua CNH está vencida.")
         if crlv_expires_on < today:
             raise RegistrationError("O documento da moto está vencido.")
+        duplicate = self._find_duplicate(session, cpf=cpf_ok, cnh_number=cnh_ok, plate=plate_ok)
+        if duplicate is not None:
+            raise duplicate
+        user.name = clean_name
+        try:
+            with session.begin_nested():
+                session.add(
+                    RiderProfileRow(
+                        user_id=user_id, cpf=cpf_ok, cnh_number=cnh_ok, plate=plate_ok,
+                        moto_model=moto_model.strip(), status="pending", selfie_key=selfie_key,
+                        cnh_photo_key=cnh_photo_key, crlv_key=crlv_key,
+                        cnh_expires_on=cnh_expires_on, crlv_expires_on=crlv_expires_on,
+                    )
+                )
+                session.flush()
+        except IntegrityError:
+            # Outro cadastro entrou entre a conferência e a gravação (dois toques, duas telas): o banco decide.
+            raise self._find_duplicate(
+                session, cpf=cpf_ok, cnh_number=cnh_ok, plate=plate_ok
+            ) or RegistrationError("Seu cadastro já foi enviado.") from None
+
+    def _find_duplicate(
+        self, session: Session, *, cpf: str, cnh_number: str, plate: str
+    ) -> DuplicateRegistration | None:
         for field, phrase, column, value in (
-            ("CPF", "este CPF", RiderProfileRow.cpf, cpf_ok),
-            ("número de CNH", "este número de CNH", RiderProfileRow.cnh_number, cnh_ok),
-            ("placa", "esta placa", RiderProfileRow.plate, plate_ok),
+            ("CPF", "este CPF", RiderProfileRow.cpf, cpf),
+            ("número de CNH", "este número de CNH", RiderProfileRow.cnh_number, cnh_number),
+            ("placa", "esta placa", RiderProfileRow.plate, plate),
         ):
             if session.execute(select(RiderProfileRow.user_id).where(column == value)).first() is not None:
-                raise DuplicateRegistration(field, phrase)
-        user.name = clean_name
-        session.add(
-            RiderProfileRow(
-                user_id=user_id, cpf=cpf_ok, cnh_number=cnh_ok, plate=plate_ok, moto_model=moto_model.strip(),
-                status="pending", selfie_key=selfie_key, cnh_photo_key=cnh_photo_key, crlv_key=crlv_key,
-                cnh_expires_on=cnh_expires_on, crlv_expires_on=crlv_expires_on,
-            )
-        )
-        session.flush()
+                return DuplicateRegistration(field, phrase)
+        return None
 
     def _profile(self, session: Session, rider_id: str) -> RiderProfileRow:
         row = session.execute(
@@ -171,13 +188,25 @@ class RiderService:
         self.events.add(rider_id, "rider_unblocked")
 
     def renew_documents(
-        self, session: Session, rider_id: str, *, cnh_expires_on: dt.date, crlv_expires_on: dt.date, today: dt.date
+        self,
+        session: Session,
+        rider_id: str,
+        *,
+        cnh_expires_on: dt.date,
+        crlv_expires_on: dt.date,
+        today: dt.date,
+        cnh_photo_key: str | None = None,
+        crlv_key: str | None = None,
     ) -> None:
         if cnh_expires_on < today or crlv_expires_on < today:
             raise RegistrationError("As novas datas já estão vencidas.")
         profile = self._profile(session, rider_id)
         profile.cnh_expires_on = cnh_expires_on
         profile.crlv_expires_on = crlv_expires_on
+        if cnh_photo_key is not None:
+            profile.cnh_photo_key = cnh_photo_key
+        if crlv_key is not None:
+            profile.crlv_key = crlv_key
         session.flush()
 
     # --- disponibilidade ----------------------------------------------------------

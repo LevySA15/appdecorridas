@@ -7,6 +7,7 @@ from app.adapters.fake_otp import FakeOtpSender
 from app.adapters.fake_payments import FakePaymentProvider
 from app.api.app import create_app
 from app.domain.dispatch import ReservationBook
+from app.infra.documents import LocalDocumentStore
 from app.infra.redis_store import (
     InMemoryFactorStore,
     InMemoryJobMarks,
@@ -52,7 +53,7 @@ def clock():
 
 
 @pytest.fixture()
-def runtime(session, clock):
+def runtime(session, clock, tmp_path):
     return Runtime(
         session_factory=lambda: session,
         positions=InMemoryPositionStore(),
@@ -65,6 +66,7 @@ def runtime(session, clock):
         limiter=InMemoryRateLimiter(),
         pix_health=InMemoryPixHealth(),
         job_marks=InMemoryJobMarks(),
+        documents=LocalDocumentStore(tmp_path / "docs"),
         mode="dev",
         clock=clock,
     )

@@ -25,6 +25,7 @@ from app.db.config_store import AppConfig, load_app_config
 from app.db.session import make_engine, make_session_factory
 from app.domain.maps import MapsProvider
 from app.domain.payments import PaymentProvider
+from app.infra.documents import DocumentStore, LocalDocumentStore
 from app.infra.redis_store import (
     FactorStore,
     JobMarks,
@@ -88,6 +89,7 @@ class Runtime:
     limiter: RateLimiter
     pix_health: PixHealth
     job_marks: JobMarks
+    documents: DocumentStore
     mode: str = "production"
     clock: Callable[[], float] = time.time
     redis_client: Any = None
@@ -179,6 +181,7 @@ def build_runtime(settings: Settings) -> Runtime:
         limiter=RedisRateLimiter(client),
         pix_health=RedisPixHealth(client),
         job_marks=RedisJobMarks(client),
+        documents=LocalDocumentStore(settings.upload_dir),
         mode="dev",
         redis_client=client,
     )

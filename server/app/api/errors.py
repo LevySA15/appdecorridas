@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.domain.payments import PaymentProviderError
+from app.infra.documents import UploadError
 from app.domain.rides import InvalidTransition
 from app.services.auth import TooManyRequests
 from app.services.dispatch import OfferGone
@@ -77,6 +78,10 @@ async def _cannot_go_online(request: Request, exc: CannotGoOnline) -> JSONRespon
     return error_response(409, exc.code, exc.message)
 
 
+async def _upload_error(request: Request, exc: UploadError) -> JSONResponse:
+    return error_response(exc.status, exc.code, exc.message)
+
+
 async def _duplicate_registration(request: Request, exc: DuplicateRegistration) -> JSONResponse:
     return error_response(409, "duplicate_registration", str(exc), field=exc.field)
 
@@ -112,6 +117,7 @@ def install_error_handlers(app: FastAPI) -> None:
         app.add_exception_handler(exc_class, _rule_handler(rule))
     app.add_exception_handler(ApiError, _api_error)
     app.add_exception_handler(CannotGoOnline, _cannot_go_online)
+    app.add_exception_handler(UploadError, _upload_error)
     app.add_exception_handler(DuplicateRegistration, _duplicate_registration)
     app.add_exception_handler(LookupError, _not_found)
     app.add_exception_handler(RequestValidationError, _validation)
