@@ -440,3 +440,32 @@ def queue_info(session: Session, ride_id: str, rider_id: str) -> dict:
         select(RideOfferRow.eta_seconds).where(RideOfferRow.ride_id == ride_id, RideOfferRow.status == "accepted")
     ).scalar_one_or_none()
     return {"finishing_at": finishing_at or "", "eta_seconds": eta}
+
+
+def count_rides_by_state(session: Session) -> dict[str, int]:
+    """Quantas corridas há em cada estado (a conferência de fim de dia do simulador)."""
+    rows = session.execute(select(RideRow.state, func.count()).group_by(RideRow.state)).all()
+    return {state: total for state, total in rows}
+
+
+def open_rides(session: Session) -> list[dict]:
+    """Corridas que ainda não terminaram (nem concluídas, nem canceladas, nem sem moto), das mais antigas às novas."""
+    rows = session.execute(
+        select(RideRow.id, RideRow.state, RideRow.passenger_id, RideRow.rider_id)
+        .where(RideRow.state.notin_(_TERMINAL))
+        .order_by(RideRow.created_at, RideRow.id)
+    ).all()
+    return [{"ride_id": i, "state": s, "passenger_id": p, "rider_id": r} for i, s, p, r in rows]
+
+
+def riders_with_two_active_rides(session: Session) -> list[str]:
+    """Motoqueiros com mais de uma corrida ativa ao mesmo tempo: não pode acontecer (a segunda vai para a fila)."""
+    return list(
+        session.execute(
+            select(RideRow.rider_id)
+            .where(RideRow.state.in_(_ACTIVE))
+            .group_by(RideRow.rider_id)
+            .having(func.count() > 1)
+            .order_by(RideRow.rider_id)
+        ).scalars()
+    )

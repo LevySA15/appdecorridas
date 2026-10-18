@@ -6,6 +6,8 @@ from fastapi import APIRouter, Request
 from app.api.deps import get_runtime
 from app.api.errors import ApiError
 from app.api.webhook import process_pix_event
+from app.db import queries
+from app.db.pg_ledger import PgLedger
 from app.services.auth import normalize_phone
 
 router = APIRouter(prefix="/v1/dev", tags=["desenvolvimento"])
@@ -30,3 +32,26 @@ def pay_pix(charge_id: str, request: Request) -> dict:
     except (KeyError, AttributeError):
         raise ApiError(404, "not_found", "Cobrança desconhecida.") from None
     return {"status": process_pix_event(runtime, event)}
+
+
+@router.get("/audit")
+def audit(request: Request) -> dict:
+    """Conferência de fim de dia para o simulador: o livro-caixa fecha, bate com o provedor e não sobrou corrida aberta?"""
+    runtime = get_runtime(request)
+
+    def work(unit):
+        ledger = PgLedger(unit.session)
+        extract = {
+            (f"entry:{c.rider_id}" if c.purpose == "entry" else f"charge:{c.charge_id}"): c.amount_cents
+            for c in runtime.provider.charges.values()
+            if c.paid and not c.refunded
+        }
+        return {
+            "ledger_balanced": ledger.is_balanced(),
+            "reconcile_diff": ledger.reconcile(extract),
+            "rides_by_state": queries.count_rides_by_state(unit.session),
+            "open_rides": queries.open_rides(unit.session),
+            "double_booked_riders": queries.riders_with_two_active_rides(unit.session),
+        }
+
+    return runtime.run(work)
