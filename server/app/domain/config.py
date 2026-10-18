@@ -81,4 +81,5 @@ class AuthConfig:
     otp_ttl_s: int = 300
     otp_max_attempts: int = 5
     otp_requests_per_hour: int = 5
+    otp_requests_per_ip_hour: int = 100   # por aparelho/rede; alto porque várias pessoas dividem o mesmo IP no 4G
     session_days: int = 180

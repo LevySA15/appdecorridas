@@ -138,3 +138,32 @@ def test_nome_do_usuario(auth, sender, session):
     assert auth.authenticate(session, entrou.token, 1100.0).name == "Ana Lima"
     with pytest.raises(ValueError, match="nome"):
         auth.set_name(session, entrou.user_id, " ")
+
+
+def test_pedir_codigo_de_novo_invalida_o_anterior(auth, sender, session):
+    # Roteiro do 2B (menores): um código antigo não pode continuar valendo depois de outro ter sido usado.
+    auth.request_code(session, PHONE, 1000.0)
+    antigo = sender.last_code(NORMAL)
+    auth.request_code(session, PHONE, 1010.0)
+    novo = sender.last_code(NORMAL)
+    assert antigo != novo
+    assert auth.verify_code(session, PHONE, novo, "passenger", "x", 1020.0).ok is True
+    assert auth.verify_code(session, PHONE, antigo, "passenger", "x", 1030.0).ok is False
+
+
+def test_administrador_so_entra_se_o_numero_ja_for_de_administrador(auth, sender, session):
+    auth.request_code(session, PHONE, 1000.0)
+    sem_acesso = auth.verify_code(session, PHONE, sender.last_code(NORMAL), "admin", "painel", 1001.0)
+    assert sem_acesso.ok is False and "administrador" in sem_acesso.reason
+    assert session.execute(select(UserRow).where(UserRow.phone == NORMAL)).first() is None   # não criou conta
+
+    repo.add_user(session, user_id="adm-1", phone=NORMAL, name="Levy", role="admin")
+    auth.request_code(session, PHONE, 2000.0)
+    entrou = auth.verify_code(session, PHONE, sender.last_code(NORMAL), "admin", "painel", 2001.0)
+    assert entrou.ok and entrou.role == "admin" and entrou.user_id == "adm-1" and not entrou.is_new_user
+
+
+def test_passageiro_nao_entra_como_administrador(auth, sender, session):
+    _login(auth, sender, session, role="passenger")
+    resultado = _login(auth, sender, session, now=5000.0, role="admin")
+    assert resultado.ok is False and "passageiro" in resultado.reason

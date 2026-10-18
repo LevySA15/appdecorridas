@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from app.api.errors import install_error_handlers
+from app.api.routes import auth as auth_routes
 
 
 def create_app(runtime=None, *, run_background: bool = False) -> FastAPI:
@@ -19,6 +20,7 @@ def create_app(runtime=None, *, run_background: bool = False) -> FastAPI:
     )
     app.state.runtime = runtime
     install_error_handlers(app)
+    app.include_router(auth_routes.router)
 
     if runtime is not None:
 

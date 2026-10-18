@@ -13,7 +13,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Protocol
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.db import repositories as repo
@@ -82,6 +82,10 @@ class AuthService:
         ).scalar_one()
         if recent >= self.cfg.otp_requests_per_hour:
             raise TooManyRequests("Muitos pedidos de código. Tente de novo mais tarde.")
+        # um código só vale por vez: pedir outro invalida o anterior
+        session.execute(
+            update(OtpCodeRow).where(OtpCodeRow.phone == phone, OtpCodeRow.used.is_(False)).values(used=True)
+        )
         digits = self.cfg.otp_digits
         code = f"{secrets.randbelow(10 ** digits):0{digits}d}"
         session.add(
@@ -95,7 +99,7 @@ class AuthService:
     def verify_code(
         self, session: Session, raw_phone: str, code: str, role: str, device: str, now: float
     ) -> LoginResult:
-        if role not in ("passenger", "rider"):
+        if role not in ("passenger", "rider", "admin"):
             raise ValueError("papel inválido")
         phone = normalize_phone(raw_phone)
         row = session.execute(
@@ -114,6 +118,8 @@ class AuthService:
             session.flush()
             return LoginResult(False, reason="Código errado.")
         user = session.execute(select(UserRow).where(UserRow.phone == phone)).scalar_one_or_none()
+        if user is None and role == "admin":      # administrador nunca nasce por login: é criado por `app.cli`
+            return LoginResult(False, reason="Este número não tem acesso de administrador.")
         if user is not None and user.role != role:
             return LoginResult(False, reason=f"Este número já tem cadastro de {_ROLE_NAMES.get(user.role, user.role)}.")
         if user is not None and user.is_blocked:
