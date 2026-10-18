@@ -35,8 +35,9 @@ def test_so_uma_oferta_pendente_por_corrida(session):
 
 def test_so_uma_oferta_pendente_por_motoqueiro(session):
     add_passenger(session)
+    add_passenger(session, "p2", "+5575900000010")
     add_rider(session)
-    session.add_all([_ride("ride-1"), _ride("ride-2")])
+    session.add_all([_ride("ride-1"), _ride("ride-2", "p2")])
     session.flush()
     session.add(_offer("ride-1", "r1"))
     session.flush()

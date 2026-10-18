@@ -61,9 +61,11 @@ def test_cobranca_atual_da_corrida(session):
     add_passenger(session)
     add_rider(session)
     add_accepted_ride(session)
+    charge = FakePaymentProvider().create_pix_charge("ride-1", "r1", 700, compute_split(700, 100, 0))
+    repo.add_charge(session, charge)
     assert repo.get_current_charge_id(session, "ride-1") is None
-    repo.set_current_charge(session, "ride-1", "ch-1")
-    assert repo.get_current_charge_id(session, "ride-1") == "ch-1"
+    repo.set_current_charge(session, "ride-1", charge.charge_id)
+    assert repo.get_current_charge_id(session, "ride-1") == charge.charge_id
     repo.set_current_charge(session, "ride-1", None)
     assert repo.get_current_charge_id(session, "ride-1") is None
 

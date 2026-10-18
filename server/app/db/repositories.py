@@ -110,6 +110,29 @@ def save_passenger_account(session: Session, acc: PassengerAccount) -> None:
     session.flush()
 
 
+@dataclass(frozen=True)
+class EmergencyContact:
+    name: str
+    phone: str
+
+
+def get_emergency_contact(session: Session, passenger_id: str) -> EmergencyContact | None:
+    row = session.get(PassengerProfileRow, passenger_id)
+    if row is None:
+        raise LookupError(f"passageiro {passenger_id} não encontrado")
+    if not row.emergency_phone:
+        return None
+    return EmergencyContact(row.emergency_name or "", row.emergency_phone)
+
+
+def set_emergency_contact(session: Session, passenger_id: str, name: str, phone: str) -> None:
+    row = session.get(PassengerProfileRow, passenger_id)
+    if row is None:
+        raise LookupError(f"passageiro {passenger_id} não encontrado")
+    row.emergency_name, row.emergency_phone = name, phone
+    session.flush()
+
+
 # --- corridas ----------------------------------------------------------------
 
 
@@ -212,6 +235,7 @@ def _charge_to_domain(row: PixChargeRow) -> PixCharge:
         refunded=row.refunded,
         debt_state=DebtState(row.debt_state),
         purpose=row.purpose,
+        br_code=row.br_code,
     )
 
 
@@ -226,6 +250,7 @@ def _apply_charge(row: PixChargeRow, charge: PixCharge) -> None:
     row.refunded = charge.refunded
     row.debt_state = charge.debt_state.value
     row.purpose = charge.purpose
+    row.br_code = charge.br_code
 
 
 def add_charge(session: Session, charge: PixCharge) -> None:
@@ -275,6 +300,7 @@ class RideDetails:
     distance_m: int
     price_factor: float
     price_reason: str
+    route: tuple[tuple[float, float], ...] = ()     # pontos (lat, lng) do trajeto, vindos do mapa na hora do preço
 
 
 def set_ride_details(session: Session, ride_id: str, details: RideDetails) -> None:
@@ -285,6 +311,7 @@ def set_ride_details(session: Session, ride_id: str, details: RideDetails) -> No
     row.dest_lat, row.dest_lng = details.destination.lat, details.destination.lng
     row.pickup_text, row.dest_text = details.pickup_text, details.destination_text
     row.distance_m, row.price_factor, row.price_reason = details.distance_m, details.price_factor, details.price_reason
+    row.route = [list(point) for point in details.route] or None
     session.flush()
 
 
@@ -302,6 +329,7 @@ def get_ride_details(session: Session, ride_id: str) -> RideDetails:
         distance_m=row.distance_m or 0,
         price_factor=row.price_factor if row.price_factor is not None else 1.0,
         price_reason=row.price_reason or "",
+        route=tuple((float(lat), float(lng)) for lat, lng in (row.route or ())),
     )
 
 

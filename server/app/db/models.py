@@ -79,11 +79,22 @@ class PassengerProfileRow(Base):
 
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), primary_key=True)
     unpaid_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    emergency_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    emergency_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
 
 class RideRow(Base):
     __tablename__ = "rides"
-    __table_args__ = (CheckConstraint("price_cents > 0", name="ride_price_positive"),)
+    __table_args__ = (
+        CheckConstraint("price_cents > 0", name="ride_price_positive"),
+        Index("ix_rides_state", "state"),
+        Index("ix_rides_passenger_state", "passenger_id", "state"),
+        Index("ix_rides_rider_state", "rider_id", "state"),
+        Index(
+            "ride_one_open_per_passenger", "passenger_id", unique=True,
+            postgresql_where=text("state NOT IN ('completed','cancelled','no_rider')"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(40), primary_key=True)
     passenger_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
@@ -101,7 +112,9 @@ class RideRow(Base):
     arrived_at: Mapped[float | None] = mapped_column(Float(53), nullable=True)
     end_payment_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     non_payment_reported: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
-    current_charge_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    current_charge_id: Mapped[str | None] = mapped_column(
+        String(40), ForeignKey("pix_charges.charge_id", use_alter=True, name="rides_current_charge_fk"), nullable=True
+    )
     pickup_lat: Mapped[float | None] = mapped_column(Float(53), nullable=True)
     pickup_lng: Mapped[float | None] = mapped_column(Float(53), nullable=True)
     dest_lat: Mapped[float | None] = mapped_column(Float(53), nullable=True)
@@ -111,6 +124,7 @@ class RideRow(Base):
     distance_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
     price_factor: Mapped[float | None] = mapped_column(Float(53), nullable=True)
     price_reason: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    route: Mapped[list | None] = mapped_column(JSONB, nullable=True)   # [[lat, lng], ...] do preço mostrado
     fee_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     completed_at: Mapped[float | None] = mapped_column(Float(53), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -135,6 +149,7 @@ class PixChargeRow(Base):
     paid: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     refunded: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     debt_state: Mapped[str] = mapped_column(String(12), default="reserved", server_default="reserved")
+    br_code: Mapped[str] = mapped_column(Text, default="", server_default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -210,6 +225,7 @@ class QuoteRow(Base):
     price_cents: Mapped[int] = mapped_column(Integer)
     factor: Mapped[float] = mapped_column(Float(53))
     reason: Mapped[str] = mapped_column(String(80))
+    route: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[float] = mapped_column(Float(53))
     expires_at: Mapped[float] = mapped_column(Float(53))
     used: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
@@ -221,6 +237,7 @@ class RideOfferRow(Base):
         CheckConstraint("status IN ('pending','accepted','declined','expired')", name="offer_status_valid"),
         Index("offer_one_pending_per_ride", "ride_id", unique=True, postgresql_where=text("status = 'pending'")),
         Index("offer_one_pending_per_rider", "rider_id", unique=True, postgresql_where=text("status = 'pending'")),
+        Index("ix_ride_offers_ride_id", "ride_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
@@ -228,6 +245,7 @@ class RideOfferRow(Base):
     rider_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     status: Mapped[str] = mapped_column(String(10), default="pending", server_default="pending")
     will_queue: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    eta_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[float] = mapped_column(Float(53))
     expires_at: Mapped[float] = mapped_column(Float(53))
 

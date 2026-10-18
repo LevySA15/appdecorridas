@@ -14,6 +14,8 @@ def test_dia_de_trabalho_com_dinheiro_pix_e_estorno_fecha_as_contas(session):
     provider = FakePaymentProvider()
     service = PaymentService(provider)
     add_passenger(session)
+    add_passenger(session, "p2", "+5575900000010")     # uma corrida aberta por passageiro
+    add_passenger(session, "p3", "+5575900000011")
     add_rider(session)
 
     # 1) uma corrida em dinheiro já concluída: a taxa vira dívida do motoqueiro
@@ -23,7 +25,7 @@ def test_dia_de_trabalho_com_dinheiro_pix_e_estorno_fecha_as_contas(session):
     assert repo.get_rider_account(session, "r1").cash_debt_cents == 100
 
     # 2) uma corrida Pix de R$ 7,00: a dívida é abatida quando o Pix é pago
-    add_accepted_ride(session, ride_id="ride-2", price=700)
+    add_accepted_ride(session, ride_id="ride-2", passenger_id="p2", price=700)
     charge2 = service.start_pix_charge(session, "ride-2", FEE)
     assert repo.get_rider_account(session, "r1").cash_debt_cents == 100  # ainda não abateu
     assert service.on_provider_event(session, provider.mark_paid(charge2.charge_id)) == "applied"
@@ -33,7 +35,7 @@ def test_dia_de_trabalho_com_dinheiro_pix_e_estorno_fecha_as_contas(session):
     assert (acc.cash_debt_cents, acc.debt_reserved_cents, acc.completed_rides) == (0, 0, 2)
 
     # 3) uma corrida Pix de R$ 6,00, paga e depois cancelada: o dinheiro volta
-    add_accepted_ride(session, ride_id="ride-3", price=600)
+    add_accepted_ride(session, ride_id="ride-3", passenger_id="p3", price=600)
     charge3 = service.start_pix_charge(session, "ride-3", FEE)
     service.on_provider_event(session, provider.mark_paid(charge3.charge_id))
     assert service.cancel_ride(session, "ride-3", now=20) == CancelResult(0, True)

@@ -124,6 +124,7 @@ class PixCharge:
     refunded: bool = False
     debt_state: DebtState = DebtState.RESERVED
     purpose: str = "ride"   # "ride" (Pix antes da corrida), "end" (QR do fim em dinheiro) ou "entry" (entrada de R$ 50)
+    br_code: str = ""       # texto do Pix "copia e cola"; o app desenha o QR a partir dele
 
 
 class PaymentProviderError(Exception):

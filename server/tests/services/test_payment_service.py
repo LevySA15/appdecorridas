@@ -68,7 +68,8 @@ def test_so_cobra_pix_de_corrida_aceita_por_um_motoqueiro(session, service):
     mundo(session, method=PaymentMethod.CASH)
     with pytest.raises(InvalidTransition, match="Pix"):
         service.start_pix_charge(session, "ride-1", FEE)
-    ride = Ride("ride-2", "p1", 700, PaymentMethod.PIX, pin="4821")
+    add_passenger(session, "p2", "+5575900000010")    # uma corrida aberta por passageiro
+    ride = Ride("ride-2", "p2", 700, PaymentMethod.PIX, pin="4821")
     repo.add_ride(session, ride)
     with pytest.raises(InvalidTransition):
         service.start_pix_charge(session, "ride-2", FEE)

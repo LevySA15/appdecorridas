@@ -48,6 +48,8 @@ class RideConfig:
     search_give_up_s: int = 120
     cash_pay_wait_s: int = 300      # espera pelo pagamento do fim da corrida em dinheiro
     quote_ttl_s: int = 300          # validade do preço mostrado antes do pedido
+    min_trip_m: int = 100           # origem e destino mais perto que isso não é corrida
+    max_trip_m: int = 40_000        # em linha reta; mais longe que isso não é corrida de moto na cidade
 
 
 @dataclass(frozen=True)
@@ -69,6 +71,8 @@ class SafetyConfig:
     max_plausible_speed_kmh: float = 140.0
     reanchor_after_rejects: int = 3
     mock_location_jumps: int = 2
+    alert_cooldown_s: int = 600     # depois de um aviso, o mesmo tipo de aviso não repete nesse tempo
+    max_samples: int = 120          # posições guardadas por corrida (cerca de 8 minutos a cada 4 s)
 
 
 @dataclass(frozen=True)

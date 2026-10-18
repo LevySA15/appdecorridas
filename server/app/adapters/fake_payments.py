@@ -22,6 +22,7 @@ class FakePaymentProvider:
             amount_cents=amount_cents,
             split=split,
             purpose=purpose,
+            br_code=f"fake-pix|ch-{self._counter}|{amount_cents}",
         )
         self.charges[charge.charge_id] = charge
         return charge

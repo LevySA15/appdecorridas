@@ -26,6 +26,10 @@ class InvalidTransition(Exception):
     """A ação não é permitida no estado atual da corrida."""
 
 
+class WrongPin(ValueError):
+    """O código de 4 dígitos informado pelo motoqueiro não é o da corrida."""
+
+
 @dataclass
 class Ride:
     ride_id: str
@@ -169,7 +173,7 @@ def start_ride(ride: Ride, pin: str) -> None:
     if ride.payment_method is PaymentMethod.PIX and not ride.pix_paid:
         raise InvalidTransition("o Pix ainda não foi pago")
     if pin != ride.pin:
-        raise ValueError("código errado")
+        raise WrongPin("código errado")
     ride.state = RideState.IN_PROGRESS
 
 
