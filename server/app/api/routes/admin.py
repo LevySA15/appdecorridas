@@ -17,6 +17,10 @@ class ReasonIn(BaseModel):
     reason: str = Field(min_length=1, max_length=200)
 
 
+class NoteIn(BaseModel):
+    note: str = Field(default="", max_length=200)
+
+
 def _rider_item(item: queries.RiderListItem) -> dict:
     return {
         "rider_id": item.rider_id, "name": item.name, "phone": item.phone, "cpf": item.cpf, "plate": item.plate,
@@ -60,4 +64,34 @@ def block(rider_id: str, body: ReasonIn, request: Request, admin: AuthUser = Dep
 @router.post("/riders/{rider_id}/unblock", status_code=204)
 def unblock(rider_id: str, request: Request, admin: AuthUser = Depends(admin_user)) -> Response:
     get_runtime(request).run(lambda unit: unit.riders.unblock(unit.session, rider_id))
+    return Response(status_code=204)
+
+
+@router.get("/safety-alerts")
+def list_safety_alerts(
+    request: Request,
+    status: Literal["open", "ok", "sos", "resolved"] = "open",
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: AuthUser = Depends(admin_user),
+) -> list[dict]:
+    items = get_runtime(request).run(lambda unit: queries.list_safety_alerts(unit.session, status, limit, offset))
+    return [
+        {
+            "alert_id": i.alert_id, "ride_id": i.ride_id, "kind": i.kind, "status": i.status,
+            "suspected_mock": i.suspected_mock, "lat": i.lat, "lng": i.lng, "created_at": i.created_at,
+            "answered_at": i.answered_at, "resolved_at": i.resolved_at, "note": i.note,
+            "passenger_name": i.passenger_name, "rider_name": i.rider_name, "plate": i.plate,
+        }
+        for i in items
+    ]
+
+
+@router.post("/safety-alerts/{alert_id}/resolve", status_code=204)
+def resolve_safety_alert(
+    alert_id: int, body: NoteIn, request: Request, admin: AuthUser = Depends(admin_user)
+) -> Response:
+    get_runtime(request).run(
+        lambda unit: unit.safety.resolve(unit.session, alert_id, admin.user_id, body.note, unit.now)
+    )
     return Response(status_code=204)

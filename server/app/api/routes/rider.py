@@ -140,11 +140,14 @@ def report_position(body: PositionIn, request: Request, user: AuthUser = Depends
         context = queries.rider_context(unit.session, user.user_id)
         if context is None or not context.online:
             return
-        unit.riders.report_position(user.user_id, GeoPoint(body.lat, body.lng), unit.now)
+        point = GeoPoint(body.lat, body.lng)
+        unit.riders.report_position(user.user_id, point, unit.now)
         if context.ride_id is not None and context.ride_state in _ON_THE_MOVE:
             unit.events.add(
                 context.passenger_id, "rider_position", {"ride_id": context.ride_id, "lat": body.lat, "lng": body.lng}
             )
+            if context.ride_state == "in_progress":
+                unit.safety.on_rider_position(unit.session, context.ride_id, context.passenger_id, point, unit.now)
 
     get_runtime(request).run(work)
     return Response(status_code=204)

@@ -99,6 +99,6 @@ def evaluate(
     suspected = jumps >= cfg.mock_location_jumps
     if is_stopped_too_long(good, cfg):
         return SafetyResult(AlertType.STOPPED, suspected)
-    if is_off_route(good, route, cfg):
+    if route and is_off_route(good, route, cfg):      # sem rota guardada, só o aviso de parada vale
         return SafetyResult(AlertType.OFF_ROUTE, suspected)
     return SafetyResult(None, suspected)

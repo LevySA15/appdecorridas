@@ -12,6 +12,7 @@ from app.api.routes import passenger as passenger_routes
 from app.api.routes import payments as payments_routes
 from app.api.routes import rider as rider_routes
 from app.api.routes import rides as rides_routes
+from app.api.routes import safety as safety_routes
 
 
 def create_app(runtime=None, *, run_background: bool = False) -> FastAPI:
@@ -33,6 +34,7 @@ def create_app(runtime=None, *, run_background: bool = False) -> FastAPI:
     app.include_router(passenger_routes.router)
     app.include_router(rides_routes.router)
     app.include_router(payments_routes.router)
+    app.include_router(safety_routes.router)
 
     if getattr(runtime, "mode", None) == "dev":
         from app.api.routes import dev as dev_routes

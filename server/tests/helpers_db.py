@@ -129,3 +129,31 @@ def add_completed_ride(
     ride.fee_cents = fee
     repo.add_ride(session, ride)
     return ride
+
+
+def add_in_progress_ride(
+    session,
+    ride_id: str = "ride-1",
+    passenger_id: str = "p1",
+    rider_id: str = "r1",
+    method: PaymentMethod = PaymentMethod.CASH,
+    route: tuple[tuple[float, float], ...] = (),
+    pickup: GeoPoint = ORIGIN,
+    destination: GeoPoint | None = None,
+) -> Ride:
+    """Corrida já iniciada (código dito, capacete confirmado). A rota esperada vai nos detalhes."""
+    ride = Ride(ride_id, passenger_id, 700, method, pin="4821")
+    start_search(ride, 0)
+    accept(ride, rider_id, 1, rider_busy=False)
+    mark_arrived(ride, 2)
+    confirm_helmet(ride)
+    if method is PaymentMethod.PIX:
+        ride.pix_paid = True
+    start_ride(ride, "4821")
+    ride.fee_cents = 100
+    repo.add_ride(session, ride)
+    repo.set_ride_details(
+        session, ride_id,
+        repo.RideDetails(pickup, destination or pt(1500, 0), "Rua A", "Feira livre", 1950, 1.0, "Preço normal.", route=route),
+    )
+    return ride

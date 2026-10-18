@@ -3,6 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.adapters.fake_maps import FakeMaps
+from app.adapters.fake_notifier import FakeContactNotifier
 from app.adapters.fake_otp import FakeOtpSender
 from app.adapters.fake_payments import FakePaymentProvider
 from app.api.app import create_app
@@ -16,6 +17,7 @@ from app.infra.redis_store import (
     InMemoryPositionStore,
     InMemoryRateLimiter,
 )
+from app.infra.safety_store import InMemorySafetyStore
 from app.realtime.hub import Hub
 from app.runtime import Runtime
 
@@ -70,6 +72,8 @@ def runtime(session, clock, tmp_path):
         job_marks=InMemoryJobMarks(),
         documents=LocalDocumentStore(tmp_path / "docs"),
         webhook_verifier=HmacVerifier(WEBHOOK_SECRET),
+        safety_store=InMemorySafetyStore(),
+        notifier=FakeContactNotifier(),
         mode="dev",
         clock=clock,
     )

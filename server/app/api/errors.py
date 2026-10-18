@@ -20,6 +20,7 @@ from app.services.auth import TooManyRequests
 from app.services.dispatch import OfferGone
 from app.services.quotes import NotAllowed, QuoteExpired
 from app.services.riders import CannotGoOnline, DuplicateRegistration, InvalidState, RegistrationError
+from app.services.safety import AlertClosed
 from app.services.trips import AlreadyRated, NotYourRide
 
 
@@ -49,6 +50,7 @@ _RULES: dict[type[Exception], _Rule] = {
     OfferGone: _Rule(409, "offer_gone"),
     NotYourRide: _Rule(403, "not_your_ride"),
     AlreadyRated: _Rule(409, "already_rated"),
+    AlertClosed: _Rule(409, "alert_closed"),
     InvalidTransition: _Rule(409, "invalid_state", "Essa ação não vale para o estado atual da corrida."),
     InvalidState: _Rule(409, "invalid_state", "Essa ação não vale para o estado atual do cadastro."),
     WrongPin: _Rule(422, "wrong_pin", "Código errado. Confira os 4 dígitos com o passageiro."),

@@ -19,11 +19,13 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.adapters.fake_maps import FakeMaps
+from app.adapters.fake_notifier import FakeContactNotifier
 from app.adapters.fake_otp import DevOtpSender
 from app.adapters.fake_payments import FakePaymentProvider
 from app.db.config_store import AppConfig, load_app_config
 from app.db.session import make_engine, make_session_factory
 from app.domain.maps import MapsProvider
+from app.domain.notifier import ContactNotifier
 from app.domain.payments import PaymentProvider
 from app.api.webhook import HmacVerifier, WebhookVerifier
 from app.infra.documents import DocumentStore, LocalDocumentStore
@@ -40,6 +42,7 @@ from app.infra.redis_store import (
     RedisRateLimiter,
     RedisReservationBook,
 )
+from app.infra.safety_store import RedisSafetyStore, SafetyStore
 from app.realtime.hub import Hub
 from app.services.auth import AuthService, OtpSender
 from app.services.dispatch import DispatchService, Reservations
@@ -48,6 +51,7 @@ from app.services.payments import PaymentService
 from app.services.quotes import QuoteService
 from app.services.ride_requests import RideRequestService
 from app.services.riders import RiderService
+from app.services.safety import SafetyService
 from app.services.sweeps import SweepService
 from app.services.trips import TripService
 from app.settings import Settings
@@ -76,6 +80,7 @@ class Unit:
     quotes: QuoteService
     requests: RideRequestService
     sweeps: SweepService
+    safety: SafetyService
 
 
 @dataclass
@@ -93,6 +98,8 @@ class Runtime:
     job_marks: JobMarks
     documents: DocumentStore
     webhook_verifier: WebhookVerifier
+    safety_store: SafetyStore
+    notifier: ContactNotifier
     mode: str = "production"
     clock: Callable[[], float] = time.time
     redis_client: Any = None
@@ -129,6 +136,7 @@ class Runtime:
             quotes=QuoteService(self.maps, self.positions, self.factors, cfg),
             requests=RideRequestService(dispatch, events, cfg),
             sweeps=SweepService(payments, dispatch, trips, events, cfg),
+            safety=SafetyService(self.safety_store, self.positions, self.notifier, events, cfg),
         )
 
     def run(self, work: Callable[[Unit], T], *, retries: int = 2) -> T:
@@ -192,6 +200,8 @@ def build_runtime(settings: Settings) -> Runtime:
         job_marks=RedisJobMarks(client),
         documents=LocalDocumentStore(settings.upload_dir),
         webhook_verifier=HmacVerifier(settings.webhook_secret),
+        safety_store=RedisSafetyStore(client),
+        notifier=FakeContactNotifier(),
         mode="dev",
         redis_client=client,
     )

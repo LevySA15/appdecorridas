@@ -4,9 +4,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
-from app.db.models import RideOfferRow, RideRow, RiderProfileRow, UserRow
+from app.db.models import RideOfferRow, RideRow, RiderProfileRow, SafetyAlertRow, UserRow
 from app.domain.fees import RiderAccount
 from app.domain.geo import GeoPoint
 from app.domain.rides import RideState
@@ -360,3 +360,52 @@ def rider_context(session: Session, rider_id: str) -> RiderContext | None:
         .limit(1)
     ).first()
     return RiderContext(bool(online), *(tuple(ride) if ride else (None, None, None)))
+
+
+def admin_ids(session: Session) -> list[str]:
+    """Quem recebe os avisos de segurança: todos os administradores sem bloqueio."""
+    return list(
+        session.execute(
+            select(UserRow.id).where(UserRow.role == "admin", UserRow.is_blocked.is_(False)).order_by(UserRow.id)
+        ).scalars()
+    )
+
+
+@dataclass(frozen=True)
+class SafetyAlertItem:
+    alert_id: int
+    ride_id: str
+    kind: str
+    status: str
+    suspected_mock: bool
+    lat: float | None
+    lng: float | None
+    created_at: float
+    answered_at: float | None
+    resolved_at: float | None
+    note: str | None
+    passenger_name: str
+    rider_name: str
+    plate: str
+
+
+def list_safety_alerts(session: Session, status: str, limit: int, offset: int) -> list[SafetyAlertItem]:
+    passenger, rider = aliased(UserRow), aliased(UserRow)
+    rows = session.execute(
+        select(SafetyAlertRow, passenger.name, rider.name, RiderProfileRow.plate)
+        .join(RideRow, RideRow.id == SafetyAlertRow.ride_id)
+        .join(passenger, passenger.id == RideRow.passenger_id)
+        .join(rider, rider.id == RideRow.rider_id)
+        .join(RiderProfileRow, RiderProfileRow.user_id == RideRow.rider_id)
+        .where(SafetyAlertRow.status == status)
+        .order_by(SafetyAlertRow.created_at.desc(), SafetyAlertRow.id.desc())
+        .limit(limit)
+        .offset(offset)
+    ).all()
+    return [
+        SafetyAlertItem(
+            a.id, a.ride_id, a.kind, a.status, a.suspected_mock, a.lat, a.lng, a.created_at, a.answered_at,
+            a.resolved_at, a.note, passenger_name, rider_name, plate,
+        )
+        for a, passenger_name, rider_name, plate in rows
+    ]

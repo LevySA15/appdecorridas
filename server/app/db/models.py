@@ -260,6 +260,29 @@ class RideEventRow(Base):
     created_at: Mapped[float] = mapped_column(Float(53))
 
 
+class SafetyAlertRow(Base):
+    __tablename__ = "safety_alerts"
+    __table_args__ = (
+        CheckConstraint("kind IN ('stopped','off_route','sos')", name="alert_kind_valid"),
+        CheckConstraint("status IN ('open','ok','sos','resolved')", name="alert_status_valid"),
+        Index("ix_safety_alerts_status", "status"),
+        Index("ix_safety_alerts_ride_id", "ride_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    ride_id: Mapped[str] = mapped_column(String(40), ForeignKey("rides.id"))
+    kind: Mapped[str] = mapped_column(String(10))
+    status: Mapped[str] = mapped_column(String(10), default="open", server_default="open")
+    suspected_mock: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    lat: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    lng: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    created_at: Mapped[float] = mapped_column(Float(53))
+    answered_at: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    resolved_at: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
 class RatingRow(Base):
     __tablename__ = "ratings"
     __table_args__ = (
