@@ -66,6 +66,7 @@ class Unit:
     now: float
     cfg: AppConfig
     events: EventCollector
+    positions: PositionStore
     auth: AuthService
     riders: RiderService
     payments: PaymentService
@@ -106,6 +107,10 @@ class Runtime:
             self._config = (now, load_app_config(session))
         return self._config[1]
 
+    def payment_methods(self, now: float) -> list[str]:
+        """O que o passageiro pode escolher agora. Com o Pix fora do ar, só dinheiro (spec, seção 12)."""
+        return ["cash"] if self.pix_health.is_down(now) else ["pix", "cash"]
+
     # --- unidade de trabalho --------------------------------------------------------------------
 
     def make_unit(self, session: Session) -> Unit:
@@ -115,7 +120,7 @@ class Runtime:
         dispatch = DispatchService(self.positions, self.reservations, self.maps, payments, events, cfg)
         trips = TripService(payments, dispatch, events, cfg)
         return Unit(
-            session=session, now=self.clock(), cfg=cfg, events=events,
+            session=session, now=self.clock(), cfg=cfg, events=events, positions=self.positions,
             auth=AuthService(self.otp_sender, cfg.auth),
             riders=RiderService(self.positions, events, cfg.fees),
             payments=payments, dispatch=dispatch, trips=trips,

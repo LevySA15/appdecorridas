@@ -9,7 +9,7 @@ from app.db import queries
 from app.db import repositories as repo
 from app.db.config_store import AppConfig
 from app.db.models import QuoteRow, UserRow
-from app.domain.geo import GeoPoint
+from app.domain.geo import GeoPoint, haversine_m
 from app.domain.ids import new_id
 from app.domain.maps import MapsProvider
 from app.domain.pricing import final_price_cents, price_reason, smooth_factor, target_factor
@@ -37,6 +37,15 @@ class Quote:
     destination: GeoPoint
     pickup_text: str
     destination_text: str
+    eta_seconds: int | None = None      # estimativa de quando a moto livre mais perto chega; None se não há moto
+    nearby_riders: int = 0
+    route: tuple[tuple[float, float], ...] = ()
+
+
+# "Chega em X min" da tela de confirmação: linha reta até a moto livre mais perto, com a rua 30% mais longa,
+# a cerca de 25 km/h. É uma estimativa sem custo de mapa; o tempo de verdade vem da procura.
+_STREET_FACTOR = 1.3
+_ESTIMATED_SPEED_MPS = 7.0
 
 
 def passenger_block_reason(session: Session, passenger_id: str) -> str | None:
@@ -76,11 +85,20 @@ class QuoteService:
         reason_blocked = passenger_block_reason(session, passenger_id)
         if reason_blocked:
             raise NotAllowed(reason_blocked)
+        straight_m = haversine_m(pickup, destination)
+        if straight_m < self.cfg.rides.min_trip_m:
+            raise NotAllowed("A origem e o destino estão muito perto. Escolha outro destino.")
+        if straight_m > self.cfg.rides.max_trip_m:
+            raise NotAllowed("Esse destino é longe demais para uma corrida de moto.")
         route = self.maps.route(pickup, destination)
         near = self.positions.nearby(
             pickup, self.cfg.dispatch.search_radius_m, now, self.cfg.dispatch.position_max_age_s
         )
-        free = len(queries.free_online_rider_ids(session, [rider_id for rider_id, _ in near]))
+        free_ids = set(queries.free_online_rider_ids(session, [rider_id for rider_id, _ in near]))
+        free = len(free_ids)
+        nearest = next((point for rider_id, point in near if rider_id in free_ids), None)
+        eta_seconds = None if nearest is None else int(haversine_m(pickup, nearest) * _STREET_FACTOR / _ESTIMATED_SPEED_MPS)
+        route_points = tuple((point.lat, point.lng) for point in route.points)
         pending = queries.count_searching_rides(session)
         state = self.factors.get()
         if state is None or now - state[1] >= self.cfg.pricing.factor_interval_s:
@@ -94,6 +112,7 @@ class QuoteService:
             quote_id=new_id("q"), price_cents=price, distance_m=route.distance_m, duration_s=route.duration_s,
             factor=factor, reason=price_reason(factor), expires_at=now + self.cfg.rides.quote_ttl_s,
             pickup=pickup, destination=destination, pickup_text=pickup_text, destination_text=destination_text,
+            eta_seconds=eta_seconds, nearby_riders=free, route=route_points,
         )
         session.add(
             QuoteRow(
@@ -101,7 +120,8 @@ class QuoteService:
                 pickup_lat=pickup.lat, pickup_lng=pickup.lng, dest_lat=destination.lat, dest_lng=destination.lng,
                 pickup_text=pickup_text[:200], dest_text=destination_text[:200],
                 distance_m=route.distance_m, duration_s=route.duration_s, price_cents=price,
-                factor=factor, reason=quote.reason, created_at=now, expires_at=quote.expires_at,
+                factor=factor, reason=quote.reason, route=[list(p) for p in route_points],
+                created_at=now, expires_at=quote.expires_at,
             )
         )
         session.flush()

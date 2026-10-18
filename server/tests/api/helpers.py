@@ -27,3 +27,16 @@ def login(client, runtime, phone: str, role: str, name: str | None = None) -> Lo
     if name:
         assert client.put("/v1/me", json={"name": name}, headers=entrou.headers).status_code == 200
     return entrou
+
+
+def rider_phone(n: int) -> str:
+    """Celular do motoqueiro que `online_rider(n)` cria (já no formato que o login aceita)."""
+    return f"75977{n:06d}"
+
+
+def online_rider(session, runtime, clock, n: int = 1, point=None) -> str:
+    """Motoqueiro aprovado, disponível e com posição fresca. Devolve o id; entra na API com `rider_phone(n)`."""
+    from tests.helpers import pt
+    from tests.helpers_db import make_online_rider
+
+    return make_online_rider(session, runtime.positions, n, point or pt(300, 0), now=clock.now)

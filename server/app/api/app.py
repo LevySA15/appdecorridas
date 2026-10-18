@@ -8,7 +8,9 @@ from app.api.errors import install_error_handlers
 from app.api.routes import admin as admin_routes
 from app.api.routes import auth as auth_routes
 from app.api.routes import files as files_routes
+from app.api.routes import passenger as passenger_routes
 from app.api.routes import rider as rider_routes
+from app.api.routes import rides as rides_routes
 
 
 def create_app(runtime=None, *, run_background: bool = False) -> FastAPI:
@@ -27,6 +29,8 @@ def create_app(runtime=None, *, run_background: bool = False) -> FastAPI:
     app.include_router(rider_routes.router)
     app.include_router(admin_routes.router)
     app.include_router(files_routes.router)
+    app.include_router(passenger_routes.router)
+    app.include_router(rides_routes.router)
 
     if runtime is not None:
 

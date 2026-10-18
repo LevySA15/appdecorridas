@@ -5,6 +5,7 @@ import secrets
 from typing import Protocol
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import repositories as repo
@@ -47,7 +48,11 @@ class RideRequestService:
             payment_method=method, pin=f"{secrets.randbelow(10000):04d}",
         )
         start_search(ride, now)
-        repo.add_ride(session, ride)
+        try:
+            with session.begin_nested():
+                repo.add_ride(session, ride)
+        except IntegrityError:      # o índice do banco (uma corrida aberta por passageiro) é a última barreira
+            raise NotAllowed("Você já tem uma corrida em andamento.") from None
         repo.set_ride_details(
             session, ride.ride_id,
             repo.RideDetails(
@@ -55,6 +60,7 @@ class RideRequestService:
                 destination=GeoPoint(quote.dest_lat, quote.dest_lng),
                 pickup_text=quote.pickup_text, destination_text=quote.dest_text,
                 distance_m=quote.distance_m, price_factor=quote.factor, price_reason=quote.reason,
+                route=tuple((float(lat), float(lng)) for lat, lng in (quote.route or ())),
             ),
         )
         quote.used = True
