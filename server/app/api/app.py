@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from app.api.errors import install_error_handlers
 
@@ -18,4 +19,15 @@ def create_app(runtime=None, *, run_background: bool = False) -> FastAPI:
     )
     app.state.runtime = runtime
     install_error_handlers(app)
+
+    if runtime is not None:
+
+        @app.get("/health")
+        def health():
+            try:
+                runtime.check()
+            except Exception:
+                return JSONResponse({"status": "down"}, status_code=503)
+            return {"status": "ok"}
+
     return app
