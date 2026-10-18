@@ -50,6 +50,8 @@ Para os planos seguintes:
 - Plano 7: o simulador usa as rotas `/v1/dev/*`, que não existem com os adaptadores reais. Contra o ambiente de testes da Woovi ele precisaria de outro jeito de "pagar" o Pix; até lá fica no modo `demo`, com adaptadores falsos.
 - Fora do alcance do simulador: mais de um processo do servidor e queda do banco ou do Redis no meio da rodada.
 
+Da revisão final do plano 3 (adiados, todos pequenos): Ctrl+C no `run` diz "servidor descartável apagado" sem haver um; falta teste de Ctrl+C dentro do `Sandbox`; os passos de limpeza do `Sandbox` não são isolados e o Redis só é esvaziado no fim (uma rodada morta à força deixa sobras no banco 14); corrida que some do estado durante uma reconexão de propósito pode reprovar uma rodada `bagunca` (cerca de 0,2% das corridas); o relatório só confere as corridas abertas que o próprio simulador pediu; corrida sobrada de um `run` interrompido é ignorada; a espera de 3 s pelo aviso final é curta para picos de 3 a 4 s de atraso; o script de fumaça lê o registro do servidor antes de ele desligar; falta teste do login com token vencido; `--riders`/`--passengers` de 10000 para cima geram telefone inválido.
+
 ## Decisões já tomadas
 
 - Corrida em dinheiro sem pagamento: bloqueio automático após 5 minutos, sem taxa para o motoqueiro, repasse quando o passageiro pagar (feito no 2B). Em aberto, com o Levy: se o passageiro nunca pagar, quem arca com o prejuízo (por enquanto, o motoqueiro).
