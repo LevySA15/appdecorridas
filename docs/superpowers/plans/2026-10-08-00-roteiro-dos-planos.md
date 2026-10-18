@@ -35,6 +35,8 @@ Plano 7 (integrações reais): adaptadores da Woovi, do Google Maps e do WhatsAp
 
 Mais de um processo: exige um canal entre eles (Redis pub/sub) para o hub do WebSocket e uma trava para o agendador.
 
+Da revisão final do 2C (ainda abertos): alerta de "muito tempo sem sinal" (spec, seção 12) quando a moto para de mandar posição no meio da corrida, que precisa de um tipo de alerta novo, uma varredura no agendador e do Levy definir o tempo e quem é avisado; efeitos externos (devolução no provedor, mensagem do SOS, marca do Redis) rodam antes do commit e se repetem se o banco derrubar a transação por impasse (plano 7: idempotência); menores: fotos órfãs sem limpeza nem cota; WebSocket aberto continua recebendo avisos depois de logout ou bloqueio; SOS em dois toques simultâneos pode criar dois alertas; `ValueError` genérico devolve texto interno ao app; `/rider/state` pode mostrar oferta já vencida por até 3 s; cobrança de entrada pendente não reaparece no estado do motoqueiro; `answer_ok` trava antes de conferir o dono; pool do banco (10+10) menor que o de threads (40), ajustar com a carga do simulador.
+
 Menores do 2B que seguem abertos: o `downgrade` da migração 0002 falha se existe cobrança de entrada; a taxa da corrida da fila é fixada no aceite.
 
 ## Decisões já tomadas
