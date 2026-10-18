@@ -32,6 +32,19 @@ class OfferGone(Exception):
     """A oferta não existe mais para este motoqueiro (venceu, foi para outro, ou a corrida mudou)."""
 
 
+def offer_payload(
+    ride: Ride, details: repo.RideDetails, *, eta_seconds: int | None, will_queue: bool, expires_at: float
+) -> dict:
+    """O que o motoqueiro vê numa oferta. Serve ao aviso em tempo real e ao estado que o app pede ao reconectar."""
+    return {
+        "ride_id": ride.ride_id, "price_cents": ride.price_cents, "payment_method": ride.payment_method.value,
+        "pickup": {"lat": details.pickup.lat, "lng": details.pickup.lng, "text": details.pickup_text},
+        "destination": {"lat": details.destination.lat, "lng": details.destination.lng, "text": details.destination_text},
+        "distance_m": details.distance_m, "seconds_to_pickup": eta_seconds,
+        "will_queue": will_queue, "expires_at": expires_at,
+    }
+
+
 class Reservations(Protocol):
     def reserve(self, rider_id: str, ride_id: str) -> bool: ...
 
@@ -109,7 +122,8 @@ class DispatchService:
                     session.add(
                         RideOfferRow(
                             ride_id=ride_id, rider_id=candidate.rider_id, status="pending",
-                            will_queue=candidate.will_queue, created_at=now, expires_at=now + dispatch_cfg.offer_timeout_s,
+                            will_queue=candidate.will_queue, eta_seconds=candidate.eta_seconds, created_at=now,
+                            expires_at=now + dispatch_cfg.offer_timeout_s,
                         )
                     )
                     session.flush()
@@ -119,15 +133,10 @@ class DispatchService:
             repo.log_ride_event(session, ride_id, "offered", {"rider_id": candidate.rider_id}, now)
             self.events.add(
                 candidate.rider_id, "offer",
-                {
-                    "ride_id": ride_id, "price_cents": ride.price_cents, "payment_method": ride.payment_method.value,
-                    "pickup": {"lat": details.pickup.lat, "lng": details.pickup.lng, "text": details.pickup_text},
-                    "destination": {
-                        "lat": details.destination.lat, "lng": details.destination.lng, "text": details.destination_text,
-                    },
-                    "distance_m": details.distance_m, "seconds_to_pickup": candidate.eta_seconds,
-                    "will_queue": candidate.will_queue, "expires_at": now + dispatch_cfg.offer_timeout_s,
-                },
+                offer_payload(
+                    ride, details, eta_seconds=candidate.eta_seconds, will_queue=candidate.will_queue,
+                    expires_at=now + dispatch_cfg.offer_timeout_s,
+                ),
             )
             return candidate.rider_id
         return None
@@ -144,6 +153,9 @@ class DispatchService:
             or offer.expires_at <= now
         ):
             raise OfferGone("Essa corrida já foi para outro motoqueiro.")
+        snapshot = queries.rider_snapshots(session, [rider_id]).get(rider_id)
+        if snapshot is None or not snapshot.available:      # parou, foi bloqueado ou perdeu a aprovação depois da oferta
+            raise OfferGone("Você não está disponível para essa corrida.")
         repo.get_rider_account(session, rider_id, for_update=True)
         busy = queries.rider_active_ride_id(session, rider_id) is not None
         number = queries.completed_rides_since(session, rider_id, local_day_start(now)) + (1 if busy else 0) + 1

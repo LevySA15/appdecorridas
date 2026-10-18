@@ -87,6 +87,10 @@ class TripService:
         count_completed_ride(acc)
         repo.save_ride(session, ride)
         repo.save_rider_account(session, acc)
+        if offer_block_reason(acc, self.cfg.fees) is not None:
+            # chegou nas corridas de teste sem pagar a entrada: para de aparecer como disponível e o app avisa
+            session.get(RiderProfileRow, rider_id).online = False
+            self.events.add(rider_id, "entry_required", {"entry_fee_cents": self.cfg.fees.entry_fee_cents})
         repo.log_ride_event(session, ride_id, "completed", {}, now)
         pay = None
         if ride.payment_method is PaymentMethod.CASH:

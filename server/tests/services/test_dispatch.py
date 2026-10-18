@@ -345,3 +345,28 @@ def test_ainda_calcula_a_rota_da_moto_que_esta_terminando_perto(dispatch_contand
     mapa.chamadas = 0
     assert dispatch_contando.offer_next(session, "ride-1", AGORA) == rider
     assert mapa.chamadas >= 1
+
+
+def test_oferta_guarda_o_tempo_ate_o_passageiro_para_o_app_mostrar_ao_reconectar(dispatch, session, positions, events):
+    mundo(session, positions)
+    dispatch.offer_next(session, "ride-1", AGORA)
+    aviso = next(e for e in events.events if e.type == "offer")
+    assert session.query(RideOfferRow).one().eta_seconds == aviso.payload["seconds_to_pickup"] > 0
+
+
+def test_motoqueiro_que_ficou_indisponivel_depois_da_oferta_nao_consegue_aceitar(dispatch, session, positions):
+    # Roteiro do 2B (menores): `accept_offer` não reconferia o bloqueio.
+    from app.db.models import RiderProfileRow, UserRow
+
+    mundo(session, positions)
+    dispatch.offer_next(session, "ride-1", AGORA)
+    session.get(RiderProfileRow, "r1").online = False
+    session.flush()
+    with pytest.raises(OfferGone, match="disponível"):
+        dispatch.accept_offer(session, "r1", "ride-1", AGORA + 2)
+    session.get(RiderProfileRow, "r1").online = True
+    session.get(UserRow, "r1").is_blocked = True
+    session.flush()
+    with pytest.raises(OfferGone, match="disponível"):
+        dispatch.accept_offer(session, "r1", "ride-1", AGORA + 3)
+    assert repo.get_ride(session, "ride-1").state is RideState.SEARCHING

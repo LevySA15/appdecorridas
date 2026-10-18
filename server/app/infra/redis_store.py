@@ -212,6 +212,9 @@ class RateLimiter(Protocol):
     def hit(self, key: str, limit: int, window_s: float, now: float) -> bool:
         """Conta mais uma tentativa em `key`. Devolve False quando passou de `limit` na janela atual."""
 
+    def count(self, key: str, window_s: float, now: float) -> int:
+        """Quantas tentativas já foram contadas na janela atual (sem contar mais uma)."""
+
 
 class InMemoryRateLimiter:
     def __init__(self) -> None:
@@ -221,6 +224,9 @@ class InMemoryRateLimiter:
         bucket = (key, int(now // window_s))
         self._counts[bucket] = self._counts.get(bucket, 0) + 1
         return self._counts[bucket] <= limit
+
+    def count(self, key: str, window_s: float, now: float) -> int:
+        return self._counts.get((key, int(now // window_s)), 0)
 
 
 class RedisRateLimiter:
@@ -237,6 +243,9 @@ class RedisRateLimiter:
         pipe.expire(bucket, int(window_s * 2))
         count, _ = pipe.execute()
         return int(count) <= limit
+
+    def count(self, key: str, window_s: float, now: float) -> int:
+        return int(self.r.get(f"{self.prefix}{key}:{int(now // window_s)}") or 0)
 
 
 class PixHealth(Protocol):

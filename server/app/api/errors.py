@@ -15,7 +15,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.domain.payments import PaymentProviderError
 from app.infra.documents import UploadError
-from app.domain.rides import InvalidTransition
+from app.domain.rides import InvalidTransition, WrongPin
 from app.services.auth import TooManyRequests
 from app.services.dispatch import OfferGone
 from app.services.quotes import NotAllowed, QuoteExpired
@@ -51,6 +51,7 @@ _RULES: dict[type[Exception], _Rule] = {
     AlreadyRated: _Rule(409, "already_rated"),
     InvalidTransition: _Rule(409, "invalid_state", "Essa ação não vale para o estado atual da corrida."),
     InvalidState: _Rule(409, "invalid_state", "Essa ação não vale para o estado atual do cadastro."),
+    WrongPin: _Rule(422, "wrong_pin", "Código errado. Confira os 4 dígitos com o passageiro."),
     RegistrationError: _Rule(422, "invalid"),
     ValueError: _Rule(422, "invalid"),
     PaymentProviderError: _Rule(503, "payment_unavailable", "O Pix está instável agora. Tente de novo em instantes."),

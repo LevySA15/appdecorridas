@@ -316,3 +316,47 @@ def passenger_rode_with(session: Session, passenger_id: str, rider_id: str) -> b
         )
         .limit(1)
     ).first() is not None
+
+
+def pending_offer_for_rider(session: Session, rider_id: str) -> RideOfferRow | None:
+    return session.execute(
+        select(RideOfferRow).where(RideOfferRow.rider_id == rider_id, RideOfferRow.status == "pending")
+    ).scalar_one_or_none()
+
+
+def rider_unpaid_cash_ride_id(session: Session, rider_id: str) -> str | None:
+    """A corrida em dinheiro mais recente que o motoqueiro terminou e ainda está sem pagamento confirmado."""
+    return session.execute(
+        select(RideRow.id)
+        .where(
+            RideRow.rider_id == rider_id,
+            RideRow.state == RideState.COMPLETED.value,
+            RideRow.payment_method == "cash",
+            RideRow.end_payment_confirmed.is_(False),
+        )
+        .order_by(RideRow.completed_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+@dataclass(frozen=True)
+class RiderContext:
+    online: bool
+    ride_id: str | None
+    passenger_id: str | None
+    ride_state: str | None
+
+
+def rider_context(session: Session, rider_id: str) -> RiderContext | None:
+    """O que o servidor precisa saber a cada posição recebida: está disponível? tem corrida em andamento?"""
+    online = session.execute(
+        select(RiderProfileRow.online).where(RiderProfileRow.user_id == rider_id)
+    ).scalar_one_or_none()
+    if online is None:
+        return None
+    ride = session.execute(
+        select(RideRow.id, RideRow.passenger_id, RideRow.state)
+        .where(RideRow.rider_id == rider_id, RideRow.state.in_(_ACTIVE))
+        .limit(1)
+    ).first()
+    return RiderContext(bool(online), *(tuple(ride) if ride else (None, None, None)))

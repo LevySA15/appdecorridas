@@ -3,9 +3,12 @@ from __future__ import annotations
 
 from app.db import queries
 from app.db import repositories as repo
+from app.db.models import RiderProfileRow, UserRow
+from app.domain.fees import offer_block_reason
 from app.domain.rides import Ride, RideState
 from app.domain.types import PaymentMethod
 from app.runtime import Unit
+from app.services.dispatch import offer_payload
 from app.services.quotes import Quote, passenger_block_reason
 
 _WITH_RIDER_ON_THE_MOVE = (RideState.ACCEPTED, RideState.ARRIVED, RideState.IN_PROGRESS)
@@ -98,4 +101,65 @@ def passenger_state(unit: Unit, passenger_id: str, payment_methods: list[str]) -
         "unpaid_cents": repo.get_passenger_account(session, passenger_id).unpaid_cents,
         "emergency_contact": None if contact is None else {"name": contact.name, "phone": contact.phone},
         "payment_methods": payment_methods,
+    }
+
+
+# --- motoqueiro ----------------------------------------------------------------------------------------
+
+
+def rider_ride_view(unit: Unit, ride_id: str) -> dict:
+    ride = repo.get_ride(unit.session, ride_id)
+    details = repo.get_ride_details(unit.session, ride_id)
+    passenger = unit.session.get(UserRow, ride.passenger_id)
+    first_name = (passenger.name.split() or [""])[0] if passenger is not None else ""
+    return {
+        "ride_id": ride.ride_id, "state": ride.state.value, "queued": ride.state is RideState.QUEUED,
+        "price_cents": ride.price_cents, "fee_cents": ride.fee_cents, "method": ride.payment_method.value,
+        "pix_paid": ride.pix_paid, "helmet_confirmed": ride.helmet_confirmed,
+        "passenger": {"name": first_name},      # o motoqueiro só vê o primeiro nome (o código fica com o passageiro)
+        "pickup": place(details.pickup.lat, details.pickup.lng, details.pickup_text),
+        "destination": place(details.destination.lat, details.destination.lng, details.destination_text),
+        "distance_m": details.distance_m, "end_payment": _end_payment(unit, ride),
+    }
+
+
+def rider_state(unit: Unit, rider_id: str) -> dict:
+    session = unit.session
+    profile = session.get(RiderProfileRow, rider_id)
+    if profile is None:
+        return {
+            "registration": {"status": "not_registered"}, "account": None, "offer": None, "ride": None,
+            "queued_ride": None, "awaiting_payment": None,
+        }
+    fees = unit.cfg.fees
+    account = repo.get_rider_account(session, rider_id)
+    rating = round(profile.rating_sum / profile.rating_count, 1) if profile.rating_count else None
+    offer_row = queries.pending_offer_for_rider(session, rider_id)
+    offer = None
+    if offer_row is not None:
+        ride = repo.get_ride(session, offer_row.ride_id)
+        offer = offer_payload(
+            ride, repo.get_ride_details(session, offer_row.ride_id), eta_seconds=offer_row.eta_seconds,
+            will_queue=offer_row.will_queue, expires_at=offer_row.expires_at,
+        )
+    active_id = queries.rider_active_ride_id(session, rider_id)
+    queued_id = queries.queued_ride_id_of_rider(session, rider_id)
+    unpaid_id = queries.rider_unpaid_cash_ride_id(session, rider_id)
+    return {
+        "registration": {
+            "status": profile.status, "online": profile.online, "reason": profile.rejected_reason,
+            "rating": rating, "rating_count": profile.rating_count,
+            "cnh_expires_on": profile.cnh_expires_on.isoformat() if profile.cnh_expires_on else None,
+            "crlv_expires_on": profile.crlv_expires_on.isoformat() if profile.crlv_expires_on else None,
+        },
+        "account": {
+            "completed_rides": account.completed_rides, "trial_rides": fees.trial_rides,
+            "entry_paid": account.entry_paid, "entry_fee_cents": fees.entry_fee_cents,
+            "needs_entry": offer_block_reason(account, fees) is not None,
+            "cash_debt_cents": account.cash_debt_cents, "cash_debt_limit_cents": fees.cash_debt_limit_cents,
+        },
+        "offer": offer,
+        "ride": rider_ride_view(unit, active_id) if active_id else None,
+        "queued_ride": rider_ride_view(unit, queued_id) if queued_id else None,
+        "awaiting_payment": rider_ride_view(unit, unpaid_id) if unpaid_id else None,
     }

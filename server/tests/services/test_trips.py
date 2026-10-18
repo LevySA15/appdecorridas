@@ -290,3 +290,27 @@ def test_corrida_em_dinheiro_termina_mesmo_com_o_provedor_de_pix_fora_do_ar(sess
     w.trips.confirm_cash_received(session, "r1", "ride-1", AGORA + 600)       # o dinheiro continua valendo
     assert repo.get_rider_account(session, "r1").cash_debt_cents == 100
 
+
+
+def _faz_corrida_numero(w, session, positions, completadas_antes):
+    add_passenger(session)
+    aceitar(session, positions, w)
+    pagar(session, w)
+    acc = repo.get_rider_account(session, "r1", for_update=True)
+    acc.completed_rides = completadas_antes
+    repo.save_rider_account(session, acc)
+    ate_o_fim(session, w)
+
+
+def test_decima_corrida_tira_o_motoqueiro_de_disponivel_e_avisa_da_entrada(w, session, positions, events):
+    # Roteiro do 2B (menores): na 10ª corrida sem entrada ele continuava "disponível".
+    _faz_corrida_numero(w, session, positions, completadas_antes=9)
+    assert session.get(RiderProfileRow, "r1").online is False
+    aviso = next(e for e in events.events if e.type == "entry_required")
+    assert aviso.user_id == "r1" and aviso.payload == {"entry_fee_cents": 5000}
+
+
+def test_nona_corrida_nao_mexe_na_disponibilidade(w, session, positions, events):
+    _faz_corrida_numero(w, session, positions, completadas_antes=8)
+    assert session.get(RiderProfileRow, "r1").online is True
+    assert "entry_required" not in tipos(events, "r1")

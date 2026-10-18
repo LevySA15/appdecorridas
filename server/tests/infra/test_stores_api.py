@@ -41,6 +41,15 @@ def test_limitador_deixa_passar_ate_o_limite_e_zera_na_janela_seguinte(limiter):
     assert limiter.hit("pin:ride-1", 3, 600, now=1600.0) is True        # janela seguinte
 
 
+def test_limitador_conta_sem_gastar_tentativa(limiter):
+    assert limiter.count("pin:ride-1", 600, now=1000.0) == 0
+    limiter.hit("pin:ride-1", 3, 600, now=1000.0)
+    limiter.hit("pin:ride-1", 3, 600, now=1001.0)
+    assert limiter.count("pin:ride-1", 600, now=1002.0) == 2
+    assert limiter.count("pin:ride-1", 600, now=1002.0) == 2
+    assert limiter.count("pin:ride-1", 600, now=1600.0) == 0          # janela seguinte
+
+
 def test_pix_fora_do_ar_volta_sozinho_depois_do_prazo(health):
     assert health.is_down(100.0) is False
     health.mark_down(100.0, for_s=60.0)

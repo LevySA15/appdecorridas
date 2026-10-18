@@ -1,4 +1,4 @@
-"""Rotas do motoqueiro: documentos e cadastro. (Disponibilidade e corridas entram na próxima tarefa.)"""
+"""Rotas do motoqueiro: cadastro, disponibilidade, posição, ofertas e andamento da corrida."""
 from __future__ import annotations
 
 import datetime as dt
@@ -9,7 +9,11 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from app.api.deps import get_runtime, rider_user
+from app.api.views import rider_ride_view, rider_state
+from app.db import queries
 from app.domain.clock import local_date
+from app.domain.geo import GeoPoint
+from app.domain.rides import WrongPin
 from app.infra.documents import KINDS, MAX_UPLOAD_BYTES, DocumentStore, UploadError
 from app.services.auth import AuthUser, TooManyRequests
 from app.services.riders import RegistrationError
@@ -18,6 +22,9 @@ router = APIRouter(prefix="/v1/rider", tags=["motoqueiro"])
 
 DocKind = Literal["selfie", "cnh", "crlv"]
 UPLOADS_PER_HOUR = 30
+PIN_ATTEMPTS = 5            # códigos errados por corrida...
+PIN_WINDOW_S = 600          # ...nesta janela, depois trava (4 dígitos não podem ser adivinhados no tapa)
+_ON_THE_MOVE = ("accepted", "arrived", "in_progress")
 _KIND_NAMES = {"selfie": "o seu rosto (selfie)", "cnh": "a CNH", "crlv": "o documento da moto"}
 
 
@@ -32,6 +39,15 @@ class RegisterIn(BaseModel):
     crlv_key: str = Field(max_length=200)
     cnh_expires_on: dt.date
     crlv_expires_on: dt.date
+
+
+class PositionIn(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+
+
+class StartIn(BaseModel):
+    pin: str = Field(pattern=r"^\d{4}$")
 
 
 class RenewIn(BaseModel):
@@ -101,6 +117,113 @@ def renew_documents(body: RenewIn, request: Request, user: AuthUser = Depends(ri
             unit.session, user.user_id, cnh_expires_on=body.cnh_expires_on, crlv_expires_on=body.crlv_expires_on,
             today=local_date(unit.now), cnh_photo_key=cnh_key, crlv_key=crlv_key,
         )
+    )
+    return Response(status_code=204)
+
+
+@router.get("/state")
+def state(request: Request, user: AuthUser = Depends(rider_user)) -> dict:
+    return get_runtime(request).run(lambda unit: rider_state(unit, user.user_id))
+
+
+@router.post("/online", status_code=204)
+def go_online(request: Request, user: AuthUser = Depends(rider_user)) -> Response:
+    get_runtime(request).run(lambda unit: unit.riders.go_online(unit.session, user.user_id, local_date(unit.now)))
+    return Response(status_code=204)
+
+
+@router.post("/offline", status_code=204)
+def go_offline(request: Request, user: AuthUser = Depends(rider_user)) -> Response:
+    get_runtime(request).run(lambda unit: unit.riders.go_offline(unit.session, user.user_id))
+    return Response(status_code=204)
+
+
+@router.post("/position", status_code=204)
+def report_position(body: PositionIn, request: Request, user: AuthUser = Depends(rider_user)) -> Response:
+    """A cada ~4 s enquanto disponível. Quem está parado não entra no mapa; na corrida, o passageiro acompanha."""
+
+    def work(unit):
+        context = queries.rider_context(unit.session, user.user_id)
+        if context is None or not context.online:
+            return
+        unit.riders.report_position(user.user_id, GeoPoint(body.lat, body.lng), unit.now)
+        if context.ride_id is not None and context.ride_state in _ON_THE_MOVE:
+            unit.events.add(
+                context.passenger_id, "rider_position", {"ride_id": context.ride_id, "lat": body.lat, "lng": body.lng}
+            )
+
+    get_runtime(request).run(work)
+    return Response(status_code=204)
+
+
+@router.post("/entry-charge", status_code=201)
+def entry_charge(request: Request, user: AuthUser = Depends(rider_user)) -> dict:
+    def work(unit):
+        charge = unit.payments.start_entry_charge(unit.session, user.user_id)
+        return {"charge_id": charge.charge_id, "amount_cents": charge.amount_cents, "br_code": charge.br_code}
+
+    return get_runtime(request).run(work)
+
+
+@router.post("/offers/{ride_id}/accept")
+def accept_offer(ride_id: str, request: Request, user: AuthUser = Depends(rider_user)) -> dict:
+    def work(unit):
+        unit.dispatch.accept_offer(unit.session, user.user_id, ride_id, unit.now)
+        return rider_ride_view(unit, ride_id)
+
+    return get_runtime(request).run(work)
+
+
+@router.post("/offers/{ride_id}/decline", status_code=204)
+def decline_offer(ride_id: str, request: Request, user: AuthUser = Depends(rider_user)) -> Response:
+    get_runtime(request).run(lambda unit: unit.dispatch.decline_offer(unit.session, user.user_id, ride_id, unit.now))
+    return Response(status_code=204)
+
+
+def _step(request: Request, user: AuthUser, ride_id: str, action) -> dict:
+    def work(unit):
+        action(unit)
+        return rider_ride_view(unit, ride_id)
+
+    return get_runtime(request).run(work)
+
+
+@router.post("/rides/{ride_id}/arrive")
+def arrive(ride_id: str, request: Request, user: AuthUser = Depends(rider_user)) -> dict:
+    return _step(request, user, ride_id, lambda u: u.trips.arrive(u.session, user.user_id, ride_id, u.now))
+
+
+@router.post("/rides/{ride_id}/helmet")
+def confirm_helmet(ride_id: str, request: Request, user: AuthUser = Depends(rider_user)) -> dict:
+    return _step(request, user, ride_id, lambda u: u.trips.confirm_helmet(u.session, user.user_id, ride_id, u.now))
+
+
+@router.post("/rides/{ride_id}/start")
+def start_trip(ride_id: str, body: StartIn, request: Request, user: AuthUser = Depends(rider_user)) -> dict:
+    runtime = get_runtime(request)
+    key = f"pin:{ride_id}"
+
+    def action(unit):
+        if runtime.limiter.count(key, PIN_WINDOW_S, unit.now) >= PIN_ATTEMPTS:
+            raise TooManyRequests("Muitas tentativas de código. Espere alguns minutos e confira com o passageiro.")
+        try:
+            unit.trips.start_trip(unit.session, user.user_id, ride_id, body.pin, unit.now)
+        except WrongPin:
+            runtime.limiter.hit(key, PIN_ATTEMPTS, PIN_WINDOW_S, unit.now)
+            raise
+
+    return _step(request, user, ride_id, action)
+
+
+@router.post("/rides/{ride_id}/complete")
+def complete_trip(ride_id: str, request: Request, user: AuthUser = Depends(rider_user)) -> dict:
+    return _step(request, user, ride_id, lambda u: u.trips.complete_trip(u.session, user.user_id, ride_id, u.now))
+
+
+@router.post("/rides/{ride_id}/cash-received", status_code=204)
+def cash_received(ride_id: str, request: Request, user: AuthUser = Depends(rider_user)) -> Response:
+    get_runtime(request).run(
+        lambda unit: unit.trips.confirm_cash_received(unit.session, user.user_id, ride_id, unit.now)
     )
     return Response(status_code=204)
 
