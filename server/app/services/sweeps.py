@@ -2,7 +2,10 @@
 
 Cada corrida é tratada num ponto de salvamento: se uma falhar, o banco volta ao que era, os avisos
 anotados naquela corrida são descartados, o erro vai para o relatório e as outras seguem. Os serviços
-e este precisam compartilhar o mesmo `EventCollector`. Quem chama faz o commit (ou o rollback) do conjunto.
+e este precisam compartilhar o mesmo `EventCollector`.
+
+Sem `after_commit`, quem chama faz o commit (ou o rollback) do conjunto. Com `after_commit`, cada corrida
+tratada sem erro é gravada na hora (para soltar as travas dela) e `after_commit()` publica os avisos dela.
 """
 from __future__ import annotations
 
@@ -49,7 +52,13 @@ class SweepService:
         self.cfg = cfg or AppConfig.defaults()
 
     def _each(
-        self, session: Session, report: SweepReport, label: str, ride_ids: list[str], action: Callable[[str], bool]
+        self,
+        session: Session,
+        report: SweepReport,
+        label: str,
+        ride_ids: list[str],
+        action: Callable[[str], bool],
+        after_commit: Callable[[], None] | None,
     ) -> int:
         done = 0
         for ride_id in ride_ids:
@@ -61,9 +70,13 @@ class SweepService:
             except Exception as exc:  # um pedido com problema não pode travar os outros
                 self.events.rollback_to(mark)   # os avisos desta corrida somem junto com o banco
                 report.errors.append(f"{label} {ride_id}: {exc}")
+                continue
+            if after_commit is not None:
+                session.commit()
+                after_commit()
         return done
 
-    def run(self, session: Session, now: float) -> SweepReport:
+    def run(self, session: Session, now: float, after_commit: Callable[[], None] | None = None) -> SweepReport:
         report = SweepReport()
         rides = self.cfg.rides
 
@@ -133,23 +146,26 @@ class SweepService:
                 return False
             return self.dispatcher.give_up_if_expired(session, ride_id, now)
 
-        report.offers_expired = self._each(session, report, "oferta", queries.due_offer_ride_ids(session, now), offers)
+        report.offers_expired = self._each(session, report, "oferta", queries.due_offer_ride_ids(session, now), offers, after_commit)
         report.pix_expired = self._each(
-            session, report, "pix", queries.pix_window_due_ride_ids(session, now, rides.pix_window_s), pix
+            session, report, "pix", queries.pix_window_due_ride_ids(session, now, rides.pix_window_s), pix, after_commit
         )
         report.queue_released = self._each(
-            session, report, "fila", queries.queued_ride_ids_due(session, now, rides.queue_max_wait_s), queue
+            session, report, "fila", queries.queued_ride_ids_due(session, now, rides.queue_max_wait_s), queue,
+            after_commit,
         )
         report.arrival_cancelled = self._each(
-            session, report, "chegada", queries.arrived_ride_ids_due(session, now, rides.max_wait_at_arrival_s), arrival
+            session, report, "chegada", queries.arrived_ride_ids_due(session, now, rides.max_wait_at_arrival_s), arrival,
+            after_commit,
         )
         report.qr_created = self._each(
-            session, report, "qr", queries.cash_rides_without_charge_ids(session), qr
+            session, report, "qr", queries.cash_rides_without_charge_ids(session), qr, after_commit
         )
         report.cash_blocked = self._each(
-            session, report, "dinheiro", queries.cash_unpaid_ride_ids_due(session, now, rides.cash_pay_wait_s), cash
+            session, report, "dinheiro", queries.cash_unpaid_ride_ids_due(session, now, rides.cash_pay_wait_s), cash,
+            after_commit,
         )
         report.searches_given_up = self._each(
-            session, report, "procura", queries.searching_ride_ids(session), searching
+            session, report, "procura", queries.searching_ride_ids(session), searching, after_commit
         )
         return report

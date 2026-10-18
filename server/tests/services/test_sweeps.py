@@ -228,3 +228,49 @@ def test_qr_que_faltou_e_criado_depois_e_o_passageiro_ganha_um_prazo_novo(sessio
     assert sweeps.run(session, fim + 310 + 299).cash_blocked == 0       # o prazo de 5 minutos recomeça no QR
     assert sweeps.run(session, fim + 310 + 300).cash_blocked == 1
 
+
+
+def _dois_pix_vencidos(w, session, positions, events):
+    add_passenger(session)
+    add_passenger(session, "p2", "+5575900002002")
+    aceitar(session, positions, w, ride_id="ride-1", passenger_id="p1", rider_n=1)
+    aceitar(session, positions, w, ride_id="ride-2", passenger_id="p2", rider_n=2)
+    events.drain()          # os avisos do pedido e do aceite já foram publicados
+
+
+def test_com_publicacao_cada_corrida_e_gravada_e_publicada_na_hora(w, session, positions, events, monkeypatch):
+    # Roteiro do 2B: "um commit por corrida, para segurar as travas por menos tempo".
+    _dois_pix_vencidos(w, session, positions, events)
+    passos: list = []
+    commit_de_verdade = session.commit
+
+    def commit_anotado():
+        passos.append("commit")
+        commit_de_verdade()
+
+    monkeypatch.setattr(session, "commit", commit_anotado)
+
+    def depois():
+        passos.append([e.type for e in events.drain()])
+
+    relatorio = w.sweeps.run(session, AGORA + 1 + 120, after_commit=depois)
+    assert relatorio.pix_expired == 2 and relatorio.errors == []
+    assert passos == ["commit", ["ride_cancelled", "ride_cancelled"]] * 2
+
+
+def test_corrida_com_erro_nao_impede_as_outras_e_seus_avisos_nao_saem(w, session, positions, events, monkeypatch):
+    _dois_pix_vencidos(w, session, positions, events)
+    original = w.payments.expire_unpaid_pix
+
+    def quebra_na_primeira(sessao, ride_id, now):
+        if ride_id == "ride-1":
+            raise RuntimeError("provedor caiu")
+        return original(sessao, ride_id, now)
+
+    monkeypatch.setattr(w.payments, "expire_unpaid_pix", quebra_na_primeira)
+    publicados: list = []
+    relatorio = w.sweeps.run(session, AGORA + 1 + 120, after_commit=lambda: publicados.extend(events.drain()))
+    assert relatorio.pix_expired == 1 and len(relatorio.errors) == 1 and "ride-1" in relatorio.errors[0]
+    assert repo.get_ride(session, "ride-1").state is RideState.ACCEPTED
+    assert repo.get_ride(session, "ride-2").state is RideState.CANCELLED
+    assert {e.user_id for e in publicados} == {"p2", "r2"}
