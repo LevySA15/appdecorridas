@@ -22,6 +22,10 @@ class PositionStore(Protocol):
         self, center: GeoPoint, radius_m: float, now: float, max_age_s: float = 30.0
     ) -> list[tuple[str, GeoPoint]]: ...
 
+    def prune(self, now: float, max_age_s: float) -> int:
+        """Esquece quem não manda posição há mais de `max_age_s` (celular desligado, app fechado)."""
+        ...
+
 
 class InMemoryPositionStore:
     """Versão em memória, para testes e para o simulador."""
@@ -41,6 +45,12 @@ class InMemoryPositionStore:
     def get(self, rider_id: str) -> GeoPoint | None:
         return self._points.get(rider_id)
 
+    def prune(self, now: float, max_age_s: float) -> int:
+        gone = [rider_id for rider_id, seen in self._seen.items() if now - seen > max_age_s]
+        for rider_id in gone:
+            self.remove(rider_id)
+        return len(gone)
+
     def nearby(
         self, center: GeoPoint, radius_m: float, now: float, max_age_s: float = 30.0
     ) -> list[tuple[str, GeoPoint]]:
@@ -54,6 +64,18 @@ class InMemoryPositionStore:
         return [(rider_id, point) for _, rider_id, point in found]
 
 
+# Tirar quem sumiu numa ida só: lendo e apagando em comandos separados, uma posição nova que chegasse
+# no meio seria apagada junto.
+_PRUNE_LUA = """
+local old = redis.call('zrangebyscore', KEYS[2], '-inf', ARGV[1])
+for _, id in ipairs(old) do
+    redis.call('zrem', KEYS[1], id)
+    redis.call('zrem', KEYS[2], id)
+end
+return #old
+"""
+
+
 class RedisPositionStore:
     GEO = "pos:geo"
     SEEN = "pos:seen"
@@ -65,6 +87,10 @@ class RedisPositionStore:
                 "(senão os ids dos motoqueiros voltam como bytes)"
             )
         self.r = client
+        self._prune = client.register_script(_PRUNE_LUA)
+
+    def prune(self, now: float, max_age_s: float) -> int:
+        return int(self._prune(keys=[self.GEO, self.SEEN], args=[repr(now - max_age_s)]))
 
     def update(self, rider_id: str, point: GeoPoint, now: float) -> None:
         pipe = self.r.pipeline()
@@ -176,3 +202,103 @@ class RedisFactorStore:
 
     def set(self, value: float, updated_at: float) -> None:
         self.r.set(self.key, f"{value!r}:{updated_at!r}")
+
+
+
+# --- limite de tentativas, saúde do Pix e marcas de tarefas diárias -------------------------------
+
+
+class RateLimiter(Protocol):
+    def hit(self, key: str, limit: int, window_s: float, now: float) -> bool:
+        """Conta mais uma tentativa em `key`. Devolve False quando passou de `limit` na janela atual."""
+
+
+class InMemoryRateLimiter:
+    def __init__(self) -> None:
+        self._counts: dict[tuple[str, int], int] = {}
+
+    def hit(self, key: str, limit: int, window_s: float, now: float) -> bool:
+        bucket = (key, int(now // window_s))
+        self._counts[bucket] = self._counts.get(bucket, 0) + 1
+        return self._counts[bucket] <= limit
+
+
+class RedisRateLimiter:
+    """Janela fixa por chave. O instante vem de quem chama (`now`), como no resto do servidor."""
+
+    def __init__(self, client: redis.Redis, prefix: str = "rl:") -> None:
+        self.r = client
+        self.prefix = prefix
+
+    def hit(self, key: str, limit: int, window_s: float, now: float) -> bool:
+        bucket = f"{self.prefix}{key}:{int(now // window_s)}"
+        pipe = self.r.pipeline()
+        pipe.incr(bucket)
+        pipe.expire(bucket, int(window_s * 2))
+        count, _ = pipe.execute()
+        return int(count) <= limit
+
+
+class PixHealth(Protocol):
+    def mark_down(self, now: float, for_s: float) -> None: ...
+
+    def is_down(self, now: float) -> bool: ...
+
+
+class InMemoryPixHealth:
+    def __init__(self) -> None:
+        self._down_until = 0.0
+
+    def mark_down(self, now: float, for_s: float) -> None:
+        self._down_until = max(self._down_until, now + for_s)
+
+    def is_down(self, now: float) -> bool:
+        return now < self._down_until
+
+
+class RedisPixHealth:
+    """O Pix é dado como fora do ar até um instante; passado esse instante, volta a ser tentado."""
+
+    def __init__(self, client: redis.Redis, key: str = "pix:down_until") -> None:
+        self.r = client
+        self.key = key
+
+    def mark_down(self, now: float, for_s: float) -> None:
+        until = max(self._until(), now + for_s)
+        self.r.set(self.key, repr(until), ex=int(for_s) + 60)
+
+    def _until(self) -> float:
+        raw = self.r.get(self.key)
+        return float(raw) if raw is not None else 0.0
+
+    def is_down(self, now: float) -> bool:
+        return now < self._until()
+
+
+class JobMarks(Protocol):
+    def get(self, name: str) -> str | None: ...
+
+    def set(self, name: str, value: str) -> None: ...
+
+
+class InMemoryJobMarks:
+    def __init__(self) -> None:
+        self._values: dict[str, str] = {}
+
+    def get(self, name: str) -> str | None:
+        return self._values.get(name)
+
+    def set(self, name: str, value: str) -> None:
+        self._values[name] = value
+
+
+class RedisJobMarks:
+    def __init__(self, client: redis.Redis, prefix: str = "job:") -> None:
+        self.r = client
+        self.prefix = prefix
+
+    def get(self, name: str) -> str | None:
+        return self.r.get(f"{self.prefix}{name}")
+
+    def set(self, name: str, value: str) -> None:
+        self.r.set(f"{self.prefix}{name}", value)
