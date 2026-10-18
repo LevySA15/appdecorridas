@@ -10,71 +10,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import shutil
-import socket
-import subprocess
-import sys
-import tempfile
 import time
-import uuid
-from urllib.parse import quote
 
 import httpx2 as httpx
-import redis
 import websockets
-from alembic import command
-from alembic.config import Config
-from sqlalchemy import create_engine, text
 
-from app.settings import load_settings
-
-
-def free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+from simulator.sandbox import Sandbox
 
 
 def main() -> int:
-    settings = load_settings()
-    schema = f"t_{uuid.uuid4().hex[:10]}"
-    admin = create_engine(settings.database_url, isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text(f'CREATE SCHEMA "{schema}"'))
-    engine = create_engine(settings.database_url, connect_args={"options": f"-csearch_path={schema},public"})
-    cfg = Config("alembic.ini")
-    cfg.set_main_option("script_location", "migrations")
-    with engine.begin() as conn:
-        cfg.attributes["connection"] = conn
-        cfg.attributes["schema"] = schema
-        command.upgrade(cfg, "head")
-    engine.dispose()
-
-    port, uploads = free_port(), tempfile.mkdtemp(prefix="smoke-uploads-")
-    redis_url = settings.redis_url.rsplit("/", 1)[0] + "/14"
-    separator = "&" if "?" in settings.database_url else "?"
-    env = dict(
-        os.environ,
-        DATABASE_URL=settings.database_url + separator + "options=" + quote(f"-csearch_path={schema},public"),
-        REDIS_URL=redis_url, APP_MODE="dev", WEBHOOK_SECRET="segredo-do-smoke", UPLOAD_DIR=uploads,
-    )
-    server = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "--factory", "app.main:create_default_app", "--port", str(port),
-         "--log-level", "warning"],
-        env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-    )
-    base = f"http://127.0.0.1:{port}"
-    try:
-        for _ in range(60):
-            try:
-                if httpx.get(base + "/health", timeout=1).status_code == 200:
-                    break
-            except httpx.TransportError:
-                time.sleep(0.25)
-        else:
-            raise SystemExit("o servidor não subiu")
-        client = httpx.Client(base_url=base, timeout=5)
+    with Sandbox() as box:
+        client = httpx.Client(base_url=box.url, timeout=5)
         assert client.get("/health").json() == {"status": "ok"}
         print("OK saúde: banco e Redis respondem")
 
@@ -86,12 +32,14 @@ def main() -> int:
         assert client.put("/v1/me", json={"name": "Ana Lima"}, headers=headers).json()["name"] == "Ana Lima"
         print("OK login por código e nome")
 
+        ws_url = box.url.replace("http", "ws", 1) + "/v1/ws"
+
         async def websocket_flow() -> None:
-            async with websockets.connect(f"ws://127.0.0.1:{port}/v1/ws") as ws:
+            async with websockets.connect(ws_url) as ws:
                 await ws.send(json.dumps({"token": login["token"]}))
                 assert json.loads(await ws.recv())["type"] == "ready"
                 await ws.send("ping")
-            async with websockets.connect(f"ws://127.0.0.1:{port}/v1/ws") as ws:
+            async with websockets.connect(ws_url) as ws:
                 await ws.send(json.dumps({"token": "inventado"}))
                 try:
                     await asyncio.wait_for(ws.recv(), 3)
@@ -112,16 +60,9 @@ def main() -> int:
         print(f"OK preço: R$ {price['price_cents'] / 100:.2f}")
 
         time.sleep(4)          # deixa o agendador dar pelo menos uma volta
-        assert server.poll() is None, "o servidor caiu"
-    finally:
-        server.terminate()
-        output = server.communicate(timeout=10)[0]
-        with admin.connect() as conn:
-            conn.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        shutil.rmtree(uploads, ignore_errors=True)
-        redis.Redis.from_url(redis_url).flushdb()
-    bad = [line for line in output.splitlines() if "Traceback" in line or "ERROR" in line]
-    assert not bad, "erros no registro do servidor:\n" + "\n".join(bad)
+        assert box.process.poll() is None, "o servidor caiu"
+        problems = box.problems()
+    assert not problems, "erros no registro do servidor:\n" + "\n".join(problems)
     print("OK agendador rodou sem erros no registro")
     return 0
 
