@@ -9,7 +9,7 @@ A especificação cobre várias partes independentes. Cada parte vira um plano p
 | 1 | **Núcleo de regras do servidor** (`2026-10-08-01-nucleo-de-regras.md`) | Biblioteca Python pura e testada: preço dinâmico, taxas por faixa, dívida de dinheiro, divisão do pagamento, livro-caixa, máquina de estados da corrida (com fila), escolha de moto, alertas de segurança. | nada | não |
 | 2A | **Banco, Redis e fluxo de dinheiro** (`2026-10-08-02a-banco-e-dinheiro.md`) | PostgreSQL com migrações, repositórios, livro-caixa persistente (só acrescenta, protegido no banco), configuração no banco, posições e reservas no Redis, e o serviço transacional de pagamentos (cobrança, aviso de pago, vencimento, cancelamento, estorno). Sem HTTP. | 1 | não |
 | 2B | **Corrida de ponta a ponta, em serviços** (`2026-10-09-02b-corrida-de-ponta-a-ponta.md`) | Login por código, cadastro e aprovação do motoqueiro, preço e pedido, procura e ofertas (uma por vez, com fila), andamento da corrida, dinheiro do fim da corrida em dinheiro vivo (QR, bloqueio automático e repasse ao motoqueiro quando o passageiro paga), taxa de entrada, avaliações e varreduras de tempo. Sem HTTP. | 2A | não |
-| 2C | **API e tempo real** (`2026-10-18-02c-api-e-tempo-real.md`) | FastAPI sobre os serviços do 2B: rotas, autenticação por token, webhook do provedor (conferindo valor e corrida), WebSocket, publicação dos avisos depois do commit, repetição das varreduras e da checagem diária de documentos, aviso de segurança (parada longa e saída da rota) com o SOS, envio de documentos. | 2B | não |
+| 2C | **API e tempo real** (`2026-10-18-02c-api-e-tempo-real.md`) | FastAPI sobre os serviços do 2B: login, cadastro com fotos, preço, pedido, ofertas, corrida, cobrança e QR do Pix, aviso assinado do provedor, WebSocket, varredura de tempo e checagem diária rodando sozinhas, alertas de segurança com SOS, mínimo do painel (aprovar cadastros e ver alertas) e o contrato em `docs/api-v1.md`. | 2B | não |
 | 3 | **Simulador** | Motoqueiros e passageiros falsos andando por Santo Antônio de Jesus usando a API do plano 2. | 2 | não |
 | 4 | **Painel do dono** | Site para aprovar cadastros, ver corridas, dinheiro, taxas, bloqueios. | 2 | não |
 | 5 | **App do motoqueiro (Flutter, Android)** | Cadastro, ficar disponível, oferta, fila, capacete, QR, extrato. | 2 | não |
@@ -19,35 +19,29 @@ A especificação cobre várias partes independentes. Cada parte vira um plano p
 
 Ferramentas que ainda precisam ser instaladas no computador do Levy (não existem hoje): PostgreSQL com PostGIS e Redis (plano 2, por pacote do sistema ou Docker), Flutter e Android SDK (planos 5 e 6). O computador tem 7 GB de RAM e pouca memória livre, então os planos 5 e 6 vão pedir atenção ao consumo.
 
-## Itens para o plano 2C
+## Itens que sobraram do plano 2C
 
-Vindos da revisão final do 2A (ainda abertos):
-- Aviso do provedor para cobrança desconhecida levanta `LookupError`: a camada HTTP decide se confirma ou falha.
-- Conferir `amount_cents` e `ride_id` do aviso com a cobrança gravada e autenticar o webhook.
-- `save_rider_account` regrava as quatro colunas: só chamar depois de ler com `for_update=True`.
-- Criar o cliente Redis sempre com `decode_responses=True` (as posições recusam cliente sem isso).
-- Limpar do Redis (`pos:geo`, `pos:seen`) as motos que somem sem avisar.
-- CHECKs em `pix_charges` e chave estrangeira em `rides.current_charge_id` numa migração nova; transformar o `compare_metadata` do Alembic em teste.
+Do Levy decidir (o servidor segue o padrão atual):
+- Compensação do cancelamento tardio: hoje só fica registrada no histórico da corrida, sem movimento de dinheiro, e a API não a promete ao app. Decidir a política (valor em aberto na spec) e como cobrar.
+- Se a corrida com bloqueio por falta de pagamento conta para as 10 corridas de teste (hoje conta).
 
-Vindos do plano 2B:
-- Publicar os avisos do `EventCollector` somente depois do `commit` e rodar `SweepService.run` a cada poucos segundos (um commit por rodada, erros do relatório vão para o registro).
-- Rodar `RiderService.block_expired_documents` uma vez por dia.
-- Compensação do cancelamento tardio: hoje só fica registrada no histórico da corrida (`cancelled`), sem movimento de dinheiro. Decidir a política (valor em aberto na spec) e como cobrar.
-- Pagamento atrasado de corrida em dinheiro: a cobrança do QR do fim continua valendo; com a Woovi real ela expira, então será preciso recriá-la quando o passageiro abrir a tela "Pagamento pendente".
-- Dívida reservada de um QR que nunca é pago continua reservada até alguém pagar ou o Levy resolver no painel (ver plano 4).
-- O Pix que cria a cobrança e a chamada ao provedor continuam dentro da transação (idempotência no plano 7).
-- Aviso de segurança durante a corrida (usar `app.domain.safety.evaluate`), SOS e "tudo bem?" do passageiro.
-- Decidir se a corrida com bloqueio por falta de pagamento conta para as 10 corridas de teste (hoje conta).
-- Cada unidade de trabalho (requisição ou rodada de varredura) usa **um** `EventCollector`, compartilhado por todos os serviços dela; nunca um coletor global entre requisições.
-- Os adaptadores reais do provedor de pagamento traduzem erros de rede para `PaymentProviderError`.
-- Cadência da varredura (hoje cada rodada tenta de novo as procuras sem oferta) e um `commit` por corrida, para segurar as travas por menos tempo.
-- Repetir a transação quando o banco derrubar uma por impasse (resíduo da ordem de travas ao entrar na fila).
-- Quando o provedor de Pix estiver fora, oferecer só dinheiro na hora do pedido (spec, seção 12).
-- Menores adiados do 2B: motoqueiro na 10ª corrida sem entrada continua `online`; downgrade da migração 0002 falha com cobrança de entrada; códigos de login antigos continuam valendo; `accept_offer` não reconfere bloqueio; `register_rider` concorrente vaza `IntegrityError`; faltam índices em `rides(state, rider_id, passenger_id)` e `ride_offers(ride_id)`; taxa da corrida da fila fixada no aceite; índice único parcial de uma corrida aberta por passageiro.
+Plano 3 (simulador): usa `/v1/dev/otp` e `/v1/dev/pix/{id}/pay`; motoqueiros falsos mandam posição a cada 4 s.
+
+Plano 4 (painel): listas de corridas, dinheiro e taxas, devedores, bloqueio de passageiro, parâmetros (`app_config`); a dívida reservada de um QR que nunca é pago continua reservada até alguém resolver; registro das ações do administrador; CORS para o site.
+
+Planos 5 e 6 (apps): histórico de corridas e extrato do dia (rotas novas), notificação push (FCM) para oferta e avisos com o app fechado, reenvio de avisos perdidos.
+
+Plano 7 (integrações reais): adaptadores da Woovi, do Google Maps e do WhatsApp (também para o aviso ao contato de emergência); traduzir erros de rede para `PaymentProviderError`; idempotência da chamada ao provedor (hoje dentro da transação); recriar o QR do pagamento atrasado quando ele expira (a Woovi real expira); inverter o padrão de `APP_MODE` para exigir os adaptadores reais.
+
+Mais de um processo: exige um canal entre eles (Redis pub/sub) para o hub do WebSocket e uma trava para o agendador.
+
+Menores do 2B que seguem abertos: o `downgrade` da migração 0002 falha se existe cobrança de entrada; a taxa da corrida da fila é fixada no aceite.
 
 ## Decisões já tomadas
 
 - Corrida em dinheiro sem pagamento: bloqueio automático após 5 minutos, sem taxa para o motoqueiro, repasse quando o passageiro pagar (feito no 2B). Em aberto, com o Levy: se o passageiro nunca pagar, quem arca com o prejuízo (por enquanto, o motoqueiro).
+
+- SOS: o servidor aceita durante toda a corrida (a caminho, na chegada e andando); mostrar o botão sempre ou só dentro do aviso automático é decisão do Levy nas telas do app (spec, seção 9, itens 4 e 5).
 
 ## Perguntas para o advogado (conversa na semana de 12/10/2026)
 

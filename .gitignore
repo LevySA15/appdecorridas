@@ -1,5 +1,6 @@
 .superpowers/
 server/.venv/
+server/var/
 __pycache__/
 .pytest_cache/
 .env
