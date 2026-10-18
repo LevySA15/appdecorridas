@@ -138,11 +138,14 @@ def report_position(body: PositionIn, request: Request, user: AuthUser = Depends
 
     def work(unit):
         context = queries.rider_context(unit.session, user.user_id)
-        if context is None or not context.online:
+        if context is None:
+            return
+        on_ride = context.ride_id is not None and context.ride_state in _ON_THE_MOVE
+        if not context.online and not on_ride:     # parado e sem corrida: não entra no mapa
             return
         point = GeoPoint(body.lat, body.lng)
         unit.riders.report_position(user.user_id, point, unit.now)
-        if context.ride_id is not None and context.ride_state in _ON_THE_MOVE:
+        if on_ride:
             unit.events.add(
                 context.passenger_id, "rider_position", {"ride_id": context.ride_id, "lat": body.lat, "lng": body.lng}
             )

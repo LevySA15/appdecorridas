@@ -74,6 +74,7 @@ def passenger_ride_view(unit: Unit, ride_id: str) -> dict:
         "destination": place(details.destination.lat, details.destination.lng, details.destination_text),
         "distance_m": details.distance_m, "rider": rider, "rider_position": position,
         "queue": queries.queue_info(unit.session, ride.ride_id, ride.rider_id) if ride.state is RideState.QUEUED else None,
+        "safety_alert": queries.open_safety_alert(unit.session, ride.ride_id),
         "pay": _pix_to_pay(unit, ride), "end_payment": _end_payment(unit, ride),
     }
 

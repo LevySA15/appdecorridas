@@ -419,6 +419,17 @@ def list_safety_alerts(session: Session, status: str, limit: int, offset: int) -
     ]
 
 
+def open_safety_alert(session: Session, ride_id: str) -> dict | None:
+    """O aviso automático da corrida que o passageiro ainda não respondeu (o mais recente), se houver."""
+    row = session.execute(
+        select(SafetyAlertRow.id, SafetyAlertRow.kind)
+        .where(SafetyAlertRow.ride_id == ride_id, SafetyAlertRow.status == "open")
+        .order_by(SafetyAlertRow.id.desc())
+        .limit(1)
+    ).first()
+    return None if row is None else {"alert_id": row[0], "kind": row[1]}
+
+
 def queue_info(session: Session, ride_id: str, rider_id: str) -> dict:
     """Para o passageiro da fila: onde a moto termina a corrida de agora e em quanto tempo chega até ele."""
     active_id = rider_active_ride_id(session, rider_id)

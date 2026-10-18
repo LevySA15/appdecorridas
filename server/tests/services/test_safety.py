@@ -244,3 +244,27 @@ def test_limites_vem_da_configuracao(session, mundo, store, positions, notifier,
     rapido = SafetyService(store, positions, notifier, events, cfg)
     assert len(posicoes(rapido, session, [pt(500, 3)] * 12)) == 1          # 44 s já basta
     assert session.get(UserRow, "p1") is not None
+
+
+def test_sos_apertado_de_novo_tenta_avisar_o_contato_que_falhou(safety, session, mundo, notifier):
+    # Revisão final (I2): o segundo toque devolvia o alerta antigo sem nova tentativa.
+    com_contato(session)
+    notifier.fail = True
+    primeiro = safety.sos(session, "p1", "ride-1", AGORA)
+    assert primeiro.contact_notified is False
+    notifier.fail = False
+    segundo = safety.sos(session, "p1", "ride-1", AGORA + 30)
+    assert (segundo.repeated, segundo.contact_notified, segundo.alert_id) == (True, True, primeiro.alert_id)
+    assert len(notifier.sent) == 1
+    assert session.execute(select(SafetyAlertRow.note)).scalar_one() == "contato avisado"
+    terceiro = safety.sos(session, "p1", "ride-1", AGORA + 60)
+    assert (terceiro.repeated, terceiro.contact_notified) == (True, True) and len(notifier.sent) == 1
+
+
+def test_sos_sem_contato_e_depois_do_cadastro_do_contato_avisa_na_segunda_vez(safety, session, mundo, notifier):
+    primeiro = safety.sos(session, "p1", "ride-1", AGORA)
+    assert (primeiro.contact_registered, primeiro.contact_notified) == (False, False)
+    com_contato(session)
+    segundo = safety.sos(session, "p1", "ride-1", AGORA + 30)
+    assert (segundo.repeated, segundo.contact_registered, segundo.contact_notified) == (True, True, True)
+    assert len(notifier.sent) == 1

@@ -42,6 +42,7 @@ A sessão dura 180 dias. `role: "admin"` só entra se o número já foi criado c
 `queued, price_cents, price_reason, method, pin` (os 4 dígitos que ele diz ao motoqueiro), `helmet_confirmed, pix_paid,
 pickup, destination, distance_m, rider` (`rider_id, name, plate, moto_model, rating, rating_count, photo_url`),
 `rider_position` (`{lat,lng}` ou `null`), `queue` (`{"finishing_at","eta_seconds"}` quando está na fila),
+`safety_alert` (`{"alert_id","kind"}` enquanto o "está tudo bem?" não foi respondido, para redesenhar a tela ao reconectar),
 `pay` (`{"charge_id","amount_cents","expires_at"}` enquanto o Pix não foi pago) e `end_payment`.
 `photo_url` é uma rota com login: `GET /v1/riders/{id}/documents/selfie`.
 

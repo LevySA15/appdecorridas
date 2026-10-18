@@ -120,13 +120,17 @@ class SafetyService:
         if ride.state not in _ON_THE_MOVE:
             raise InvalidTransition("O SOS vale só durante a corrida.")
         contact = repo.get_emergency_contact(session, passenger_id)
+        where = self.positions.get(ride.rider_id) if ride.rider_id else None
         if not self.store.claim(f"{ride_id}:sos", now, SOS_REPEAT_S):
             previous = session.query(SafetyAlertRow).filter_by(ride_id=ride_id, kind="sos").order_by(
                 SafetyAlertRow.id.desc()
             ).first()
             if previous is not None:
-                return SosResult(previous.id, contact is not None, previous.note == "contato avisado", True)
-        where = self.positions.get(ride.rider_id) if ride.rider_id else None
+                notified = previous.note == "contato avisado"
+                if contact is not None and not notified:     # o primeiro aviso falhou ou ainda não havia contato
+                    notified = self._notify_contact(session, ride_id, passenger_id, contact, where, previous)
+                    session.flush()
+                return SosResult(previous.id, contact is not None, notified, True)
         alert = SafetyAlertRow(
             ride_id=ride_id, kind="sos", status="sos", lat=where.lat if where else None,
             lng=where.lng if where else None, created_at=now,
@@ -140,12 +144,7 @@ class SafetyService:
         if contact is None:
             alert.note = "sem contato cadastrado"
         else:
-            try:
-                self.notifier.notify(contact.phone, self._sos_text(session, ride_id, passenger_id, where))
-                notified, alert.note = True, "contato avisado"
-            except Exception:       # o WhatsApp fora do ar não pode impedir o SOS
-                log.exception("falha ao avisar o contato de emergência da corrida %s", ride_id)
-                alert.note = "falha ao avisar o contato"
+            notified = self._notify_contact(session, ride_id, passenger_id, contact, where, alert)
         session.flush()
         self.events.add(
             passenger_id, "sos_sent",
@@ -159,6 +158,17 @@ class SafetyService:
             },
         )
         return SosResult(alert.id, contact is not None, notified, False)
+
+    def _notify_contact(self, session, ride_id, passenger_id, contact, where, alert) -> bool:
+        """Avisa o contato e anota o resultado no alerta. O WhatsApp fora do ar não pode impedir o SOS."""
+        try:
+            self.notifier.notify(contact.phone, self._sos_text(session, ride_id, passenger_id, where))
+        except Exception:
+            log.exception("falha ao avisar o contato de emergência da corrida %s", ride_id)
+            alert.note = "falha ao avisar o contato"
+            return False
+        alert.note = "contato avisado"
+        return True
 
     @staticmethod
     def _sos_text(session: Session, ride_id: str, passenger_id: str, where: GeoPoint | None) -> str:

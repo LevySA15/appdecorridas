@@ -152,3 +152,16 @@ def test_lista_e_encerramento_de_alertas_sao_so_do_administrador(client, pax, ri
             assert getattr(client, metodo)(url, headers=quem.headers).status_code == 403
         assert getattr(client, metodo)(url).status_code == 401
     assert client.get("/v1/admin/safety-alerts", params={"status": "perdido"}, headers=rider.headers).status_code == 403
+
+
+def test_estado_do_passageiro_traz_o_aviso_de_seguranca_em_aberto(client, pax, rider, clock, listen):
+    # Revisão final (I4): o app que reconecta precisa redesenhar o "está tudo bem?".
+    pedido = corrida(client, pax, rider)
+    assert client.get("/v1/passenger/state", headers=pax.headers).json()["ride"]["safety_alert"] is None
+    avisos = listen(pax.user_id)
+    parar_por(client, rider, clock, 200)
+    alerta = next(m for m in avisos.messages if m["type"] == "safety_check")["data"]
+    estado = client.get("/v1/passenger/state", headers=pax.headers).json()["ride"]
+    assert estado["safety_alert"] == {"alert_id": alerta["alert_id"], "kind": "stopped"}
+    client.post(f"/v1/rides/{pedido['ride_id']}/safety/{alerta['alert_id']}/ok", headers=pax.headers)
+    assert client.get("/v1/passenger/state", headers=pax.headers).json()["ride"]["safety_alert"] is None

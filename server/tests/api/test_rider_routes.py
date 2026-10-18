@@ -275,3 +275,23 @@ def test_rotas_do_motoqueiro_sao_so_do_motoqueiro(client, pax):
     ):
         assert getattr(client, metodo)(url, headers=pax.headers).status_code == 403, url
         assert getattr(client, metodo)(url).status_code == 401, url
+
+
+def test_motoqueiro_marcado_como_parado_continua_rastreado_enquanto_a_corrida_anda(
+    client, pax, rider, clock, listen
+):
+    # Revisão final (C1): "parado" com corrida andando derrubava o rastreio e o aviso de segurança.
+    corrida = pedir(client, pax, "cash")
+    rid = corrida["ride_id"]
+    aceitar(client, rider, rid)
+    acao(client, rider, rid, "arrive")
+    acao(client, rider, rid, "helmet")
+    assert acao(client, rider, rid, "start", pin=corrida["pin"]).status_code == 200
+    assert client.post("/v1/rider/offline", headers=rider.headers).status_code == 204
+    avisos = listen(pax.user_id)
+    parado = pt(500, 3)
+    for _ in range(50):
+        clock.advance(4)
+        client.post("/v1/rider/position", json={"lat": parado.lat, "lng": parado.lng}, headers=rider.headers)
+    assert avisos.types.count("rider_position") == 50 and avisos.types.count("safety_check") == 1
+    assert client.get("/v1/passenger/state", headers=pax.headers).json()["ride"]["rider_position"] is not None
