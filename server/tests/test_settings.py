@@ -39,3 +39,24 @@ def test_url_que_ja_tem_driver_nao_e_alterada(tmp_path):
     env = tmp_path / ".env"
     env.write_text("DATABASE_URL=postgresql+psycopg://u@h/d\nREDIS_URL=redis://h/0\n", encoding="utf-8")
     assert load_settings(env_path=env, environ={}).database_url == "postgresql+psycopg://u@h/d"
+
+
+def test_configuracoes_da_api_tem_padrao_seguro(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("DATABASE_URL=postgresql://a@h/x\nREDIS_URL=redis://a/0\n", encoding="utf-8")
+    settings = load_settings(env_path=env, environ={})
+    assert settings.mode == "production"          # sem APP_MODE=dev não liga os adaptadores falsos
+    assert settings.webhook_secret is None
+    assert settings.upload_dir.name == "uploads" and settings.upload_dir.parent.name == "var"
+
+
+def test_le_modo_segredo_do_webhook_e_pasta_de_documentos(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text(
+        "DATABASE_URL=postgresql://a@h/x\nREDIS_URL=redis://a/0\n"
+        "APP_MODE=dev\nWEBHOOK_SECRET=segredo\nUPLOAD_DIR=/dados/docs\n",
+        encoding="utf-8",
+    )
+    settings = load_settings(env_path=env, environ={})
+    assert (settings.mode, settings.webhook_secret) == ("dev", "segredo")
+    assert str(settings.upload_dir) == "/dados/docs"

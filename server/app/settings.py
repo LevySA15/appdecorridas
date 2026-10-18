@@ -9,13 +9,18 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-_DEFAULT_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+_SERVER_DIR = Path(__file__).resolve().parents[1]
+_DEFAULT_ENV_PATH = _SERVER_DIR / ".env"
+_DEFAULT_UPLOAD_DIR = _SERVER_DIR / "var" / "uploads"
 
 
 @dataclass(frozen=True)
 class Settings:
     database_url: str
     redis_url: str
+    webhook_secret: str | None = None       # assina os avisos do provedor de pagamento (HMAC)
+    upload_dir: Path = _DEFAULT_UPLOAD_DIR  # onde ficam as fotos dos documentos (fora do git)
+    mode: str = "production"                # "dev" liga os adaptadores falsos, os únicos que existem até o plano 7
 
 
 def parse_env_file(path: Path) -> dict[str, str]:
@@ -52,4 +57,14 @@ def load_settings(
             raise RuntimeError(f"falta a configuração {key} (defina no ambiente ou em server/.env)")
         return value
 
-    return Settings(database_url=_with_driver(get("DATABASE_URL")), redis_url=get("REDIS_URL"))
+    def optional(key: str) -> str | None:
+        return env.get(key) or file_values.get(key) or None
+
+    upload_dir = optional("UPLOAD_DIR")
+    return Settings(
+        database_url=_with_driver(get("DATABASE_URL")),
+        redis_url=get("REDIS_URL"),
+        webhook_secret=optional("WEBHOOK_SECRET"),
+        upload_dir=Path(upload_dir) if upload_dir else _DEFAULT_UPLOAD_DIR,
+        mode=optional("APP_MODE") or "production",
+    )
