@@ -18,6 +18,7 @@ class PricingConfig:
     factor_min: float = 0.8
     factor_max: float = 1.6
     max_factor_step: float = 0.1    # mudança máxima do fator por atualização
+    factor_interval_s: float = 30.0 # tempo mínimo entre duas atualizações do fator (o preço muda aos poucos)
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,8 @@ class RideConfig:
     max_wait_at_arrival_s: int = 300
     queue_max_wait_s: int = 480
     search_give_up_s: int = 120
+    cash_pay_wait_s: int = 300      # espera pelo pagamento do fim da corrida em dinheiro
+    quote_ttl_s: int = 300          # validade do preço mostrado antes do pedido
 
 
 @dataclass(frozen=True)
@@ -53,6 +56,8 @@ class DispatchConfig:
     max_candidates_routed: int = 3
     finishing_max_s: int = 120
     finishing_max_m: int = 500
+    search_radius_m: float = 3000.0     # só motos até essa distância em linha reta recebem oferta
+    position_max_age_s: float = 30.0    # posição mais velha que isso não conta
 
 
 @dataclass(frozen=True)
@@ -64,3 +69,12 @@ class SafetyConfig:
     max_plausible_speed_kmh: float = 140.0
     reanchor_after_rejects: int = 3
     mock_location_jumps: int = 2
+
+
+@dataclass(frozen=True)
+class AuthConfig:
+    otp_digits: int = 6
+    otp_ttl_s: int = 300
+    otp_max_attempts: int = 5
+    otp_requests_per_hour: int = 5
+    session_days: int = 180

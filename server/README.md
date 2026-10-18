@@ -29,9 +29,13 @@ apague com `DROP SCHEMA "t_..." CASCADE`. O Redis dos testes é o banco número 
 - `app/infra/redis_store.py` — posições das motos e reservas com validade.
 - `app/services/payments.py` — serviço transacional de pagamentos Pix (cobrança, aviso de pago, vencimento, cancelamento, estorno).
 - `app/adapters/` — provedores falsos de pagamento e mapas, para testes e simulador.
+- `app/services/auth.py` — login por código (WhatsApp falso nos testes) e sessões; `riders.py` — cadastro, aprovação, bloqueio e disponibilidade do motoqueiro; `quotes.py` e `ride_requests.py` — preço antes do pedido e pedido de corrida; `dispatch.py` — procura e ofertas uma por vez, com fila; `trips.py` — andamento, cancelamento, fila e avaliações; `sweeps.py` — tarefas de tempo (ofertas, Pix, fila, chegada, pagamento em dinheiro, procura); `events.py` — avisos para os apps (publicados só depois do commit, no plano 2C).
+- `app/db/queries.py` — consultas de leitura usadas pelos serviços.
 - `migrations/` — esquema do banco (Alembic).
 
 ## Regras de convivência
 
 - Serviços e repositórios não fazem `commit`: quem chama controla a transação.
-- Ordem de travas no banco: corrida, motoqueiro, cobrança.
+- Os serviços recebem `now` como parâmetro e anotam avisos num `EventCollector`; quem chama publica depois do commit.
+- Login: `AuthService.verify_code` não levanta erro para código errado; devolve `ok=False` para a tentativa ser gravada.
+- Ordem de travas: corrida, motoqueiro, cobrança, passageiro.

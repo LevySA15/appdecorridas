@@ -79,3 +79,12 @@ def test_campo_desconhecido_ou_faltando_no_banco_da_erro_claro(session):
     _gravar_cru(session, "fees", {"min_fee_cents": 70})
     with pytest.raises(ValueError, match="inválida"):
         load_config(session, "fees")
+
+def test_configuracao_de_login_vai_e_volta(session):
+    from app.domain.config import AuthConfig
+
+    custom = AuthConfig(otp_digits=4, otp_ttl_s=60, otp_max_attempts=3, otp_requests_per_hour=2, session_days=30)
+    save_config(session, "auth", custom)
+    session.expire_all()
+    assert load_config(session, "auth") == custom
+    assert load_app_config(session).auth == custom

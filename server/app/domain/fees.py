@@ -83,3 +83,15 @@ def register_completed_ride(
 
 def mark_entry_paid(acc: RiderAccount) -> None:
     acc.entry_paid = True
+
+
+def count_completed_ride(acc: RiderAccount) -> None:
+    """Conta a corrida concluída, sem mexer na dívida (a taxa em dinheiro vivo é somada à parte)."""
+    acc.completed_rides += 1
+
+
+def add_cash_fee_debt(acc: RiderAccount, fee_cents: int) -> None:
+    """O passageiro pagou em dinheiro vivo e o motoqueiro confirmou: a taxa vira dívida dele."""
+    if fee_cents < 0:
+        raise ValueError("a taxa não pode ser negativa")
+    acc.cash_debt_cents += fee_cents

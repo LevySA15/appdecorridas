@@ -11,6 +11,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -19,6 +20,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -60,6 +62,15 @@ class RiderProfileRow(Base):
     cash_debt_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     debt_reserved_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     approved_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    online: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    rejected_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    selfie_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    cnh_photo_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    crlv_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    cnh_expires_on: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    crlv_expires_on: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    rating_sum: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    rating_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
 
 
 class PassengerProfileRow(Base):
@@ -91,6 +102,17 @@ class RideRow(Base):
     end_payment_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     non_payment_reported: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     current_charge_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    pickup_lat: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    pickup_lng: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    dest_lat: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    dest_lng: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    pickup_text: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    dest_text: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    distance_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    price_factor: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    price_reason: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    fee_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    completed_at: Mapped[float | None] = mapped_column(Float(53), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -98,10 +120,13 @@ class PixChargeRow(Base):
     __tablename__ = "pix_charges"
     __table_args__ = (
         CheckConstraint("rider_cents + company_cents = amount_cents", name="charge_split_closes"),
+        CheckConstraint("purpose IN ('ride','end','entry')", name="charge_purpose_valid"),
+        CheckConstraint("purpose = 'entry' OR ride_id IS NOT NULL", name="charge_ride_required"),
     )
 
     charge_id: Mapped[str] = mapped_column(String(40), primary_key=True)
-    ride_id: Mapped[str] = mapped_column(String(40), ForeignKey("rides.id"))
+    ride_id: Mapped[str | None] = mapped_column(String(40), ForeignKey("rides.id"), nullable=True)
+    purpose: Mapped[str] = mapped_column(String(8), default="ride", server_default="ride")
     rider_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     amount_cents: Mapped[int] = mapped_column(Integer)
     rider_cents: Mapped[int] = mapped_column(Integer)
@@ -144,3 +169,89 @@ class AppConfigRow(Base):
     key: Mapped[str] = mapped_column(String(40), primary_key=True)
     value: Mapped[dict] = mapped_column(JSONB)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class OtpCodeRow(Base):
+    __tablename__ = "otp_codes"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    phone: Mapped[str] = mapped_column(String(20), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[float] = mapped_column(Float(53))
+    expires_at: Mapped[float] = mapped_column(Float(53))
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    used: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+
+
+class SessionRow(Base):
+    __tablename__ = "sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    device: Mapped[str] = mapped_column(String(80), default="", server_default="")
+    created_at: Mapped[float] = mapped_column(Float(53))
+    expires_at: Mapped[float] = mapped_column(Float(53))
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+
+
+class QuoteRow(Base):
+    __tablename__ = "quotes"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    passenger_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    pickup_lat: Mapped[float] = mapped_column(Float(53))
+    pickup_lng: Mapped[float] = mapped_column(Float(53))
+    dest_lat: Mapped[float] = mapped_column(Float(53))
+    dest_lng: Mapped[float] = mapped_column(Float(53))
+    pickup_text: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    dest_text: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    distance_m: Mapped[int] = mapped_column(Integer)
+    duration_s: Mapped[int] = mapped_column(Integer)
+    price_cents: Mapped[int] = mapped_column(Integer)
+    factor: Mapped[float] = mapped_column(Float(53))
+    reason: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[float] = mapped_column(Float(53))
+    expires_at: Mapped[float] = mapped_column(Float(53))
+    used: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+
+
+class RideOfferRow(Base):
+    __tablename__ = "ride_offers"
+    __table_args__ = (
+        CheckConstraint("status IN ('pending','accepted','declined','expired')", name="offer_status_valid"),
+        Index("offer_one_pending_per_ride", "ride_id", unique=True, postgresql_where=text("status = 'pending'")),
+        Index("offer_one_pending_per_rider", "rider_id", unique=True, postgresql_where=text("status = 'pending'")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    ride_id: Mapped[str] = mapped_column(String(40), ForeignKey("rides.id"))
+    rider_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    status: Mapped[str] = mapped_column(String(10), default="pending", server_default="pending")
+    will_queue: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    created_at: Mapped[float] = mapped_column(Float(53))
+    expires_at: Mapped[float] = mapped_column(Float(53))
+
+
+class RideEventRow(Base):
+    __tablename__ = "ride_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    ride_id: Mapped[str] = mapped_column(String(40), ForeignKey("rides.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(30))
+    data: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
+    created_at: Mapped[float] = mapped_column(Float(53))
+
+
+class RatingRow(Base):
+    __tablename__ = "ratings"
+    __table_args__ = (
+        CheckConstraint("stars BETWEEN 1 AND 5", name="rating_range"),
+        UniqueConstraint("ride_id", "from_user", name="rating_once"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    ride_id: Mapped[str] = mapped_column(String(40), ForeignKey("rides.id"))
+    from_user: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    to_user: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    stars: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[float] = mapped_column(Float(53))

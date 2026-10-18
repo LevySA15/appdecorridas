@@ -5,7 +5,9 @@ várias linhas, a ordem é sempre corrida, motoqueiro, cobrança (evita impasse 
 """
 from __future__ import annotations
 
-from sqlalchemy import Select, select
+from dataclasses import dataclass
+
+from sqlalchemy import Select, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -13,11 +15,13 @@ from app.db.models import (
     PassengerProfileRow,
     PixChargeRow,
     ProcessedEventRow,
+    RideEventRow,
     RideRow,
     RiderProfileRow,
     UserRow,
 )
 from app.domain.fees import RiderAccount
+from app.domain.geo import GeoPoint
 from app.domain.payments import DebtState, PixCharge, Split
 from app.domain.rides import PassengerAccount, Ride, RideState
 from app.domain.types import PaymentMethod
@@ -127,6 +131,8 @@ def _ride_to_domain(row: RideRow) -> Ride:
         arrived_at=row.arrived_at,
         end_payment_confirmed=row.end_payment_confirmed,
         non_payment_reported=row.non_payment_reported,
+        completed_at=row.completed_at,
+        fee_cents=row.fee_cents,
     )
 
 
@@ -146,6 +152,8 @@ def _apply_ride(row: RideRow, ride: Ride) -> None:
     row.arrived_at = ride.arrived_at
     row.end_payment_confirmed = ride.end_payment_confirmed
     row.non_payment_reported = ride.non_payment_reported
+    row.completed_at = ride.completed_at
+    row.fee_cents = ride.fee_cents
 
 
 def add_ride(session: Session, ride: Ride) -> None:
@@ -192,7 +200,7 @@ def get_current_charge_id(session: Session, ride_id: str) -> str | None:
 def _charge_to_domain(row: PixChargeRow) -> PixCharge:
     return PixCharge(
         charge_id=row.charge_id,
-        ride_id=row.ride_id,
+        ride_id=row.ride_id or "",
         rider_id=row.rider_id,
         amount_cents=row.amount_cents,
         split=Split(
@@ -203,11 +211,12 @@ def _charge_to_domain(row: PixChargeRow) -> PixCharge:
         paid=row.paid,
         refunded=row.refunded,
         debt_state=DebtState(row.debt_state),
+        purpose=row.purpose,
     )
 
 
 def _apply_charge(row: PixChargeRow, charge: PixCharge) -> None:
-    row.ride_id = charge.ride_id
+    row.ride_id = charge.ride_id or None
     row.rider_id = charge.rider_id
     row.amount_cents = charge.amount_cents
     row.rider_cents = charge.split.rider_cents
@@ -216,6 +225,7 @@ def _apply_charge(row: PixChargeRow, charge: PixCharge) -> None:
     row.paid = charge.paid
     row.refunded = charge.refunded
     row.debt_state = charge.debt_state.value
+    row.purpose = charge.purpose
 
 
 def add_charge(session: Session, charge: PixCharge) -> None:
@@ -250,3 +260,77 @@ def first_time_event(session: Session, event_id: str) -> bool:
         .returning(ProcessedEventRow.event_id)
     )
     return session.execute(stmt).scalar_one_or_none() is not None
+
+
+
+# --- detalhes da corrida e eventos ---------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RideDetails:
+    pickup: GeoPoint
+    destination: GeoPoint
+    pickup_text: str
+    destination_text: str
+    distance_m: int
+    price_factor: float
+    price_reason: str
+
+
+def set_ride_details(session: Session, ride_id: str, details: RideDetails) -> None:
+    row = session.get(RideRow, ride_id)
+    if row is None:
+        raise LookupError(f"corrida {ride_id} não encontrada")
+    row.pickup_lat, row.pickup_lng = details.pickup.lat, details.pickup.lng
+    row.dest_lat, row.dest_lng = details.destination.lat, details.destination.lng
+    row.pickup_text, row.dest_text = details.pickup_text, details.destination_text
+    row.distance_m, row.price_factor, row.price_reason = details.distance_m, details.price_factor, details.price_reason
+    session.flush()
+
+
+def get_ride_details(session: Session, ride_id: str) -> RideDetails:
+    row = session.get(RideRow, ride_id)
+    if row is None:
+        raise LookupError(f"corrida {ride_id} não encontrada")
+    if row.pickup_lat is None or row.dest_lat is None:
+        raise LookupError(f"corrida {ride_id} sem detalhes de trajeto")
+    return RideDetails(
+        pickup=GeoPoint(row.pickup_lat, row.pickup_lng),
+        destination=GeoPoint(row.dest_lat, row.dest_lng),
+        pickup_text=row.pickup_text or "",
+        destination_text=row.dest_text or "",
+        distance_m=row.distance_m or 0,
+        price_factor=row.price_factor if row.price_factor is not None else 1.0,
+        price_reason=row.price_reason or "",
+    )
+
+
+def log_ride_event(session: Session, ride_id: str, kind: str, data: dict | None, now: float) -> None:
+    session.add(RideEventRow(ride_id=ride_id, kind=kind, data=data or {}, created_at=now))
+    session.flush()
+
+
+def ride_events(session: Session, ride_id: str) -> list[tuple[str, dict]]:
+    rows = session.execute(
+        select(RideEventRow).where(RideEventRow.ride_id == ride_id).order_by(RideEventRow.id)
+    ).scalars()
+    return [(r.kind, r.data) for r in rows]
+
+
+
+
+def find_open_entry_charge(session: Session, rider_id: str) -> PixCharge | None:
+    """Cobrança da entrada de R$ 50 que o motoqueiro ainda não pagou, se houver."""
+    row = session.execute(
+        select(PixChargeRow)
+        .where(PixChargeRow.rider_id == rider_id, PixChargeRow.purpose == "entry", PixChargeRow.paid.is_(False))
+        .limit(1)
+    ).scalar_one_or_none()
+    return _charge_to_domain(row) if row is not None else None
+
+
+def ride_event_time(session: Session, ride_id: str, kind: str) -> float | None:
+    """Instante do último evento deste tipo na corrida, ou None."""
+    return session.execute(
+        select(func.max(RideEventRow.created_at)).where(RideEventRow.ride_id == ride_id, RideEventRow.kind == kind)
+    ).scalar_one()

@@ -123,11 +123,17 @@ class PixCharge:
     paid: bool = False
     refunded: bool = False
     debt_state: DebtState = DebtState.RESERVED
+    purpose: str = "ride"   # "ride" (Pix antes da corrida), "end" (QR do fim em dinheiro) ou "entry" (entrada de R$ 50)
+
+
+class PaymentProviderError(Exception):
+    """O provedor de pagamento não respondeu ou recusou (fora do ar, tempo esgotado). Os adaptadores
+    reais traduzem seus erros de rede para este; os serviços só tratam este."""
 
 
 class PaymentProvider(Protocol):
     def create_pix_charge(
-        self, ride_id: str, rider_id: str, amount_cents: int, split: Split
+        self, ride_id: str, rider_id: str, amount_cents: int, split: Split, purpose: str = "ride"
     ) -> PixCharge: ...
 
     def refund(self, charge_id: str) -> None: ...
