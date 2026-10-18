@@ -56,10 +56,14 @@ class Feed:
             try:
                 async with websockets.connect(self.ws_url, open_timeout=10) as ws:
                     self._ws = ws
+                    if self._closing:               # pediram para fechar enquanto a conexão ainda abria
+                        break
                     await ws.send(json.dumps({"token": self.token}))
                     ready = json.loads(await asyncio.wait_for(ws.recv(), 10))
                     if ready.get("type") != "ready":
                         raise ConnectionError(f"resposta inesperada: {ready.get('type')}")
+                    if self._closing:
+                        break
                     self.generation += 1
                     self.resync = True
                     self._wake.set()
@@ -88,3 +92,11 @@ class Feed:
         self._wake.set()
         if self._ws is not None:
             await self._ws.close()
+
+    async def stop(self, task: asyncio.Task, grace_s: float = 5.0) -> None:
+        """Fecha e espera o laço terminar; se ele não obedecer em `grace_s`, cancela (a rodada nunca fica presa aqui)."""
+        await self.close()
+        try:
+            await asyncio.wait_for(task, grace_s)
+        except asyncio.TimeoutError:
+            pass

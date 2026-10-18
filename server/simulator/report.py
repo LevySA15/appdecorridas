@@ -105,10 +105,15 @@ def build_report(outcome: Outcome, server_problems: list[str] | None = None, ret
         lines.append("- Preços mostrados: " + ", ".join(f"{k} ({v})" for k, v in stats.price_reasons.most_common()))
     lines += ["", "## O que as pessoas fizeram", ""]
     lines += [f"- {key}: {count}" for key, count in sorted(stats.notes.items())] or ["- nada de especial"]
-    lines += ["", "## Avisos em tempo real recebidos (passageiros e motoqueiros somados)", ""]
+    lines += ["", "## Avisos em tempo real recebidos (de todos, somados)", ""]
     lines += [f"- {key}: {count}" for key, count in sorted(stats.events.items())] or ["- nenhum"]
     if stats.closes:
         lines.append("- Conexões encerradas: " + ", ".join(f"{k} ({v})" for k, v in sorted(stats.closes.items())))
+    if stats.events["mock_location_suspected"]:
+        lines.append(
+            f"- Suspeitas de localização falsa que o servidor avisou ao administrador: {stats.events['mock_location_suspected']} "
+            "(o simulador não falsifica nada; costuma ser moto rápida demais para o intervalo entre as posições)"
+        )
     lines += ["", "## Chamadas à API", "", "| Rota | Chamadas | Erros | Mediana | 90% | Máximo |", "|---|---:|---:|---:|---:|---:|"]
     totals: Counter = Counter()
     errors: Counter = Counter()

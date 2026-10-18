@@ -3,7 +3,7 @@ from collections import Counter
 
 import pytest
 
-from simulator.behavior import Choices, Profile, preset
+from simulator.behavior import CRUISE_LIMIT_MPS, MAX_SPEED_MPS, Choices, Profile, preset
 
 
 def test_perfis_prontos_existem_e_o_calmo_nao_faz_bagunca():
@@ -63,3 +63,9 @@ def test_chances_de_resposta_a_oferta_nao_podem_passar_de_cem_por_cento():
         Profile(accept=0.8, decline=0.2, late=0.1).check()
     for nome in ("calmo", "normal", "bagunca"):
         preset(nome).check()
+
+
+def test_moto_a_4x_nunca_passa_do_limite_de_cruzeiro_com_folga_para_o_servidor():
+    velocidades = [Choices(random.Random(i), Profile(speed_mps=8.0, speedup=4.0)).rider_speed() for i in range(300)]
+    assert max(velocidades) <= CRUISE_LIMIT_MPS < MAX_SPEED_MPS
+    assert max(velocidades) > 25                      # e ainda assim anda depressa

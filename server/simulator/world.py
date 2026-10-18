@@ -92,7 +92,10 @@ class World:
 
     async def pay_pix(self, charge_id: str) -> None:
         """Faz de conta que o passageiro pagou o Pix (só existe no modo de desenvolvimento do servidor)."""
-        await self.api.call("POST", "/v1/dev/pix/{charge_id}/pay", params={"charge_id": charge_id}, ok=("not_found",))
+        reply = await self.api.call("POST", "/v1/dev/pix/{charge_id}/pay", params={"charge_id": charge_id})
+        status = reply.body.get("status") if reply.ok and isinstance(reply.body, dict) else None
+        if reply.ok and status not in ("applied", "refunded"):      # "refunded": pagou depois de a corrida ser cancelada
+            self.stats.flag(f"Pix {charge_id}: o servidor respondeu '{status}' ao pagamento (esperado 'applied' ou 'refunded')")
 
 
 async def login(api: Api, cache: TokenCache, phone: str, role: str) -> Login:

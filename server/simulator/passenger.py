@@ -92,8 +92,7 @@ class PassengerActor:
                 if await self._act(now):
                     await self.refresh()
         finally:
-            await self.feed.close()
-            await feed_task
+            await self.feed.stop(feed_task)
 
     # --- decisões ------------------------------------------------------------------------------------
 

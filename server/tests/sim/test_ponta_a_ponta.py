@@ -75,5 +75,6 @@ def test_tapas_duplos_codigo_errado_e_sos_terminam_bem(box):
     assert notas["toque duplo em pedir"] == 1 and notas["toque duplo em aceitar"] == 1
     assert notas["código errado digitado"] == 1 and notas["SOS apertado"] == 1
     assert outcome.stats.events["sos_sent"] == 1
+    assert outcome.stats.events["sos"] == 1                    # o administrador de mentira também recebeu o aviso
     assert notas["alerta de segurança resolvido pelo administrador (sos)"] == 1
     assert outcome.audit["rides_by_state"] == {"completed": 1}

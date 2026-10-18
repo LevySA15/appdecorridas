@@ -17,13 +17,15 @@ A partir da pasta `server/`:
 
 O `demo` sobe um servidor **descartável** (um esquema só dele no banco, o Redis número 14 e uma pasta temporária de fotos), cria as pessoas, solta todo mundo, mostra uma linha de situação a cada 10 segundos e, no fim, imprime o relatório, grava uma cópia em `server/var/sim/relatorio-AAAAMMDD-HHMMSS.md` e **apaga tudo**: não encosta nos seus dados de desenvolvimento. Rode um `demo` por vez (ele usa sempre o Redis número 14).
 
-`--fast` encurta os prazos do servidor descartável (o Pix vence em 40 s, a procura desiste em 45 s, a oferta vale 8 s, o aviso de parada vem em 40 s, o passageiro que não paga o dinheiro é bloqueado em 45 s) e deixa as pessoas mais rápidas e as motos 4 vezes mais rápidas. Em poucos minutos aparecem Pix vencido, passageiro bloqueado, aviso de segurança e SOS. Sem `--fast`, os prazos são os de verdade e a rodada anda no ritmo real.
+`--fast` encurta os prazos do servidor descartável (o Pix vence em 40 s, a procura desiste em 45 s, a oferta vale 8 s, o aviso de parada vem em 40 s, o passageiro que não paga o dinheiro é bloqueado em 45 s) e deixa as pessoas mais rápidas e as motos até 4 vezes mais rápidas (no máximo 108 km/h: acima de 140 km/h o servidor desconfia de localização falsa). Em poucos minutos aparecem Pix vencido, passageiro bloqueado, aviso de segurança e SOS. Sem `--fast`, os prazos são os de verdade e a rodada anda no ritmo real.
 
 ## Rodar contra o servidor que está no ar: `run`
 
     .venv/bin/python -m app.cli create-admin --phone "75 99999-0000" --name "Levy"       # uma vez
     .venv/bin/uvicorn --factory app.main:create_default_app --port 8000                  # em outro terminal
     .venv/bin/python -m simulator run --admin-phone "75 99999-0000" --riders 10 --passengers 30 --minutes 10
+
+**Depois de reiniciar o servidor de desenvolvimento, o `run` reprova:** o Pix falso recomeça a numeração (`ch-1`, `ch-2`...) e a conferência final compara com o histórico antigo do banco. Use o `demo`, ou recomece o banco de desenvolvimento antes.
 
 As pessoas de mentira ficam gravadas no banco desse servidor (procure os nomes com "(sim)"). Os códigos de login delas são pedidos uma vez e os tokens ficam em `server/var/sim/pessoas.json`, que só você lê e o git ignora; da segunda rodada em diante ninguém pede código de novo (o servidor limita a 100 pedidos por hora por aparelho; com mais de 90 pessoas, a primeira rodada precisa esperar a hora virar).
 
@@ -35,7 +37,7 @@ As pessoas de mentira ficam gravadas no banco desse servidor (procure os nomes c
 | `--minutes N` | quanto tempo a rodada pede corridas novas (depois ela espera as abertas terminarem) | 10 |
 | `--profile` | `calmo` (tudo certo), `normal` ou `bagunca` (toque duplo, código errado, parada longa, desvio de rota, SOS, Pix atrasado, QR sem pagar, conexão que cai) | `normal` |
 | `--seed N` | repete a mesma "personalidade" das pessoas (a hora exata das coisas muda, porque o servidor é de verdade) | 1 |
-| `--speed N` | multiplica a velocidade das motos, de 1 a 4 | 1 |
+| `--speed N` | multiplica a velocidade das motos, de 1 a 4 (o teto é 108 km/h) | 1 |
 | `--pace N` | multiplica as esperas das pessoas (`0.2` = cinco vezes mais depressa) | 1 |
 | `--max-rides N` | para depois de N pedidos | sem limite |
 | `--city-scale N` | encolhe a cidade (`0.2` = viagens bem curtas) | 1 |
@@ -50,6 +52,7 @@ Sai com código 0 se deu tudo certo, 1 se achou problema e 2 se nem conseguiu co
 - **Tempos:** da procura até alguém aceitar, do aceite até a moto chegar, e da saída até o fim.
 - **Dinheiro:** corridas e valores por forma de pagamento, e os preços mostrados (o preço sobe quando falta moto livre).
 - **O que as pessoas fizeram:** a contagem dos comportamentos (oferta recusada, código errado, SOS, QR pago...).
+- **Suspeitas de localização falsa:** aparece só se o servidor avisou o administrador. O simulador não falsifica nada, então isso quase sempre quer dizer moto rápida demais para o intervalo entre as posições; não reprova a rodada.
 - **Chamadas à API:** por rota, quantas vezes, quantos erros e o tempo (mediana, 90% e máximo). "Erros" aqui inclui erros normais, como uma oferta que venceu antes do toque.
 - **Respostas inesperadas do servidor:** o que **não** devia ter acontecido (erro 500, falta de resposta, erro que o simulador não esperava). Se tiver qualquer linha aqui, a rodada reprova.
 - **Conferência final do servidor:** o livro-caixa fecha e bate com o extrato do provedor falso, ninguém ficou com duas corridas ao mesmo tempo e nenhuma corrida ficou aberta.

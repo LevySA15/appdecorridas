@@ -29,6 +29,7 @@ class RiderActor:
         self.pos = start
         self.speed = self.ch.rider_speed()
         self.state: dict | None = None
+        self.ride_distance_m = 0.0              # quanto andou com corrida (o fim da rodada usa para saber se há progresso)
         self._route: list[Point] = []
         self._route_key: tuple | None = None
         self._route_speed = self.speed
@@ -105,8 +106,7 @@ class RiderActor:
                 if await self._act(now):
                     await self.refresh()
         finally:
-            await self.feed.close()
-            await feed_task
+            await self.feed.stop(feed_task)
 
     def _reports_position(self) -> bool:
         s = self.state
@@ -145,7 +145,10 @@ class RiderActor:
         if now < self._pause_until or not self._route:
             return
         target = self._route[0]
+        before = self.pos
         self.pos = move_toward(self.pos, target, self._route_speed * dt)
+        if self.state is not None and self.state["ride"] is not None:
+            self.ride_distance_m += distance_m(before, self.pos)
         if self._stop_point is not None and distance_m(self.pos, self._stop_point) < 40:
             self._stop_point = None
             self._pause_until = now + self.p.stop_s

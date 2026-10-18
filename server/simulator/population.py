@@ -11,6 +11,16 @@ from simulator.world import Login, SimulationError, TokenCache, World, login
 PARALLEL = 8            # quantas pessoas entram ao mesmo tempo
 
 
+async def gather_all(coroutines) -> list:
+    """Como `asyncio.gather`, mas espera TODOS terminarem antes de levantar o primeiro erro: quem estava no meio de um
+    login termina (e o token fica guardado) em vez de ficar solto quando a rodada desiste."""
+    results = await asyncio.gather(*coroutines, return_exceptions=True)
+    for result in results:
+        if isinstance(result, BaseException):
+            raise result
+    return list(results)
+
+
 @dataclass
 class Population:
     admin: Login
@@ -78,6 +88,6 @@ async def prepare(
 
     rider_ids = [rider_identity(i, today) for i in range(1, riders + 1)]
     passenger_ids = [passenger_identity(i) for i in range(1, passengers + 1)]
-    rider_logins = await asyncio.gather(*[limited(_setup_rider(world, cache, admin, i)) for i in rider_ids])
-    passenger_logins = await asyncio.gather(*[limited(_setup_passenger(world, cache, i)) for i in passenger_ids])
+    rider_logins = await gather_all([limited(_setup_rider(world, cache, admin, i)) for i in rider_ids])
+    passenger_logins = await gather_all([limited(_setup_passenger(world, cache, i)) for i in passenger_ids])
     return Population(admin, list(zip(rider_ids, rider_logins)), list(zip(passenger_ids, passenger_logins)))

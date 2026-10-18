@@ -6,6 +6,7 @@ import random
 from dataclasses import dataclass
 
 MAX_SPEED_MPS = 36.0          # o servidor descarta saltos acima de 140 km/h (38,9 m/s): fica abaixo disso
+CRUISE_LIMIT_MPS = 30.0       # velocidade máxima de verdade (108 km/h): sobra folga para o atraso das posições
 
 
 @dataclass(frozen=True)
@@ -120,4 +121,6 @@ class Choices:
         return self.rng.choices([5, 4, 3, 2, 1], weights=[55, 25, 12, 5, 3])[0]
 
     def rider_speed(self) -> float:
-        return self.profile.speed_mps * self.rng.uniform(0.8, 1.2) * self.profile.speedup
+        # O servidor mede a velocidade pelo intervalo em que as posições CHEGAM: uma resposta atrasada encurta o
+        # intervalo seguinte e a moto parece mais rápida do que é. Por isso o teto fica bem abaixo dos 38,9 m/s.
+        return min(self.profile.speed_mps * self.rng.uniform(0.8, 1.2) * self.profile.speedup, CRUISE_LIMIT_MPS)

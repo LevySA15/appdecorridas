@@ -112,3 +112,35 @@ def test_servidor_que_fecha_com_4408_faz_reconectar():
         server.close()
 
     asyncio.run(caso())
+
+
+def test_fechar_enquanto_a_conexao_ainda_abre_nao_deixa_o_laco_preso():
+    async def caso():
+        async def devagar(connection, request):
+            await asyncio.sleep(0.5)             # o servidor demora a aceitar a conexão
+
+        async def handler(ws):
+            await ws.recv()
+            await ws.send(json.dumps({"type": "ready", "data": {}, "at": 0}))
+            await ws.wait_closed()
+
+        server = await serve(handler, "127.0.0.1", 0, process_request=devagar)
+        port = server.sockets[0].getsockname()[1]
+        feed = Feed(f"ws://127.0.0.1:{port}/v1/ws", "bom", Stats())
+        tarefa = asyncio.create_task(feed.run())
+        await asyncio.sleep(0.15)                # a conexão ainda está abrindo: não há o que fechar
+        await feed.close()
+        await asyncio.wait_for(tarefa, 3)        # tem de terminar sozinho assim que a conexão abrir
+        server.close()
+
+    asyncio.run(caso())
+
+
+def test_parar_o_feed_espera_pouco_e_cancela_o_laco_que_nao_obedece():
+    async def caso():
+        feed = Feed("ws://127.0.0.1:1/v1/ws", "bom", Stats())
+        teimoso = asyncio.create_task(asyncio.sleep(60))
+        await asyncio.wait_for(feed.stop(teimoso, grace_s=0.2), 2)
+        assert teimoso.cancelled()
+
+    asyncio.run(caso())

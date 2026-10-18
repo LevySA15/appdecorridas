@@ -77,3 +77,11 @@ def test_rotas_aparecem_com_erros_e_tempos():
     texto = build_report(rodada([corrida()], stats=stats)).text
     assert "| GET /v1/passenger/state | 2 | 0 | 10 ms | 30 ms | 30 ms |" in texto
     assert "| POST /v1/passenger/rides | 1 | 1 | 50 ms | 50 ms | 50 ms |" in texto
+
+
+def test_suspeita_de_localizacao_falsa_aparece_no_relatorio_sem_reprovar():
+    stats = Stats()
+    stats.events["mock_location_suspected"] = 2
+    relatorio = build_report(rodada([corrida()], stats=stats))
+    assert relatorio.passed and "localização falsa" in relatorio.text and "avisou ao administrador: 2" in relatorio.text
+    assert "localização falsa" not in build_report(rodada([corrida()])).text
