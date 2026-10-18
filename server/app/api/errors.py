@@ -54,8 +54,9 @@ _RULES: dict[type[Exception], _Rule] = {
     WrongPin: _Rule(422, "wrong_pin", "Código errado. Confira os 4 dígitos com o passageiro."),
     RegistrationError: _Rule(422, "invalid"),
     ValueError: _Rule(422, "invalid"),
-    PaymentProviderError: _Rule(503, "payment_unavailable", "O Pix está instável agora. Tente de novo em instantes."),
 }
+
+PIX_DOWN_FOR_S = 60.0
 
 INTERNAL_MESSAGE = "Algo deu errado. Tente de novo."
 
@@ -77,6 +78,14 @@ async def _api_error(request: Request, exc: ApiError) -> JSONResponse:
 
 async def _cannot_go_online(request: Request, exc: CannotGoOnline) -> JSONResponse:
     return error_response(409, exc.code, exc.message)
+
+
+async def _payment_unavailable(request: Request, exc: PaymentProviderError) -> JSONResponse:
+    # Desde já, e por um minuto, o app passa a oferecer só dinheiro (spec, seção 12).
+    runtime = getattr(request.app.state, "runtime", None)
+    if runtime is not None:
+        runtime.pix_health.mark_down(runtime.clock(), PIX_DOWN_FOR_S)
+    return error_response(503, "payment_unavailable", "O Pix está instável agora. Tente de novo em instantes.")
 
 
 async def _upload_error(request: Request, exc: UploadError) -> JSONResponse:
@@ -119,6 +128,7 @@ def install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ApiError, _api_error)
     app.add_exception_handler(CannotGoOnline, _cannot_go_online)
     app.add_exception_handler(UploadError, _upload_error)
+    app.add_exception_handler(PaymentProviderError, _payment_unavailable)
     app.add_exception_handler(DuplicateRegistration, _duplicate_registration)
     app.add_exception_handler(LookupError, _not_found)
     app.add_exception_handler(RequestValidationError, _validation)

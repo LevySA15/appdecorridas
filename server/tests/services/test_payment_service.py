@@ -271,3 +271,34 @@ def test_espera_na_chegada_esgotada_em_dinheiro_so_cancela_com_compensacao(sessi
     assert service.cancel_after_arrival_timeout(session, "ride-1", now=100 + 300) == CancelResult(200, False)
     assert repo.get_ride(session, "ride-1").state is RideState.CANCELLED
     assert divida(session) == (1000, 0)
+
+
+def test_pix_pago_avisa_o_passageiro_e_o_motoqueiro(session, provider):
+    from app.services.events import EventCollector
+
+    avisos = EventCollector()
+    service = PaymentService(provider, events=avisos)
+    mundo(session)
+    charge = service.start_pix_charge(session, "ride-1", FEE)
+    assert avisos.events == ()                          # criar a cobrança não avisa ninguém
+    assert service.on_provider_event(session, provider.mark_paid(charge.charge_id)) == "applied"
+    assert [(e.user_id, e.type, e.payload) for e in avisos.events] == [
+        ("p1", "pix_confirmed", {"ride_id": "ride-1", "amount_cents": 700}),
+        ("r1", "payment_received", {"ride_id": "ride-1", "late": False}),
+    ]
+    service.on_provider_event(session, provider.mark_paid(charge.charge_id))     # aviso repetido
+    assert len(avisos.events) == 2
+
+
+def test_pix_pago_depois_do_cancelamento_avisa_que_o_dinheiro_volta(session, provider):
+    from app.services.events import EventCollector
+
+    avisos = EventCollector()
+    service = PaymentService(provider, events=avisos)
+    mundo(session)
+    charge = service.start_pix_charge(session, "ride-1", FEE)
+    service.cancel_ride(session, "ride-1", now=20)
+    assert service.on_provider_event(session, provider.mark_paid(charge.charge_id)) == "refunded"
+    assert [(e.user_id, e.type, e.payload) for e in avisos.events] == [
+        ("p1", "payment_refunded", {"ride_id": "ride-1", "amount_cents": 700}),
+    ]

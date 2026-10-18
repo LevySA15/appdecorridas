@@ -25,6 +25,7 @@ from app.db.config_store import AppConfig, load_app_config
 from app.db.session import make_engine, make_session_factory
 from app.domain.maps import MapsProvider
 from app.domain.payments import PaymentProvider
+from app.api.webhook import HmacVerifier, WebhookVerifier
 from app.infra.documents import DocumentStore, LocalDocumentStore
 from app.infra.redis_store import (
     FactorStore,
@@ -91,6 +92,7 @@ class Runtime:
     pix_health: PixHealth
     job_marks: JobMarks
     documents: DocumentStore
+    webhook_verifier: WebhookVerifier
     mode: str = "production"
     clock: Callable[[], float] = time.time
     redis_client: Any = None
@@ -173,6 +175,8 @@ def build_runtime(settings: Settings) -> Runtime:
             "Os adaptadores reais (Woovi, Google Maps, código por WhatsApp) são do plano 7. "
             "Por enquanto só existe o modo de desenvolvimento: defina APP_MODE=dev em server/.env."
         )
+    if not settings.webhook_secret:
+        raise RuntimeError("falta WEBHOOK_SECRET em server/.env (assina os avisos do provedor de pagamento)")
     client = redis.Redis.from_url(settings.redis_url, decode_responses=True)
     return Runtime(
         session_factory=make_session_factory(make_engine(settings)),
@@ -187,6 +191,7 @@ def build_runtime(settings: Settings) -> Runtime:
         pix_health=RedisPixHealth(client),
         job_marks=RedisJobMarks(client),
         documents=LocalDocumentStore(settings.upload_dir),
+        webhook_verifier=HmacVerifier(settings.webhook_secret),
         mode="dev",
         redis_client=client,
     )

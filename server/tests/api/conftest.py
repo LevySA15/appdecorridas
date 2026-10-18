@@ -6,6 +6,7 @@ from app.adapters.fake_maps import FakeMaps
 from app.adapters.fake_otp import FakeOtpSender
 from app.adapters.fake_payments import FakePaymentProvider
 from app.api.app import create_app
+from app.api.webhook import HmacVerifier
 from app.domain.dispatch import ReservationBook
 from app.infra.documents import LocalDocumentStore
 from app.infra.redis_store import (
@@ -19,6 +20,7 @@ from app.realtime.hub import Hub
 from app.runtime import Runtime
 
 AGORA = 1_800_000_000.0
+WEBHOOK_SECRET = "segredo-de-teste"
 
 
 class Clock:
@@ -67,6 +69,7 @@ def runtime(session, clock, tmp_path):
         pix_health=InMemoryPixHealth(),
         job_marks=InMemoryJobMarks(),
         documents=LocalDocumentStore(tmp_path / "docs"),
+        webhook_verifier=HmacVerifier(WEBHOOK_SECRET),
         mode="dev",
         clock=clock,
     )

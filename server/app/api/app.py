@@ -9,6 +9,7 @@ from app.api.routes import admin as admin_routes
 from app.api.routes import auth as auth_routes
 from app.api.routes import files as files_routes
 from app.api.routes import passenger as passenger_routes
+from app.api.routes import payments as payments_routes
 from app.api.routes import rider as rider_routes
 from app.api.routes import rides as rides_routes
 
@@ -31,6 +32,12 @@ def create_app(runtime=None, *, run_background: bool = False) -> FastAPI:
     app.include_router(files_routes.router)
     app.include_router(passenger_routes.router)
     app.include_router(rides_routes.router)
+    app.include_router(payments_routes.router)
+
+    if getattr(runtime, "mode", None) == "dev":
+        from app.api.routes import dev as dev_routes
+
+        app.include_router(dev_routes.router)
 
     if runtime is not None:
 

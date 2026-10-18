@@ -144,8 +144,15 @@ def test_modo_de_producao_recusa_subir_com_adaptadores_falsos(settings):
         build_runtime(dataclasses.replace(settings, mode="production"))
 
 
+def test_sem_o_segredo_do_aviso_do_provedor_o_servidor_nao_sobe(settings):
+    with pytest.raises(RuntimeError, match="WEBHOOK_SECRET"):
+        build_runtime(dataclasses.replace(settings, mode="dev", webhook_secret=None))
+
+
 def test_modo_dev_monta_tudo_com_redis_de_verdade(settings, redis_test_url, redis_client):
-    runtime = build_runtime(dataclasses.replace(settings, mode="dev", redis_url=redis_test_url))
+    runtime = build_runtime(
+        dataclasses.replace(settings, mode="dev", redis_url=redis_test_url, webhook_secret="segredo-de-teste")
+    )
     assert isinstance(runtime, Runtime) and runtime.mode == "dev"
     runtime.check()                                   # banco e Redis respondem
     assert runtime.positions.get("ninguem") is None

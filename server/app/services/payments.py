@@ -132,8 +132,11 @@ class PaymentService:
             refund_needed = on_pix_paid(ride) if is_current else True
             if not refund_needed:
                 confirm_charge_debt(acc, charge)
+                self._emit(ride.passenger_id, "pix_confirmed", {"ride_id": ride.ride_id, "amount_cents": charge.amount_cents})
+                self._emit(ride.rider_id, "payment_received", {"ride_id": ride.ride_id, "late": False})
         if refund_needed:
             self._refund(charge, acc, ledger)
+            self._emit(ride.passenger_id, "payment_refunded", {"ride_id": ride.ride_id, "amount_cents": charge.amount_cents})
             outcome = "refunded"
         else:
             outcome = "applied"

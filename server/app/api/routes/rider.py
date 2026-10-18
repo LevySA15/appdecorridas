@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
+from app.api.body import read_limited
 from app.api.deps import get_runtime, rider_user
 from app.api.views import rider_ride_view, rider_state
 from app.db import queries
@@ -74,17 +75,10 @@ def _save_upload(runtime, rider_id: str, kind: str, data: bytes) -> dict:
 @router.put("/documents/{kind}", status_code=201)
 async def upload_document(kind: DocKind, request: Request, user: AuthUser = Depends(rider_user)) -> dict:
     """Recebe a foto crua no corpo do pedido (sem formulário). Corta em 8 MB mesmo sem tamanho declarado."""
-    declared = request.headers.get("content-length", "")
-    if declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES:
-        raise UploadError(413, "file_too_large", "A foto é grande demais (máximo 8 MB).")
-    chunks: list[bytes] = []
-    total = 0
-    async for chunk in request.stream():
-        total += len(chunk)
-        if total > MAX_UPLOAD_BYTES:
-            raise UploadError(413, "file_too_large", "A foto é grande demais (máximo 8 MB).")
-        chunks.append(chunk)
-    return await run_in_threadpool(_save_upload, get_runtime(request), user.user_id, kind, b"".join(chunks))
+    data = await read_limited(
+        request, MAX_UPLOAD_BYTES, lambda: UploadError(413, "file_too_large", "A foto é grande demais (máximo 8 MB).")
+    )
+    return await run_in_threadpool(_save_upload, get_runtime(request), user.user_id, kind, data)
 
 
 @router.post("/register", status_code=201)
