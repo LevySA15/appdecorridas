@@ -107,7 +107,10 @@ a assinatura vai no cabeçalho `x-signature: sha256=<HMAC-SHA256 do corpo com WE
 ## Só em desenvolvimento (`APP_MODE=dev`)
 
 `GET /v1/dev/otp?phone=...` devolve o último código de login enviado; `POST /v1/dev/pix/{charge_id}/pay` faz de conta
-que o passageiro pagou o Pix (passa pelo mesmo caminho do aviso real). Em produção estas rotas não existem.
+que o passageiro pagou o Pix (passa pelo mesmo caminho do aviso real); `GET /v1/dev/audit` é a conferência de fim de dia que o
+simulador pede (`docs/simulador.md`): `{"ledger_balanced", "reconcile_diff", "rides_by_state", "open_rides",
+"double_booked_riders"}`, isto é, o livro-caixa fecha, bate com o extrato do provedor falso, quantas corridas há em cada estado,
+quais ainda estão abertas e se algum motoqueiro tem duas corridas ativas. Em produção estas rotas não existem.
 
 ## Tempo real (WebSocket)
 

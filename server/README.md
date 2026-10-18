@@ -1,7 +1,7 @@
 # Servidor do app de corrida
 
-Núcleo de regras (plano 1), banco, Redis e fluxo de dinheiro (plano 2A), serviços da corrida (plano 2B) e API com
-tempo real (plano 2C). Dinheiro sempre em centavos inteiros. O contrato da API está em `docs/api-v1.md`.
+Núcleo de regras (plano 1), banco, Redis e fluxo de dinheiro (plano 2A), serviços da corrida (plano 2B), API com
+tempo real (plano 2C) e simulador (plano 3). Dinheiro sempre em centavos inteiros. O contrato da API está em `docs/api-v1.md`.
 
 ## Pré-requisitos
 
@@ -15,6 +15,9 @@ tempo real (plano 2C). Dinheiro sempre em centavos inteiros. O contrato da API e
     .venv/bin/pip install -q "pytest>=8" "httpx2>=2.0" "sqlalchemy>=2.0" "psycopg[binary]>=3.2" "alembic>=1.13" \
         "redis>=5.0" tzdata "fastapi>=0.115" "uvicorn[standard]>=0.30"
     .venv/bin/pytest -q
+
+Os testes do simulador (`tests/sim`) sobem o servidor de verdade e levam cerca de 1 minuto e meio; para o dia a dia, pule as
+rodadas longas com `.venv/bin/pytest -q -m "not slow"`.
 
 Os testes de banco criam um esquema temporário (`t_...`) no banco de desenvolvimento, aplicam as
 migrações nele e o apagam no fim. Se um teste for interrompido à força, sobra um esquema `t_...`;
@@ -36,6 +39,12 @@ apague com `DROP SCHEMA "t_..." CASCADE`. O Redis dos testes é o banco número 
 - O agendador roda dentro do servidor: varredura de tempo a cada 3 s, checagem diária de documentos vencidos e limpeza
   das posições que sumiram (a cada minuto).
 
+## Simulador
+
+Motoqueiros e passageiros de mentira que fazem corridas inteiras pela API (guia completo em `docs/simulador.md`):
+
+    .venv/bin/python -m simulator demo --fast        # servidor descartável + 10 minutos de gente de mentira + relatório
+
 ## Mapa do código
 
 - `app/domain/` — regras de negócio puras (preço, taxa, dívida, divisão, livro-caixa em memória, corrida, escolha da moto, segurança).
@@ -46,6 +55,7 @@ apague com `DROP SCHEMA "t_..." CASCADE`. O Redis dos testes é o banco número 
 - `app/realtime/hub.py` — conexões WebSocket e entrega dos avisos de qualquer thread.
 - `app/api/` — `app.py` (montagem), `errors.py` (erros → respostas), `deps.py` (quem chama), `views.py` (como a corrida aparece), `webhook.py` (aviso assinado do provedor), `routes/` (uma pasta de rotas por assunto).
 - `scripts/smoke_server.py` — sobe o servidor de verdade num esquema temporário e confere login, WebSocket e agendador (`PYTHONPATH=. .venv/bin/python scripts/smoke_server.py`; usa o Redis banco 14 e o apaga no fim).
+- `simulator/` — o simulador (plano 3): `sandbox.py` (servidor descartável), `rider.py`, `passenger.py` e `admin.py` (os atores), `runner.py` (a rodada), `report.py` (o relatório); só fala com o servidor pela API, exceto o `sandbox.py`.
 - `app/scheduler.py` — varredura, tarefa diária e limpeza; `app/main.py` — ponto de entrada do uvicorn; `app/cli.py` — criar o administrador.
 - `app/adapters/` — provedores falsos (pagamento, mapas, código de login, aviso ao contato), os únicos que existem até o plano 7.
 - `migrations/` — esquema do banco (Alembic).
