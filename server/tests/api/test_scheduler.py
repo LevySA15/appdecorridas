@@ -183,3 +183,25 @@ def test_sem_run_background_nao_tem_agendador(runtime):
     with TestClient(create_app(runtime, scheduler=Agendador(runtime, sweep_interval_s=0.01))):
         time.sleep(0.1)
     assert voltas == []
+
+
+def test_volta_do_agendador_cria_o_alerta_de_sem_sinal_e_publica_depois_do_commit(client, runtime, session, clock, listen):
+    pax = login(client, runtime, "75 99999-0001", "passenger", name="Ana Lima")
+    online_rider(session, runtime, clock, 1)
+    rider = login(client, runtime, rider_phone(1), "rider")
+    quote = client.post("/v1/passenger/quotes", json=QUOTE, headers=pax.headers).json()
+    pedido = client.post(
+        "/v1/passenger/rides", json={"quote_id": quote["quote_id"], "method": "cash"}, headers=pax.headers
+    ).json()
+    rid = pedido["ride_id"]
+    client.post(f"/v1/rider/offers/{rid}/accept", headers=rider.headers)
+    client.post(f"/v1/rider/rides/{rid}/arrive", headers=rider.headers)
+    client.post(f"/v1/rider/rides/{rid}/helmet", headers=rider.headers)
+    client.post(f"/v1/rider/rides/{rid}/start", json={"pin": pedido["pin"]}, headers=rider.headers)
+    avisos = listen(pax.user_id)
+    clock.advance(130)
+    Scheduler(runtime).tick()
+    assert avisos.types == ["safety_check"]
+    clock.advance(3)
+    Scheduler(runtime).tick()
+    assert avisos.types == ["safety_check"]              # a mesma pausa não avisa a cada volta

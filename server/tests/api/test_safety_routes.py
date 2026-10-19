@@ -165,3 +165,31 @@ def test_estado_do_passageiro_traz_o_aviso_de_seguranca_em_aberto(client, pax, r
     assert estado["safety_alert"] == {"alert_id": alerta["alert_id"], "kind": "stopped"}
     client.post(f"/v1/rides/{pedido['ride_id']}/safety/{alerta['alert_id']}/ok", headers=pax.headers)
     assert client.get("/v1/passenger/state", headers=pax.headers).json()["ride"]["safety_alert"] is None
+
+
+def test_sem_sinal_aparece_no_estado_do_passageiro_e_na_lista_do_administrador(
+    client, pax, rider, admin, runtime, clock, listen
+):
+    from app.scheduler import sweep_once
+
+    pedido = corrida(client, pax, rider)
+    client.put("/v1/passenger/emergency-contact", json={"name": "Maria", "phone": "75 98888-7777"}, headers=pax.headers)
+    posicao(client, rider, pt(500, 3))
+    avisos_pax, avisos_admin = listen(pax.user_id), listen(admin.user_id)
+    clock.advance(119)
+    sweep_once(runtime)
+    assert avisos_pax.types == [] and avisos_admin.types == []
+    clock.advance(2)
+    relatorio = sweep_once(runtime)
+    assert relatorio.no_signal == 1
+    assert avisos_pax.types == ["safety_check"] and avisos_pax.messages[0]["data"]["kind"] == "no_signal"
+    assert "safety_alert" in avisos_admin.types
+    estado = client.get("/v1/passenger/state", headers=pax.headers).json()["ride"]["safety_alert"]
+    assert estado["kind"] == "no_signal"
+    fila = client.get("/v1/admin/safety-alerts", params={"status": "open"}, headers=admin.headers).json()
+    assert [(a["kind"], a["ride_id"]) for a in fila] == [("no_signal", pedido["ride_id"])]
+    assert len(runtime.notifier.sent) == 1 and "Perdemos o sinal" in runtime.notifier.sent[0][1]
+    resposta = client.post(
+        f"/v1/rides/{pedido['ride_id']}/safety/{estado['alert_id']}/ok", headers=pax.headers
+    )
+    assert resposta.status_code == 204

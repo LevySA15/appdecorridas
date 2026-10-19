@@ -70,6 +70,13 @@ ligada (`topup_enabled`), recargas por Pix. Por enquanto só paga a taxa de canc
 `pending_payment` (corrida em dinheiro terminada e sem pagamento): `{"ride_id","amount_cents","charge_id","blocked"}`.
 Com `blocked: true` o passageiro não pede outra corrida até pagar o QR (`charge_id`).
 
+**Alerta de "muito tempo sem sinal" (`kind: "no_signal"`).** Com a corrida em andamento, se a moto fica sem mandar posição por
+mais que o limite do tamanho da corrida (até 3 km: 2 minutos; de 3 a 10 km: 4 minutos; acima de 10 km: 6 minutos; tabela
+provisória do Levy, depois vira um algoritmo de distância), o servidor avisa **o passageiro** (`safety_check` com
+`kind: "no_signal"`, que ele responde como os outros em `POST /v1/rides/{id}/safety/{alert_id}/ok`), **o contato de emergência**
+dele (WhatsApp, plano 7) e **os administradores** (`safety_alert`, e o alerta aparece em `GET /v1/admin/safety-alerts`). Repete
+só depois de 10 minutos de silêncio que continua.
+
 ## Cobrança (QR do Pix)
 
 `GET /v1/charges/{charge_id}` → `{"charge_id","purpose","ride_id","amount_cents","paid","br_code"}`.
@@ -174,9 +181,9 @@ Nos dois casos, reconecte e peça o estado. O app pode mandar texto qualquer (`"
 | `unblocked` | passageiro | `ride_id` |
 | `entry_required` · `entry_paid` | motoqueiro | `entry_fee_cents` · sem dados |
 | `rider_approved` · `rider_rejected` · `rider_blocked` · `rider_unblocked` · `documents_expired` | motoqueiro | `reason` quando houver |
-| `safety_check` | passageiro | `ride_id, alert_id, kind` (`stopped` ou `off_route`): "está tudo bem?" |
+| `safety_check` | passageiro | `ride_id, alert_id, kind` (`stopped`, `off_route` ou `no_signal`): "está tudo bem?" |
 | `sos_sent` | passageiro | `alert_id, contact_registered, contact_notified` |
-| `safety_alert` · `safety_ok` · `sos` · `mock_location_suspected` | administradores | dados do alerta e da corrida |
+| `safety_alert` · `safety_ok` · `sos` · `mock_location_suspected` | administradores | dados do alerta e da corrida (`kind`: `stopped`, `off_route`, `no_signal` ou `sos`) |
 
 ## Códigos de erro
 
