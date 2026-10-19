@@ -1,7 +1,9 @@
 """Números ajustáveis guardados no banco (tabela `app_config`), com validação ao salvar e ao ler."""
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import asdict, dataclass
+from typing import get_type_hints
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -17,8 +19,12 @@ from app.domain.config import (
     PricingConfig,
     RideConfig,
     SafetyConfig,
+    validate_auth_config,
     validate_balance_config,
+    validate_dispatch_config,
+    validate_pricing_config,
     validate_ride_config,
+    validate_safety_config,
 )
 from app.domain.fees import validate_fee_config
 
@@ -57,15 +63,39 @@ def _check_key(key: str) -> type:
     return _TYPES[key]
 
 
+def _check_types(cls, data: dict) -> None:
+    """Cada valor precisa ter o tipo do campo (inteiro não é texto nem verdadeiro/falso)."""
+    hints = get_type_hints(cls)
+    for field in dataclasses.fields(cls):
+        if field.name not in data:
+            continue
+        want, value = hints[field.name], data[field.name]
+        if want is bool:
+            ok = isinstance(value, bool)
+        elif want is int:
+            ok = isinstance(value, int) and not isinstance(value, bool)
+        elif want is float:
+            ok = isinstance(value, (int, float)) and not isinstance(value, bool)
+        else:
+            ok = True
+        if not ok:
+            raise ValueError(f"o valor de '{field.name}' tem o tipo errado")
+
+
 def _from_json(key: str, data: dict):
     cls = _check_key(key)
     try:
         data = {k: v for k, v in data.items() if k not in _RETIRED_KEYS.get(key, ())}
+        _check_types(cls, data)
         if key == "fees":
+            for tier in data["tiers"]:
+                _check_types(FeeTier, tier)
             data = {**data, "tiers": tuple(FeeTier(**t) for t in data["tiers"])}
         cfg = cls(**data)
-    except (TypeError, KeyError) as exc:
+    except (TypeError, KeyError, AttributeError) as exc:
         raise ValueError(f"configuração '{key}' inválida no banco: {exc!r}") from exc
+    except ValueError as exc:
+        raise ValueError(f"configuração '{key}' inválida no banco: {exc}") from exc
     try:
         _validate(key, cfg)
     except ValueError as exc:
@@ -74,12 +104,15 @@ def _from_json(key: str, data: dict):
 
 
 def _validate(key: str, cfg) -> None:
-    if key == "fees":
-        validate_fee_config(cfg)
-    elif key == "rides":
-        validate_ride_config(cfg)
-    elif key == "balance":
-        validate_balance_config(cfg)
+    check = {
+        "fees": validate_fee_config, "rides": validate_ride_config, "balance": validate_balance_config,
+        "pricing": validate_pricing_config, "dispatch": validate_dispatch_config,
+        "safety": validate_safety_config, "auth": validate_auth_config,
+    }[key]
+    try:
+        check(cfg)
+    except TypeError as exc:
+        raise ValueError(f"valor com o tipo errado: {exc}") from exc
 
 
 def parse_config(key: str, data: dict):

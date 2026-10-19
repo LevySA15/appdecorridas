@@ -111,9 +111,50 @@ def validate_ride_config(cfg: RideConfig) -> None:
         raise ValueError("o arredondamento da taxa de cancelamento precisa ser positivo")
     if cfg.appeal_window_s <= 0:
         raise ValueError("o prazo do recurso precisa ser positivo")
+    _need(cfg.free_cancel_after_accept_s >= 0, "a janela grátis de cancelamento não pode ser negativa")
+    _need(
+        min(cfg.pix_window_s, cfg.max_wait_at_arrival_s, cfg.queue_max_wait_s, cfg.search_give_up_s, cfg.cash_pay_wait_s, cfg.quote_ttl_s) > 0,
+        "os tempos das corridas precisam ser positivos",
+    )
+    _need(0 <= cfg.min_trip_m < cfg.max_trip_m, "a corrida mais curta precisa ser menor que a mais longa")
 
 
 def validate_balance_config(cfg: BalanceConfig) -> None:
     """Confere os limites da recarga de saldo."""
     if cfg.topup_min_cents <= 0 or cfg.topup_max_cents < cfg.topup_min_cents:
         raise ValueError("os limites da recarga precisam ser positivos, com o mínimo não maior que o máximo")
+
+
+def _need(ok: bool, text: str) -> None:
+    if not ok:
+        raise ValueError(text)
+
+
+def validate_pricing_config(cfg: PricingConfig) -> None:
+    _need(cfg.base_fare_cents >= 0 and cfg.per_km_cents >= 0, "a bandeirada e o preço por quilômetro não podem ser negativos")
+    _need(cfg.min_price_cents > 0 and cfg.round_to_cents > 0, "o preço mínimo e o arredondamento precisam ser positivos")
+    _need(0 < cfg.factor_min <= cfg.factor_max, "o fator de preço mínimo precisa ser positivo e não passar do máximo")
+    _need(cfg.max_factor_step > 0 and cfg.factor_interval_s > 0, "o passo e o intervalo do fator de preço precisam ser positivos")
+
+
+def validate_dispatch_config(cfg: DispatchConfig) -> None:
+    _need(cfg.offer_timeout_s > 0 and cfg.position_max_age_s > 0, "o tempo da oferta e a idade da posição precisam ser positivos")
+    _need(cfg.max_candidates_routed >= 1 and cfg.search_radius_m > 0, "o número de candidatas e o raio da busca precisam ser positivos")
+    _need(cfg.finishing_max_s >= 0 and cfg.finishing_max_m >= 0, "os limites de \"terminando\" não podem ser negativos")
+
+
+def validate_safety_config(cfg: SafetyConfig) -> None:
+    durations = (cfg.stopped_after_s, cfg.alert_cooldown_s, cfg.no_signal_short_s, cfg.no_signal_mid_s, cfg.no_signal_long_s)
+    _need(all(v > 0 for v in durations), "os tempos de segurança precisam ser positivos")
+    _need(cfg.stopped_radius_m > 0 and cfg.off_route_m > 0 and cfg.max_plausible_speed_kmh > 0, "os raios e a velocidade máxima precisam ser positivos")
+    _need(cfg.off_route_confirmations >= 1 and cfg.reanchor_after_rejects >= 1 and cfg.mock_location_jumps >= 1, "as contagens de segurança precisam ser de pelo menos 1")
+    _need(cfg.max_samples >= 10, "guardar menos de 10 posições por corrida não dá para vigiar")
+    _need(0 < cfg.no_signal_short_m < cfg.no_signal_long_m, "as faixas de tamanho do sem sinal precisam crescer")
+    _need(cfg.no_signal_short_s <= cfg.no_signal_mid_s <= cfg.no_signal_long_s, "o tempo sem sinal não pode diminuir em corrida maior")
+
+
+def validate_auth_config(cfg: AuthConfig) -> None:
+    _need(4 <= cfg.otp_digits <= 8, "o código de login precisa ter de 4 a 8 dígitos")
+    _need(cfg.otp_ttl_s > 0 and cfg.otp_max_attempts >= 1, "a validade do código e as tentativas precisam ser positivas")
+    _need(cfg.otp_requests_per_hour >= 1 and cfg.otp_requests_per_ip_hour >= 1, "os limites de pedido de código precisam ser de pelo menos 1")
+    _need(cfg.session_days >= 1, "a sessão precisa durar pelo menos 1 dia")

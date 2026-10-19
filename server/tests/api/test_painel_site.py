@@ -60,3 +60,25 @@ def test_toda_expressao_dos_modelos_de_html_passa_por_funcao_de_escape():
     seguras = ("esc(", "money(", "when(", "attr(", "raw(")
     soltas = [e for e in re.findall(r"\$\{([^}]*)\}", fonte) if not e.strip().startswith(seguras) and "/v1/" not in fonte[max(0, fonte.find("${" + e) - 60): fonte.find("${" + e)]]
     assert soltas == [], soltas
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar as ações")
+def test_acao_cancelada_no_prompt_nao_conta_como_feita_e_a_confirmada_sim():
+    codigo = f"""
+global.document = undefined; global.window = {{ prompt: () => null }}; global.fetch = async () => ({{ status: 204, ok: true }});
+global.sessionStorage = {{ getItem: () => 't', setItem() {{}}, removeItem() {{}} }};
+const p = require({str(JS)!r});
+(async () => {{
+  const cancelada = await p.ACOES['rider-reject']('r1');
+  global.window.prompt = () => 'foto ruim';
+  const feita = await p.ACOES['rider-reject']('r1');
+  console.log(JSON.stringify({{ cancelada: cancelada === p.CANCELADO, feita: feita === p.CANCELADO }}));
+}})();
+"""
+    saida = subprocess.run(["node", "-e", codigo], capture_output=True, text=True)
+    assert saida.returncode == 0, saida.stderr
+    assert saida.stdout.strip() == '{"cancelada":true,"feita":false}'
+
+
+def test_sair_encerra_a_sessao_no_servidor():
+    assert "/v1/auth/logout" in JS.read_text(encoding="utf-8")

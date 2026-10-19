@@ -238,7 +238,9 @@ def write_config(key: str, body: dict, request: Request, admin: AuthUser = Depen
     runtime = get_runtime(request)
 
     def work(unit):
-        cfg = parse_config(key, body)
+        cfg = parse_config(key, body)            # chave que não existe: 404 antes de tudo
+        if not body:
+            raise ValueError("O corpo está vazio: mande todos os campos da chave (copie do que o painel mostra).")
         save_config(unit.session, key, cfg)
         log_admin_action(unit.session, admin.user_id, "config.save", "config", key, "", unit.now)
 

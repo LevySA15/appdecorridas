@@ -12,6 +12,8 @@ function raw(html) { return html; }
 function money(centavos) { return "R$ " + (Number(centavos || 0) / 100).toFixed(2).replace(".", ","); }
 function when(segundos) { return segundos ? new Date(segundos * 1000).toLocaleString("pt-BR") : "–"; }
 
+const CANCELADO = Symbol("cancelado");   // o administrador desistiu no prompt: nada foi feito
+
 const TELAS = {
   cadastros: "Cadastros", corridas: "Corridas", passageiros: "Passageiros", dinheiro: "Dinheiro",
   devedores: "Devedores", recursos: "Recursos", alertas: "Alertas", parametros: "Parâmetros", registro: "Registro",
@@ -21,7 +23,12 @@ let filtros = { cadastros: "pending", corridas: "", passageiros: "" };
 
 function el(id) { return document.getElementById(id); }
 function aviso(texto, ok) { el("aviso").textContent = texto || ""; el("aviso").className = ok ? "ok" : ""; }
-function sair() { sessionStorage.removeItem(TOKEN_KEY); mostrarEntrada(); }
+function sair() {
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  if (token) fetch("/v1/auth/logout", { method: "POST", headers: { Authorization: "Bearer " + token } }).catch(() => {});   // encerra a sessão no servidor
+  sessionStorage.removeItem(TOKEN_KEY);
+  mostrarEntrada();
+}
 
 async function api(caminho, opcoes = {}) {
   const cabecalhos = { "Content-Type": "application/json" };
@@ -129,14 +136,14 @@ const VISOES = {
     return `<div class="cartoes">${raw([
       cartao("Receita da empresa", money(d.company_cents)), cartao("Com o provedor de pagamento", money(d.provider_cents)),
       cartao("Ganho dos motoqueiros", money(d.riders_cents)), cartao("Saldos dos passageiros", money(d.passenger_balances_cents)),
-      cartao("Taxas que motoqueiros devem", money(d.rider_debts_cents)), cartao("Corridas não pagas", money(d.passenger_unpaid_cents)),
-      cartao("Taxas de cancelamento pendentes", money(d.pending_fees_cents)), cartao("Livro-caixa fecha", d.ledger_balanced ? "sim" : "NÃO"),
+      cartao("Taxas que motoqueiros devem", money(d.rider_debts_cents)), cartao("Passageiros devem (corridas e taxas)", money(d.passenger_unpaid_cents)),
+      cartao("...das quais taxas de cancelamento", money(d.pending_fees_cents)), cartao("Livro-caixa fecha", d.ledger_balanced ? "sim" : "NÃO"),
     ].join(""))}</div><h3>Corridas por estado</h3><pre>${esc(JSON.stringify(d.rides_by_state, null, 2))}</pre>`;
   },
   async devedores() {
     const d = await api("/v1/admin/debtors");
     return "<h3>Motoqueiros</h3>" + tabela(["Nome", "Telefone", "Deve", "Reservado"], d.riders.map((r) => [esc(r.name), esc(r.phone), esc(money(r.cash_debt_cents)), esc(money(r.debt_reserved_cents))])) +
-      "<h3>Passageiros</h3>" + tabela(["Nome", "Telefone", "Deve", "Taxa de cancelamento"], d.passengers.map((p) => [esc(p.name), esc(p.phone), esc(money(p.unpaid_cents)), esc(money(p.pending_fee_cents))]));
+      "<h3>Passageiros</h3>" + tabela(["Nome", "Telefone", "Deve (total)", "...das quais taxa de cancelamento"], d.passengers.map((p) => [esc(p.name), esc(p.phone), esc(money(p.unpaid_cents)), esc(money(p.pending_fee_cents))]));
   },
   async recursos() {
     const lista = await api("/v1/admin/appeals?status=open&limit=100");
@@ -184,14 +191,14 @@ async function abrirDocumento(id, tipo) {
 }
 const ACOES = {
   "rider-approve": (id) => api("/v1/admin/riders/" + encodeURIComponent(id) + "/approve", { method: "POST" }),
-  "rider-reject": (id) => { const m = perguntar("Motivo da recusa:"); return m ? api("/v1/admin/riders/" + encodeURIComponent(id) + "/reject", { method: "POST", json: { reason: m } }) : null; },
-  "rider-block": (id) => { const m = perguntar("Motivo do bloqueio:"); return m ? api("/v1/admin/riders/" + encodeURIComponent(id) + "/block", { method: "POST", json: { reason: m } }) : null; },
+  "rider-reject": (id) => { const m = perguntar("Motivo da recusa:"); return m ? api("/v1/admin/riders/" + encodeURIComponent(id) + "/reject", { method: "POST", json: { reason: m } }) : CANCELADO; },
+  "rider-block": (id) => { const m = perguntar("Motivo do bloqueio:"); return m ? api("/v1/admin/riders/" + encodeURIComponent(id) + "/block", { method: "POST", json: { reason: m } }) : CANCELADO; },
   "rider-unblock": (id) => api("/v1/admin/riders/" + encodeURIComponent(id) + "/unblock", { method: "POST" }),
-  "passenger-block": (id) => { const m = perguntar("Motivo do bloqueio:"); return m ? api("/v1/admin/passengers/" + encodeURIComponent(id) + "/block", { method: "POST", json: { reason: m } }) : null; },
+  "passenger-block": (id) => { const m = perguntar("Motivo do bloqueio:"); return m ? api("/v1/admin/passengers/" + encodeURIComponent(id) + "/block", { method: "POST", json: { reason: m } }) : CANCELADO; },
   "passenger-unblock": (id) => api("/v1/admin/passengers/" + encodeURIComponent(id) + "/unblock", { method: "POST" }),
-  "appeal-accept": (id) => { const n = perguntar("Nota (pode ficar vazia):"); return n === null ? null : api("/v1/admin/appeals/" + encodeURIComponent(id) + "/decide", { method: "POST", json: { decision: "accept", note: n } }); },
-  "appeal-reject": (id) => { const n = perguntar("Nota (pode ficar vazia):"); return n === null ? null : api("/v1/admin/appeals/" + encodeURIComponent(id) + "/decide", { method: "POST", json: { decision: "reject", note: n } }); },
-  "alert-resolve": (id) => { const n = perguntar("Nota (pode ficar vazia):"); return n === null ? null : api("/v1/admin/safety-alerts/" + encodeURIComponent(id) + "/resolve", { method: "POST", json: { note: n } }); },
+  "appeal-accept": (id) => { const n = perguntar("Nota (pode ficar vazia):"); return n === null ? CANCELADO : api("/v1/admin/appeals/" + encodeURIComponent(id) + "/decide", { method: "POST", json: { decision: "accept", note: n } }); },
+  "appeal-reject": (id) => { const n = perguntar("Nota (pode ficar vazia):"); return n === null ? CANCELADO : api("/v1/admin/appeals/" + encodeURIComponent(id) + "/decide", { method: "POST", json: { decision: "reject", note: n } }); },
+  "alert-resolve": (id) => { const n = perguntar("Nota (pode ficar vazia):"); return n === null ? CANCELADO : api("/v1/admin/safety-alerts/" + encodeURIComponent(id) + "/resolve", { method: "POST", json: { note: n } }); },
   "config-save": (chave) => {
     const campo = document.querySelector('textarea[data-chave="' + chave + '"]');
     let corpo;
@@ -213,7 +220,7 @@ async function aoClicar(evento) {
       return;
     }
     const feito = await ACOES[act](id);
-    if (feito === null && !["rider-approve", "rider-unblock", "passenger-unblock", "config-save"].includes(act)) return;
+    if (feito === CANCELADO) return;
     aviso("Feito.", true);
     await mostrar(telaAtual);
   } catch (erro) { aviso(erro.message); }
@@ -242,4 +249,4 @@ function comecar() {
 }
 
 if (typeof document !== "undefined") comecar();
-if (typeof module !== "undefined") module.exports = { esc, attr, money, when };
+if (typeof module !== "undefined") module.exports = { esc, attr, money, when, ACOES, CANCELADO };

@@ -135,3 +135,45 @@ def test_registro_lista_mais_novo_primeiro_com_nome_do_administrador(client, pax
     assert lista[0]["admin_name"] == "Levy" and lista[0]["at"] > lista[1]["at"]
     assert set(lista[0]) == {"id", "admin_id", "admin_name", "action", "target_type", "target_id", "detail", "at"}
     assert len(client.get("/v1/admin/actions", params={"limit": 1}, headers=admin.headers).json()) == 1
+
+
+@pytest.mark.parametrize(
+    "chave, mudar",
+    [
+        ("pricing", {"base_fare_cents": "3,00"}),
+        ("pricing", {"per_km_cents": -150}),
+        ("pricing", {"min_price_cents": 0}),
+        ("pricing", {"factor_min": 2.0, "factor_max": 1.0}),
+        ("dispatch", {"offer_timeout_s": 0}),
+        ("dispatch", {"max_candidates_routed": "3"}),
+        ("safety", {"stopped_after_s": -1}),
+        ("safety", {"no_signal_short_s": 300, "no_signal_mid_s": 240}),
+        ("auth", {"otp_digits": "6"}),
+        ("auth", {"otp_max_attempts": 0}),
+        ("auth", {"otp_ttl_s": -1}),
+        ("auth", {"session_days": 0}),
+        ("rides", {"pix_window_s": True}),
+        ("rides", {"max_trip_m": 50}),
+        ("balance", {"topup_enabled": "sim"}),
+        ("fees", {"tiers": [{"from_ride": 1, "to_ride": None, "fee_cents": "100"}]}),
+    ],
+)
+def test_valor_de_tipo_errado_ou_fora_da_faixa_nunca_e_gravado(client, admin, session, chave, mudar):
+    atual = client.get("/v1/admin/config", headers=admin.headers).json()
+    resposta = client.put(f"/v1/admin/config/{chave}", json=atual[chave] | mudar, headers=admin.headers)
+    assert resposta.status_code == 422, resposta.text
+    assert resposta.json()["error"]["code"] == "invalid" and resposta.json()["error"]["message"]
+    assert client.get("/v1/admin/config", headers=admin.headers).json() == atual
+    assert acoes(session) == []
+
+
+@pytest.mark.parametrize("chave", ["pricing", "fees", "rides", "dispatch", "safety", "auth", "balance"])
+def test_corpo_vazio_nao_grava_os_padroes_sem_querer(client, admin, session, chave):
+    assert client.put(f"/v1/admin/config/{chave}", json={}, headers=admin.headers).status_code == 422
+    assert acoes(session) == []
+
+
+def test_parametro_certo_continua_sendo_gravado_apos_as_validacoes_novas(client, admin):
+    atual = client.get("/v1/admin/config", headers=admin.headers).json()
+    for chave, valor in atual.items():
+        assert client.put(f"/v1/admin/config/{chave}", json=valor, headers=admin.headers).status_code == 204, chave
