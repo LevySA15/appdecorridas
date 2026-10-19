@@ -82,6 +82,7 @@ def test_aceite_sem_posicao_da_moto_guarda_nada(session, positions, w):
 def test_corrida_da_fila_comeca_a_aproximacao_ao_ser_promovida(session, positions, w):
     _com_corrida_na_fila(session, positions, w)
     assert repo.get_ride(session, "ride-1").approach_start_m is None        # na fila ainda não começou a vir
+    positions.update("r1", pt(150, 0), AGORA + 399)                         # a moto manda posição até o fim da corrida
     w.trips.complete_trip(session, "r1", "ride-0", AGORA + 400)
     assert repo.get_ride(session, "ride-1").approach_start_m == pytest.approx(150, abs=5)
 
@@ -190,6 +191,7 @@ def test_taxa_igual_ao_preco_nao_chama_o_provedor_e_o_livro_fecha(session, posit
     w.dispatch.offer_next(session, "ride-1", AGORA)
     w.dispatch.accept_offer(session, "r1", "ride-1", AGORA + 4)
     pagar(session, w)
+    positions.update("r1", pt(0, 0), AGORA + 300)                                       # a moto continua mandando posição
     resultado = w.trips.cancel_by_passenger(session, "p1", "ride-1", FORA_DA_JANELA)    # moto no ponto: R$ 5,00
     assert (resultado.fee_cents, resultado.retained_cents, resultado.refund_to) == (500, 500, "pix")
     charge_id = repo.get_current_charge_id(session, "ride-1")
@@ -236,3 +238,59 @@ def test_cancelar_na_fila_e_sempre_gratis(session, positions, w):
     _com_corrida_na_fila(session, positions, w)
     assert w.trips.cancel_fee_preview(session, "ride-1", AGORA + 10_000) == 0
     assert w.trips.cancel_by_passenger(session, "p1", "ride-1", AGORA + 10_000).fee_cents == 0
+
+
+def test_pix_que_chega_depois_do_cancelamento_tardio_paga_a_taxa_pendente_e_devolve_so_o_resto(
+    session, positions, w, provider, events
+):
+    # O passageiro paga o Pix no banco e cancela quase junto; o cancelamento é processado primeiro. A taxa fica
+    # pendente (o Pix ainda não tinha chegado) e, quando o Pix chega, ele cobre a taxa em vez de ser devolvido inteiro.
+    add_passenger(session)
+    make_online_rider(session, positions, 1, pt(2000, 0), now=AGORA)
+    aceitar(session, positions, w)
+    positions.update("r1", pt(1000, 0), AGORA + 300)                         # progresso 0,5: taxa de R$ 4,00
+    resultado = w.trips.cancel_by_passenger(session, "p1", "ride-1", FORA_DA_JANELA)
+    assert (resultado.fee_cents, resultado.pending_cents, resultado.refund_needed) == (400, 400, False)
+    assert repo.get_passenger_account(session, "p1").unpaid_cents == 400
+    charge_id = repo.get_current_charge_id(session, "ride-1")
+    events.drain()
+    assert w.payments.on_provider_event(session, provider.mark_paid(charge_id)) == "refunded"
+    assert provider.charges[charge_id].refunded_cents == 300                  # R$ 7,00 pagos menos a taxa de R$ 4,00
+    taxa = repo.get_cancel_fee(session, "ride-1")
+    assert (taxa.pending_cents, taxa.paid_later_cents, taxa.retained_cents) == (0, 400, 0)
+    assert repo.get_passenger_account(session, "p1").unpaid_cents == 0
+    ledger = PgLedger(session)
+    assert ledger.balance("rider:r1") == 400 and ledger.balance(PgLedger.COMPANY) == 0
+    assert ledger.balance(PgLedger.PROVIDER) == -400
+    assert ledger.is_balanced() is True
+    assert passenger_block_reason(session, "p1") is None
+    assert eventos(events, "p1", "fee_paid") == [{"ride_id": "ride-1", "amount_cents": 400, "balance_cents": 0}]
+    assert eventos(events, "p1", "unblocked") == [{"ride_id": "ride-1"}]
+    assert eventos(events, "p1", "payment_refunded")[0]["amount_cents"] == 300
+    assert eventos(events, "r1", "payment_received") == [{"ride_id": "ride-1", "amount_cents": 400, "kind": "cancel_fee"}]
+
+
+def test_pix_atrasado_de_corrida_cancelada_de_graca_continua_sendo_devolvido_inteiro(session, positions, w, provider):
+    add_passenger(session)
+    make_online_rider(session, positions, 1, pt(2000, 0), now=AGORA)
+    aceitar(session, positions, w)
+    w.trips.cancel_by_passenger(session, "p1", "ride-1", ACEITE + 30)       # dentro da janela: sem taxa
+    charge_id = repo.get_current_charge_id(session, "ride-1")
+    assert w.payments.on_provider_event(session, provider.mark_paid(charge_id)) == "refunded"
+    assert provider.charges[charge_id].refunded_cents == 700
+    assert PgLedger(session).balance("rider:r1") == 0
+
+
+def test_posicao_velha_da_moto_cobra_o_minimo(session, positions, w):
+    moto_a(session, positions, w, method=PaymentMethod.CASH)
+    positions.update("r1", pt(500, 0), AGORA + 10)       # andou 75%, mas a última posição é de 295 s atrás
+    assert w.trips.cancel_fee_preview(session, "ride-1", FORA_DA_JANELA) == 300
+    assert w.trips.cancel_by_passenger(session, "p1", "ride-1", FORA_DA_JANELA).fee_cents == 300
+
+
+def test_posicao_recente_continua_valendo_no_limite_de_30_segundos(session, positions, w):
+    moto_a(session, positions, w, method=PaymentMethod.CASH)
+    positions.update("r1", pt(500, 0), FORA_DA_JANELA - 30)
+    assert w.trips.cancel_fee_preview(session, "ride-1", FORA_DA_JANELA) == 450
+    positions.update("r1", pt(500, 0), FORA_DA_JANELA - 31)
+    assert w.trips.cancel_fee_preview(session, "ride-1", FORA_DA_JANELA) == 300

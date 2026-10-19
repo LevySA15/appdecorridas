@@ -18,6 +18,10 @@ class PositionStore(Protocol):
 
     def get(self, rider_id: str) -> GeoPoint | None: ...
 
+    def last_seen(self, rider_id: str) -> float | None:
+        """Quando a moto mandou a última posição, ou None se ela não está (nunca mandou, saiu ou foi limpa)."""
+        ...
+
     def nearby(
         self, center: GeoPoint, radius_m: float, now: float, max_age_s: float = 30.0
     ) -> list[tuple[str, GeoPoint]]: ...
@@ -44,6 +48,9 @@ class InMemoryPositionStore:
 
     def get(self, rider_id: str) -> GeoPoint | None:
         return self._points.get(rider_id)
+
+    def last_seen(self, rider_id: str) -> float | None:
+        return self._seen.get(rider_id)
 
     def prune(self, now: float, max_age_s: float) -> int:
         gone = [rider_id for rider_id, seen in self._seen.items() if now - seen > max_age_s]
@@ -109,6 +116,9 @@ class RedisPositionStore:
         if pos is None:
             return None
         return GeoPoint(lat=pos[1], lng=pos[0])
+
+    def last_seen(self, rider_id: str) -> float | None:
+        return self.r.zscore(self.SEEN, rider_id)
 
     def nearby(
         self, center: GeoPoint, radius_m: float, now: float, max_age_s: float = 30.0

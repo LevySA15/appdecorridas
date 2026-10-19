@@ -28,10 +28,13 @@ from app.services.payments import PaymentService
 _MAX_PLAUSIBLE_SPEED_MPS = 15.0
 
 
-def distance_to_pickup_m(session: Session, positions: PositionStore, ride_id: str, rider_id: str) -> float | None:
-    """Distância em linha reta da moto (última posição conhecida) ao ponto de embarque; `None` sem dado."""
+def distance_to_pickup_m(
+    session: Session, positions: PositionStore, ride_id: str, rider_id: str, now: float, max_age_s: float
+) -> float | None:
+    """Distância em linha reta da moto ao ponto de embarque; `None` sem posição ou com posição mais velha que `max_age_s`."""
+    seen = positions.last_seen(rider_id)
     point = positions.get(rider_id)
-    if point is None:
+    if point is None or seen is None or now - seen > max_age_s:
         return None
     try:
         pickup = repo.get_ride_details(session, ride_id).pickup
@@ -175,7 +178,9 @@ class DispatchService:
         accept(ride, rider_id, now, rider_busy=busy)
         ride.fee_cents = fee
         if not busy:        # a moto começa a vir agora; na fila isso só acontece quando ela for promovida
-            ride.approach_start_m = distance_to_pickup_m(session, self.positions, ride_id, rider_id)
+            ride.approach_start_m = distance_to_pickup_m(
+                session, self.positions, ride_id, rider_id, now, self.cfg.dispatch.position_max_age_s
+            )
         repo.save_ride(session, ride)
         offer.status = "accepted"
         session.flush()

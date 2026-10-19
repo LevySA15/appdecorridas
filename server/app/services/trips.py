@@ -156,7 +156,9 @@ class TripService:
             return
         promote_from_queue(queued, now)
         if self.positions is not None:      # a moto começa a vir agora: guarda de onde
-            queued.approach_start_m = distance_to_pickup_m(session, self.positions, queued_id, rider_id)
+            queued.approach_start_m = distance_to_pickup_m(
+                session, self.positions, queued_id, rider_id, now, self.cfg.dispatch.position_max_age_s
+            )
         repo.save_ride(session, queued)
         repo.log_ride_event(session, queued_id, "promoted", {}, now)
         self.events.add(queued.passenger_id, "rider_on_the_way", {"ride_id": queued_id})
@@ -164,13 +166,14 @@ class TripService:
 
     # --- cancelamento ---------------------------------------------------------------------------
 
-    def _progress(self, session: Session, ride: Ride) -> float | None:
-        """Quanto a moto já andou até o ponto de embarque; `None` se não há posição conhecida."""
+    def _progress(self, session: Session, ride: Ride, now: float) -> float | None:
+        """Quanto a moto já andou até o ponto de embarque; `None` sem posição ou com posição velha demais."""
         if self.positions is None or ride.rider_id is None:
             return None
-        return approach_progress(
-            ride.approach_start_m, distance_to_pickup_m(session, self.positions, ride.ride_id, ride.rider_id)
+        distance = distance_to_pickup_m(
+            session, self.positions, ride.ride_id, ride.rider_id, now, self.cfg.dispatch.position_max_age_s
         )
+        return approach_progress(ride.approach_start_m, distance)
 
     def cancel_fee_preview(self, session: Session, ride_id: str, now: float) -> int:
         """A taxa que o passageiro pagaria se cancelasse agora (0 dentro da janela grátis ou fora de "a caminho")."""
@@ -179,7 +182,9 @@ class TripService:
             return 0
         if now - ride.en_route_since <= self.cfg.rides.free_cancel_after_accept_s:
             return 0
-        return late_cancel_fee_cents(1.0 if ride.state is RideState.ARRIVED else self._progress(session, ride), self.cfg.rides)
+        return late_cancel_fee_cents(
+            1.0 if ride.state is RideState.ARRIVED else self._progress(session, ride, now), self.cfg.rides
+        )
 
     def cancel_by_passenger(self, session: Session, passenger_id: str, ride_id: str, now: float) -> CancelOutcome:
         ride = repo.get_ride(session, ride_id, for_update=True)
@@ -188,7 +193,7 @@ class TripService:
         state_before, rider_id = ride.state, ride.rider_id
         if rider_id is not None and state_before in (RideState.ACCEPTED, RideState.ARRIVED):
             self.lock_queued_ride(session, rider_id)
-        result = self.payments.cancel_ride(session, ride_id, now, progress=self._progress(session, ride))
+        result = self.payments.cancel_ride(session, ride_id, now, progress=self._progress(session, ride, now))
         repo.log_ride_event(
             session, ride_id, "cancelled",
             {"by": "passenger", "fee_cents": result.fee_cents, "refund": result.refund_needed},

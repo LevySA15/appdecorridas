@@ -180,11 +180,15 @@ class PaymentService:
                 self._emit(ride.passenger_id, "pix_confirmed", {"ride_id": ride.ride_id, "amount_cents": charge.amount_cents})
                 self._emit(ride.rider_id, "payment_received", {"ride_id": ride.ride_id, "late": False})
         if refund_needed:
-            destination = self._refund(session, ride.passenger_id, charge, acc, ledger)
-            refunded = {"ride_id": ride.ride_id, "amount_cents": charge.amount_cents, "to": destination}
-            if destination == "balance":
-                refunded["balance_cents"] = repo.get_passenger_account(session, ride.passenger_id).balance_cents
-            self._emit(ride.passenger_id, "payment_refunded", refunded)
+            keep = self._retain_for_pending_fee(session, ride, charge)
+            destination = self._refund(session, ride.passenger_id, charge, acc, ledger, keep_cents=keep)
+            if keep:
+                self._announce_fee_paid(session, ride, keep)
+            if charge.amount_cents - keep > 0:
+                refunded = {"ride_id": ride.ride_id, "amount_cents": charge.amount_cents - keep, "to": destination}
+                if destination == "balance":
+                    refunded["balance_cents"] = repo.get_passenger_account(session, ride.passenger_id).balance_cents
+                self._emit(ride.passenger_id, "payment_refunded", refunded)
             outcome = "refunded"
         else:
             outcome = "applied"
@@ -192,6 +196,42 @@ class PaymentService:
         repo.save_ride(session, ride)
         repo.save_rider_account(session, acc)
         return outcome
+
+    def _retain_for_pending_fee(self, session: Session, ride: Ride, charge: PixCharge) -> int:
+        """Pix que chega depois de a corrida ser cancelada com taxa pendente: o Pix cobre a taxa e só o resto volta.
+
+        Sem isto, quem pagou o Pix e cancelou quase junto recebia tudo de volta e continuava devendo a taxa.
+        Devolve quanto fica retido para o motoqueiro (0 se não há taxa pendente).
+        """
+        if ride.state is not RideState.CANCELLED or charge.purpose != "ride":
+            return 0
+        passenger = repo.get_passenger_account(session, ride.passenger_id, for_update=True)
+        try:
+            fee = repo.get_cancel_fee(session, ride.ride_id, for_update=True)
+        except LookupError:
+            return 0
+        if fee.pending_cents <= 0:
+            return 0
+        keep = min(fee.pending_cents, charge.amount_cents)
+        apply_pending_payment(fee, keep)
+        passenger.unpaid_cents = max(0, passenger.unpaid_cents - keep)
+        repo.save_passenger_account(session, passenger)
+        repo.save_cancel_fee(session, fee)
+        return keep
+
+    def _announce_fee_paid(self, session: Session, ride: Ride, amount_cents: int) -> None:
+        """Avisa que a taxa pendente foi paga (e que o passageiro foi liberado, se era só isso que ele devia)."""
+        passenger = repo.get_passenger_account(session, ride.passenger_id)
+        self._emit(
+            ride.passenger_id, "fee_paid",
+            {"ride_id": ride.ride_id, "amount_cents": amount_cents, "balance_cents": passenger.balance_cents},
+        )
+        if passenger.unpaid_cents == 0:
+            self._emit(ride.passenger_id, "unblocked", {"ride_id": ride.ride_id})
+        self._emit(
+            ride.rider_id, "payment_received",
+            {"ride_id": ride.ride_id, "amount_cents": amount_cents, "kind": "cancel_fee"},
+        )
 
     def _apply_end_payment(
         self, session: Session, ride: Ride, acc: RiderAccount, charge: PixCharge, is_current: bool

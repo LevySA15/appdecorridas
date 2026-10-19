@@ -33,6 +33,22 @@ def test_posicao_desconhecida_e_none(store):
     assert store.get("ninguem") is None
 
 
+def test_ultimo_sinal_e_o_instante_da_ultima_posicao_e_some_com_a_moto(store):
+    assert store.last_seen("r1") is None                    # nunca mandou
+    store.update("r1", pt(100, 0), now=100)
+    store.update("r1", pt(110, 0), now=130)
+    assert store.last_seen("r1") == 130
+    store.remove("r1")
+    assert store.last_seen("r1") is None
+
+
+def test_ultimo_sinal_some_quando_a_limpeza_apaga_a_moto(store):
+    store.update("r1", pt(100, 0), now=100)
+    store.update("r2", pt(100, 0), now=900)
+    assert store.prune(now=1000, max_age_s=600) == 1
+    assert store.last_seen("r1") is None and store.last_seen("r2") == 900
+
+
 def test_busca_por_perto_ordena_pela_distancia(store):
     store.update("longe", pt(5000, 0), now=100)
     store.update("r2", pt(300, 0), now=100)
