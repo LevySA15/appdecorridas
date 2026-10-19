@@ -82,6 +82,21 @@ def _validate(key: str, cfg) -> None:
         validate_balance_config(cfg)
 
 
+def parse_config(key: str, data: dict):
+    """Monta e confere uma configuração vinda de fora (o painel). Erro com frase em português."""
+    if key not in _TYPES:
+        raise LookupError(f"chave de configuração desconhecida: {key}")
+    try:
+        return _from_json(key, data)
+    except ValueError as exc:
+        raise ValueError(str(exc).replace(" no banco", "")) from exc
+
+
+def all_configs(session: Session) -> dict:
+    """Todas as chaves de configuração como dicionários (os padrões onde nada foi gravado)."""
+    return {key: asdict(load_config(session, key)) for key in _TYPES}
+
+
 def save_config(session: Session, key: str, cfg) -> None:
     cls = _check_key(key)
     if not isinstance(cfg, cls):

@@ -203,6 +203,21 @@ class CancelFeeRow(Base):
     created_at: Mapped[float] = mapped_column(Float(53))
 
 
+class AdminActionRow(Base):
+    """O que cada administrador fez no painel (só ações de escrita)."""
+
+    __tablename__ = "admin_actions"
+    __table_args__ = (Index("ix_admin_actions_created", "created_at"), Index("ix_admin_actions_admin", "admin_id"))
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    admin_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    action: Mapped[str] = mapped_column(String(40))
+    target_type: Mapped[str] = mapped_column(String(16))
+    target_id: Mapped[str] = mapped_column(String(60))
+    detail: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    created_at: Mapped[float] = mapped_column(Float(53))
+
+
 class LedgerRow(Base):
     __tablename__ = "ledger_entries"
     __table_args__ = (

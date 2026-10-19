@@ -8,6 +8,9 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import admin_user, get_runtime
 from app.db import queries
+from app.db.config_store import all_configs, parse_config, save_config
+from app.db.models import UserRow
+from app.services.admin_log import list_admin_actions, log_admin_action
 from app.services.auth import AuthUser
 
 router = APIRouter(prefix="/v1/admin", tags=["administrador"])
@@ -50,25 +53,41 @@ def list_riders(
 
 @router.post("/riders/{rider_id}/approve", status_code=204)
 def approve(rider_id: str, request: Request, admin: AuthUser = Depends(admin_user)) -> Response:
-    get_runtime(request).run(lambda unit: unit.riders.approve(unit.session, rider_id, unit.now))
+    def work(unit):
+        unit.riders.approve(unit.session, rider_id, unit.now)
+        log_admin_action(unit.session, admin.user_id, "rider.approve", "rider", rider_id, "", unit.now)
+
+    get_runtime(request).run(work)
     return Response(status_code=204)
 
 
 @router.post("/riders/{rider_id}/reject", status_code=204)
 def reject(rider_id: str, body: ReasonIn, request: Request, admin: AuthUser = Depends(admin_user)) -> Response:
-    get_runtime(request).run(lambda unit: unit.riders.reject(unit.session, rider_id, body.reason))
+    def work(unit):
+        unit.riders.reject(unit.session, rider_id, body.reason)
+        log_admin_action(unit.session, admin.user_id, "rider.reject", "rider", rider_id, body.reason, unit.now)
+
+    get_runtime(request).run(work)
     return Response(status_code=204)
 
 
 @router.post("/riders/{rider_id}/block", status_code=204)
 def block(rider_id: str, body: ReasonIn, request: Request, admin: AuthUser = Depends(admin_user)) -> Response:
-    get_runtime(request).run(lambda unit: unit.riders.block(unit.session, rider_id, body.reason))
+    def work(unit):
+        unit.riders.block(unit.session, rider_id, body.reason)
+        log_admin_action(unit.session, admin.user_id, "rider.block", "rider", rider_id, body.reason, unit.now)
+
+    get_runtime(request).run(work)
     return Response(status_code=204)
 
 
 @router.post("/riders/{rider_id}/unblock", status_code=204)
 def unblock(rider_id: str, request: Request, admin: AuthUser = Depends(admin_user)) -> Response:
-    get_runtime(request).run(lambda unit: unit.riders.unblock(unit.session, rider_id))
+    def work(unit):
+        unit.riders.unblock(unit.session, rider_id)
+        log_admin_action(unit.session, admin.user_id, "rider.unblock", "rider", rider_id, "", unit.now)
+
+    get_runtime(request).run(work)
     return Response(status_code=204)
 
 
@@ -96,9 +115,11 @@ def list_safety_alerts(
 def resolve_safety_alert(
     alert_id: int, body: NoteIn, request: Request, admin: AuthUser = Depends(admin_user)
 ) -> Response:
-    get_runtime(request).run(
-        lambda unit: unit.safety.resolve(unit.session, alert_id, admin.user_id, body.note, unit.now)
-    )
+    def work(unit):
+        unit.safety.resolve(unit.session, alert_id, admin.user_id, body.note, unit.now)
+        log_admin_action(unit.session, admin.user_id, "alert.resolve", "alert", str(alert_id), body.note, unit.now)
+
+    get_runtime(request).run(work)
     return Response(status_code=204)
 
 
@@ -125,11 +146,11 @@ def list_appeals(
 
 @router.post("/appeals/{ride_id}/decide", status_code=204)
 def decide_appeal(ride_id: str, body: DecisionIn, request: Request, admin: AuthUser = Depends(admin_user)) -> Response:
-    get_runtime(request).run(
-        lambda unit: unit.money.decide_appeal(
-            unit.session, admin.user_id, ride_id, body.decision == "accept", body.note, unit.now
-        )
-    )
+    def work(unit):
+        unit.money.decide_appeal(unit.session, admin.user_id, ride_id, body.decision == "accept", body.note, unit.now)
+        log_admin_action(unit.session, admin.user_id, f"appeal.{body.decision}", "appeal", ride_id, body.note, unit.now)
+
+    get_runtime(request).run(work)
     return Response(status_code=204)
 
 
@@ -177,3 +198,61 @@ def debtors(request: Request, admin: AuthUser = Depends(admin_user)) -> dict:
 @router.get("/money")
 def money(request: Request, admin: AuthUser = Depends(admin_user)) -> dict:
     return get_runtime(request).run(lambda unit: queries.money_summary(unit.session))
+
+
+# --- ações do painel e registro ---------------------------------------------------------------------------
+
+
+def _set_passenger_blocked(unit, admin_id: str, passenger_id: str, blocked: bool, reason: str) -> None:
+    user = unit.session.get(UserRow, passenger_id)
+    if user is None or user.role != "passenger":
+        raise LookupError(f"passageiro {passenger_id} não encontrado")
+    user.is_blocked = blocked
+    unit.session.flush()
+    action = "passenger.block" if blocked else "passenger.unblock"
+    log_admin_action(unit.session, admin_id, action, "passenger", passenger_id, reason, unit.now)
+
+
+@router.post("/passengers/{passenger_id}/block", status_code=204)
+def block_passenger(
+    passenger_id: str, body: ReasonIn, request: Request, admin: AuthUser = Depends(admin_user)
+) -> Response:
+    get_runtime(request).run(lambda unit: _set_passenger_blocked(unit, admin.user_id, passenger_id, True, body.reason))
+    return Response(status_code=204)
+
+
+@router.post("/passengers/{passenger_id}/unblock", status_code=204)
+def unblock_passenger(passenger_id: str, request: Request, admin: AuthUser = Depends(admin_user)) -> Response:
+    get_runtime(request).run(lambda unit: _set_passenger_blocked(unit, admin.user_id, passenger_id, False, ""))
+    return Response(status_code=204)
+
+
+@router.get("/config")
+def read_config(request: Request, admin: AuthUser = Depends(admin_user)) -> dict:
+    return get_runtime(request).run(lambda unit: all_configs(unit.session))
+
+
+@router.put("/config/{key}", status_code=204)
+def write_config(key: str, body: dict, request: Request, admin: AuthUser = Depends(admin_user)) -> Response:
+    """Grava uma chave de parâmetros. Vale na hora neste processo (a cópia em memória é descartada)."""
+    runtime = get_runtime(request)
+
+    def work(unit):
+        cfg = parse_config(key, body)
+        save_config(unit.session, key, cfg)
+        log_admin_action(unit.session, admin.user_id, "config.save", "config", key, "", unit.now)
+
+    runtime.run(work)
+    runtime._config = None
+    return Response(status_code=204)
+
+
+@router.get("/actions")
+def list_actions(
+    request: Request,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: AuthUser = Depends(admin_user),
+) -> list[dict]:
+    items = get_runtime(request).run(lambda unit: list_admin_actions(unit.session, limit, offset))
+    return [i.__dict__ for i in items]
