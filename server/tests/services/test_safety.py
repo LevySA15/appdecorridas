@@ -2,9 +2,10 @@ import pytest
 from sqlalchemy import select
 
 from app.adapters.fake_notifier import FakeContactNotifier
+from app.db import queries
 from app.db import repositories as repo
 from app.db.config_store import AppConfig
-from app.db.models import RideRow, SafetyAlertRow, UserRow
+from app.db.models import RideRow, RiderProfileRow, SafetyAlertRow, UserRow
 from app.domain.config import SafetyConfig
 from app.domain.geo import GeoPoint
 from app.domain.rides import InvalidTransition
@@ -268,3 +269,103 @@ def test_sos_sem_contato_e_depois_do_cadastro_do_contato_avisa_na_segunda_vez(sa
     segundo = safety.sos(session, "p1", "ride-1", AGORA + 30)
     assert (segundo.repeated, segundo.contact_registered, segundo.contact_notified) == (True, True, True)
     assert len(notifier.sent) == 1
+
+
+# --- muito tempo sem sinal (plano 4C) -------------------------------------------------------------------------
+
+
+def iniciada(session, em=AGORA):
+    repo.log_ride_event(session, "ride-1", "started", {}, em)
+
+
+def sinal(session, safety, agora):
+    [corrida] = queries.in_progress_rides_for_signal(session)
+    return safety.check_signal(session, corrida, agora)
+
+
+def test_sem_sinal_alem_do_limite_alerta_passageiro_contato_e_administradores(
+    safety, session, mundo, positions, notifier, events
+):
+    iniciada(session)
+    com_contato(session)
+    positions.update("r1", pt(100, 0), AGORA)
+    assert sinal(session, safety, AGORA + 119) is None
+    alerta = sinal(session, safety, AGORA + 121)
+    assert (alerta.kind, alerta.status, alerta.ride_id) == ("no_signal", "open", "ride-1")
+    assert (alerta.lat, alerta.lng) == pytest.approx((pt(100, 0).lat, pt(100, 0).lng))
+    pergunta = next(e for e in events.events if e.type == "safety_check")
+    assert pergunta.user_id == "p1" and pergunta.payload == {"ride_id": "ride-1", "alert_id": alerta.id, "kind": "no_signal"}
+    for admin in ("adm-1", "adm-2"):
+        aviso = next(e for e in events.events if e.user_id == admin)
+        assert aviso.type == "safety_alert" and aviso.payload["kind"] == "no_signal" and aviso.payload["alert_id"] == alerta.id
+    [(telefone, texto)] = notifier.sent
+    assert telefone == "+5575988887777" and "Perdemos o sinal" in texto and "AAA1A11" in texto and "maps.google.com" in texto
+    assert alerta.note == "contato avisado"
+    assert "no_signal" in [tipo for tipo, _ in repo.ride_events(session, "ride-1")]
+
+
+def test_posicao_recente_nao_alerta(safety, session, mundo, positions, events):
+    iniciada(session)
+    positions.update("r1", pt(100, 0), AGORA + 100)
+    assert sinal(session, safety, AGORA + 219) is None
+    assert session.execute(select(SafetyAlertRow)).first() is None and events.events == ()
+
+
+def test_corrida_recem_iniciada_sem_posicao_ainda_nao_alerta(safety, session, mundo):
+    iniciada(session)
+    assert sinal(session, safety, AGORA + 119) is None
+    assert sinal(session, safety, AGORA + 121) is not None            # sem posição nenhuma: vale a hora em que começou
+
+
+@pytest.mark.parametrize("estado", ["accepted", "arrived", "completed", "cancelled"])
+def test_corrida_que_nao_esta_em_andamento_nao_alerta(session, mundo, estado):
+    iniciada(session)
+    session.get(RideRow, "ride-1").state = estado
+    session.flush()
+    assert queries.in_progress_rides_for_signal(session) == []
+
+
+@pytest.mark.parametrize("metros, segundos", [(1500, 120), (3001, 240), (10_001, 360)])
+def test_limite_depende_do_tamanho_da_corrida(safety, session, mundo, metros, segundos):
+    iniciada(session)
+    session.get(RideRow, "ride-1").distance_m = metros
+    session.flush()
+    assert sinal(session, safety, AGORA + segundos - 1) is None
+    assert sinal(session, safety, AGORA + segundos + 1) is not None
+
+
+def test_varredura_repetida_nao_cria_alerta_repetido(safety, session, mundo):
+    iniciada(session)
+    assert sinal(session, safety, AGORA + 121) is not None
+    assert sinal(session, safety, AGORA + 124) is None
+    assert session.query(SafetyAlertRow).count() == 1
+
+
+def test_silencio_que_continua_alerta_de_novo_depois_do_cooldown(safety, session, mundo):
+    iniciada(session)
+    assert sinal(session, safety, AGORA + 121) is not None
+    assert sinal(session, safety, AGORA + 121 + 599) is None
+    assert sinal(session, safety, AGORA + 121 + 600) is not None
+    assert session.query(SafetyAlertRow).count() == 2
+
+
+def test_sem_contato_cadastrado_o_alerta_existe_com_a_anotacao(safety, session, mundo, notifier):
+    iniciada(session)
+    assert sinal(session, safety, AGORA + 121).note == "sem contato cadastrado"
+    assert notifier.sent == []
+
+
+def test_envio_ao_contato_que_falha_nao_impede_o_alerta(safety, session, mundo, notifier):
+    iniciada(session)
+    com_contato(session)
+    notifier.fail = True
+    alerta = sinal(session, safety, AGORA + 121)
+    assert alerta is not None and alerta.note == "falha ao avisar o contato"
+
+
+def test_moto_que_ficou_indisponivel_no_meio_da_corrida_continua_sendo_vigiada(safety, session, mundo, positions):
+    iniciada(session)
+    positions.update("r1", pt(100, 0), AGORA)
+    session.get(RiderProfileRow, "r1").online = False
+    positions.remove("r1")                                              # saiu do mapa de propósito
+    assert sinal(session, safety, AGORA + 121) is not None             # cai para a hora em que a corrida começou

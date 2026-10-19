@@ -10,6 +10,7 @@ from app.db.models import (
     CancelFeeRow,
     LedgerRow,
     PassengerProfileRow,
+    RideEventRow,
     RideOfferRow,
     RideRow,
     RiderProfileRow,
@@ -538,3 +539,29 @@ def inconsistent_fee_ids(session: Session) -> list[str]:
         + CancelFeeRow.paid_later_cents + CancelFeeRow.waived_cents
     )
     return list(session.execute(select(CancelFeeRow.ride_id).where(parts != CancelFeeRow.fee_cents)).scalars())
+
+
+@dataclass(frozen=True)
+class SignalRide:
+    ride_id: str
+    rider_id: str
+    passenger_id: str
+    distance_m: int
+    started_at: float | None
+
+
+def in_progress_rides_for_signal(session: Session) -> list[SignalRide]:
+    """Corridas com o passageiro na moto, para a varredura de "muito tempo sem sinal"."""
+    started = (
+        select(RideEventRow.ride_id, func.max(RideEventRow.created_at).label("at"))
+        .where(RideEventRow.kind == "started")
+        .group_by(RideEventRow.ride_id)
+        .subquery()
+    )
+    rows = session.execute(
+        select(RideRow.id, RideRow.rider_id, RideRow.passenger_id, RideRow.distance_m, started.c.at)
+        .outerjoin(started, started.c.ride_id == RideRow.id)
+        .where(RideRow.state == RideState.IN_PROGRESS.value, RideRow.rider_id.is_not(None))
+        .order_by(RideRow.id)
+    ).all()
+    return [SignalRide(ride_id, rider_id, passenger_id, distance_m or 0, at) for ride_id, rider_id, passenger_id, distance_m, at in rows]

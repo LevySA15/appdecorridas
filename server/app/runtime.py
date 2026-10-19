@@ -130,6 +130,7 @@ class Runtime:
         payments = PaymentService(self.provider, cfg.fees, cfg.rides, events)
         dispatch = DispatchService(self.positions, self.reservations, self.maps, payments, events, cfg)
         trips = TripService(payments, dispatch, events, cfg, self.positions)
+        safety = SafetyService(self.safety_store, self.positions, self.notifier, events, cfg)
         return Unit(
             session=session, now=self.clock(), cfg=cfg, events=events, positions=self.positions,
             auth=AuthService(self.otp_sender, cfg.auth),
@@ -137,8 +138,8 @@ class Runtime:
             payments=payments, dispatch=dispatch, trips=trips,
             quotes=QuoteService(self.maps, self.positions, self.factors, cfg),
             requests=RideRequestService(dispatch, events, cfg),
-            sweeps=SweepService(payments, dispatch, trips, events, cfg),
-            safety=SafetyService(self.safety_store, self.positions, self.notifier, events, cfg),
+            sweeps=SweepService(payments, dispatch, trips, events, cfg, safety=safety),
+            safety=safety,
             money=PassengerMoneyService(payments, events, cfg),
         )
 

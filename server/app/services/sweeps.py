@@ -21,6 +21,7 @@ from app.domain.rides import arrival_wait_expired, queue_wait_expired
 from app.services.dispatch import DispatchService
 from app.services.events import EventCollector
 from app.services.payments import PaymentService
+from app.services.safety import SafetyService
 from app.services.trips import TripService
 
 
@@ -31,6 +32,7 @@ class SweepReport:
     queue_released: int = 0
     arrival_cancelled: int = 0
     cash_blocked: int = 0
+    no_signal: int = 0
     qr_created: int = 0
     searches_given_up: int = 0
     errors: list[str] = field(default_factory=list)
@@ -44,7 +46,9 @@ class SweepService:
         trips: TripService,
         events: EventCollector,
         cfg: AppConfig | None = None,
+        safety: SafetyService | None = None,
     ) -> None:
+        self.safety = safety
         self.payments = payments
         self.dispatcher = dispatcher
         self.trips = trips
@@ -147,6 +151,11 @@ class SweepService:
         def cash(ride_id: str) -> bool:
             return self.payments.block_unpaid_cash_ride(session, ride_id, now)
 
+        signal_rides = {r.ride_id: r for r in queries.in_progress_rides_for_signal(session)} if self.safety else {}
+
+        def signal(ride_id: str) -> bool:
+            return self.safety.check_signal(session, signal_rides[ride_id], now) is not None
+
         def searching(ride_id: str) -> bool:
             if self.dispatcher.offer_next(session, ride_id, now) is not None:
                 return False
@@ -174,4 +183,5 @@ class SweepService:
         report.searches_given_up = self._each(
             session, report, "procura", queries.searching_ride_ids(session), searching, after_commit
         )
+        report.no_signal = self._each(session, report, "sem sinal", list(signal_rides), signal, after_commit)
         return report

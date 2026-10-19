@@ -278,3 +278,21 @@ def test_corrida_com_erro_nao_impede_as_outras_e_seus_avisos_nao_saem(w, session
     assert repo.get_ride(session, "ride-1").state is RideState.ACCEPTED
     assert repo.get_ride(session, "ride-2").state is RideState.CANCELLED
     assert {e.user_id for e in publicados} == {"p2", "r2"}
+
+
+def test_varredura_cria_o_alerta_de_sem_sinal_e_conta_no_relatorio(w, session, positions, events):
+    from app.adapters.fake_notifier import FakeContactNotifier
+    from app.infra.safety_store import InMemorySafetyStore
+    from app.services.safety import SafetyService
+    from tests.helpers_db import add_in_progress_ride, add_rider
+
+    add_passenger(session)
+    add_rider(session)
+    add_in_progress_ride(session)
+    repo.log_ride_event(session, "ride-1", "started", {}, AGORA)
+    safety = SafetyService(InMemorySafetyStore(), positions, FakeContactNotifier(), events)
+    sweeps = SweepService(w.payments, w.dispatch, w.trips, events, safety=safety)
+    assert sweeps.run(session, AGORA + 100).no_signal == 0
+    assert sweeps.run(session, AGORA + 121).no_signal == 1
+    assert sweeps.run(session, AGORA + 124).no_signal == 0               # a mesma pausa não alerta a cada volta
+    assert [e.type for e in events.events if e.user_id == "p1"] == ["safety_check"]

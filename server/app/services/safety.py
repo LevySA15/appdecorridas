@@ -18,7 +18,7 @@ from app.db.models import SafetyAlertRow, UserRow
 from app.domain.geo import GeoPoint
 from app.domain.notifier import ContactNotifier
 from app.domain.rides import InvalidTransition, RideState
-from app.domain.safety import PositionSample, evaluate
+from app.domain.safety import AlertType, PositionSample, evaluate, no_signal_after_s, signal_gap_s
 from app.infra.redis_store import PositionStore
 from app.infra.safety_store import SafetyStore
 from app.services.events import EventCollector
@@ -111,6 +111,39 @@ class SafetyService:
         session.flush()
         self._notify_admins(session, "safety_ok", {"alert_id": alert_id, "ride_id": ride_id})
 
+    def check_signal(self, session: Session, ride: queries.SignalRide, now: float) -> SafetyAlertRow | None:
+        """A moto de uma corrida em andamento ficou tempo demais sem mandar posição? Avisa o passageiro, o contato de
+        emergência e os administradores (uma vez por silêncio: o mesmo alerta só volta depois do prazo de repetição)."""
+        cfg = self.cfg.safety
+        gap = signal_gap_s(self.positions.last_seen(ride.rider_id), ride.started_at, now)
+        if gap is None or gap < no_signal_after_s(ride.distance_m, cfg):
+            return None
+        if not self.store.claim(f"{ride.ride_id}:{AlertType.NO_SIGNAL.value}", now, cfg.alert_cooldown_s):
+            return None
+        where = self.positions.get(ride.rider_id)
+        alert = SafetyAlertRow(
+            ride_id=ride.ride_id, kind=AlertType.NO_SIGNAL.value, status="open",
+            lat=where.lat if where else None, lng=where.lng if where else None, created_at=now,
+        )
+        session.add(alert)
+        session.flush()
+        repo.log_ride_event(session, ride.ride_id, "no_signal", {"seconds": int(gap)}, now)
+        self.events.add(
+            ride.passenger_id, "safety_check", {"ride_id": ride.ride_id, "alert_id": alert.id, "kind": alert.kind}
+        )
+        self._notify_admins(
+            session, "safety_alert",
+            {"alert_id": alert.id, "ride_id": ride.ride_id, "kind": alert.kind, "lat": alert.lat, "lng": alert.lng},
+        )
+        contact = repo.get_emergency_contact(session, ride.passenger_id)
+        if contact is None:
+            alert.note = "sem contato cadastrado"
+        else:
+            text = self._no_signal_text(session, ride.ride_id, ride.passenger_id, where, gap)
+            self._notify_contact(contact, text, alert, ride.ride_id)
+        session.flush()
+        return alert
+
     # --- SOS ---------------------------------------------------------------------------------------
 
     def sos(self, session: Session, passenger_id: str, ride_id: str, now: float) -> SosResult:
@@ -128,7 +161,7 @@ class SafetyService:
             if previous is not None:
                 notified = previous.note == "contato avisado"
                 if contact is not None and not notified:     # o primeiro aviso falhou ou ainda não havia contato
-                    notified = self._notify_contact(session, ride_id, passenger_id, contact, where, previous)
+                    notified = self._notify_contact(contact, self._sos_text(session, ride_id, passenger_id, where), previous, ride_id)
                     session.flush()
                 return SosResult(previous.id, contact is not None, notified, True)
         alert = SafetyAlertRow(
@@ -144,7 +177,7 @@ class SafetyService:
         if contact is None:
             alert.note = "sem contato cadastrado"
         else:
-            notified = self._notify_contact(session, ride_id, passenger_id, contact, where, alert)
+            notified = self._notify_contact(contact, self._sos_text(session, ride_id, passenger_id, where), alert, ride_id)
         session.flush()
         self.events.add(
             passenger_id, "sos_sent",
@@ -159,16 +192,31 @@ class SafetyService:
         )
         return SosResult(alert.id, contact is not None, notified, False)
 
-    def _notify_contact(self, session, ride_id, passenger_id, contact, where, alert) -> bool:
-        """Avisa o contato e anota o resultado no alerta. O WhatsApp fora do ar não pode impedir o SOS."""
+    def _notify_contact(self, contact, text: str, alert, ride_id: str) -> bool:
+        """Avisa o contato e anota o resultado no alerta. O WhatsApp fora do ar não pode impedir o alerta."""
         try:
-            self.notifier.notify(contact.phone, self._sos_text(session, ride_id, passenger_id, where))
+            self.notifier.notify(contact.phone, text)
         except Exception:
             log.exception("falha ao avisar o contato de emergência da corrida %s", ride_id)
             alert.note = "falha ao avisar o contato"
             return False
         alert.note = "contato avisado"
         return True
+
+    @staticmethod
+    def _no_signal_text(session: Session, ride_id: str, passenger_id: str, where: GeoPoint | None, gap_s: float) -> str:
+        ride = repo.get_ride(session, ride_id)
+        passenger = session.get(UserRow, passenger_id)
+        card = queries.rider_card(session, ride.rider_id)
+        place = (
+            f"Última posição: https://maps.google.com/?q={where.lat:.6f},{where.lng:.6f}"
+            if where else "A posição da moto não está disponível."
+        )
+        minutes = max(1, round(gap_s / 60))
+        return (
+            f"Perdemos o sinal da moto de {passenger.name} há {minutes} minuto(s), no meio da corrida. "
+            f"Moto {card.moto_model}, placa {card.plate}, motoqueiro {card.name}. {place}"
+        )
 
     @staticmethod
     def _sos_text(session: Session, ride_id: str, passenger_id: str, where: GeoPoint | None) -> str:
