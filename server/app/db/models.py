@@ -313,7 +313,7 @@ class RideEventRow(Base):
 class SafetyAlertRow(Base):
     __tablename__ = "safety_alerts"
     __table_args__ = (
-        CheckConstraint("kind IN ('stopped','off_route','sos')", name="alert_kind_valid"),
+        CheckConstraint("kind IN ('stopped','off_route','sos','no_signal')", name="alert_kind_valid"),
         CheckConstraint("status IN ('open','ok','sos','resolved')", name="alert_status_valid"),
         Index("ix_safety_alerts_status", "status"),
         Index("ix_safety_alerts_ride_id", "ride_id"),

@@ -29,3 +29,10 @@ def test_tipo_e_situacao_do_alerta_so_aceitam_os_valores_conhecidos(session, cam
     with pytest.raises(IntegrityError):
         session.add(SafetyAlertRow(**dados))
         session.flush()
+
+
+def test_alerta_de_sem_sinal_e_aceito_pelo_banco(session):
+    _corrida(session)
+    session.add(SafetyAlertRow(ride_id="ride-1", kind="no_signal", created_at=1.0))
+    session.flush()
+    assert session.query(SafetyAlertRow).one().kind == "no_signal"
