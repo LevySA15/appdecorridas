@@ -12,7 +12,9 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from app.db import queries
 from app.db import repositories as repo
+from app.db.models import RiderProfileRow
 from app.db.pg_ledger import PgLedger
 from app.domain.balance import (
     CancelFee,
@@ -23,7 +25,7 @@ from app.domain.balance import (
     spend_up_to,
 )
 from app.domain.config import FeeConfig, RideConfig
-from app.domain.fees import RiderAccount, add_cash_fee_debt, mark_entry_paid
+from app.domain.fees import RiderAccount, add_cash_fee_debt, mark_entry_paid, offer_block_reason
 from app.domain.payments import (
     DebtState,
     PaymentProvider,
@@ -53,6 +55,7 @@ from app.domain.rides import (
     settle_passenger_debt,
 )
 from app.domain.types import PaymentMethod
+from app.infra.redis_store import PositionStore
 from app.services.events import EventCollector
 
 
@@ -75,7 +78,9 @@ class PaymentService:
         fee_cfg: FeeConfig | None = None,
         ride_cfg: RideConfig | None = None,
         events: EventCollector | None = None,
+        positions: PositionStore | None = None,
     ) -> None:
+        self.positions = positions
         self.provider = provider
         self.fee_cfg = fee_cfg or FeeConfig()
         self.ride_cfg = ride_cfg or RideConfig()
@@ -124,6 +129,20 @@ class PaymentService:
         elif charge.debt_state is DebtState.RESERVED:
             release_charge_debt(acc, charge)
         return destination
+
+    def _block_for_debt(self, session: Session, acc: RiderAccount) -> None:
+        """A dívida da taxa chegou ao limite: sem corrida em andamento, o motoqueiro vai para "não estou" e sai do
+        mapa na hora; com corrida em andamento ela segue e, ao acabar, ele fica em "não estou". Em qualquer caso é avisado."""
+        if queries.rider_active_ride_id(session, acc.rider_id) is None:
+            profile = session.get(RiderProfileRow, acc.rider_id)
+            profile.online = False
+            session.flush()
+            if self.positions is not None:
+                self.positions.remove(acc.rider_id)
+        self._emit(
+            acc.rider_id, "debt_required",
+            {"cash_debt_cents": acc.cash_debt_cents, "debt_limit_cents": self.fee_cfg.cash_debt_limit_cents},
+        )
 
     def _release_if_reserved(self, charge: PixCharge | None, acc: RiderAccount | None) -> None:
         if charge is not None and acc is not None and charge.debt_state is DebtState.RESERVED:
@@ -486,7 +505,10 @@ class PaymentService:
         acc, charge = self._rider_and_charge(session, ride)
         self._release_if_reserved(charge, acc)
         if acc is not None:
+            was_blocked = offer_block_reason(acc, self.fee_cfg) is not None
             add_cash_fee_debt(acc, ride.fee_cents or 0)
+            if not was_blocked and offer_block_reason(acc, self.fee_cfg) == "divida_pendente":
+                self._block_for_debt(session, acc)
             repo.save_rider_account(session, acc)
         if charge is not None:
             repo.save_charge(session, charge)

@@ -171,7 +171,9 @@ class DispatchService:
         snapshot = queries.rider_snapshots(session, [rider_id]).get(rider_id)
         if snapshot is None or not snapshot.available:      # parou, foi bloqueado ou perdeu a aprovação depois da oferta
             raise OfferGone("Você não está disponível para essa corrida.")
-        repo.get_rider_account(session, rider_id, for_update=True)
+        account = repo.get_rider_account(session, rider_id, for_update=True)
+        if offer_block_reason(account, self.cfg.fees) == "divida_pendente":     # ficou devendo depois de receber a oferta
+            raise OfferGone("Você tem uma taxa para pagar e não pode aceitar corridas agora.")
         busy = queries.rider_active_ride_id(session, rider_id) is not None
         number = queries.completed_rides_since(session, rider_id, local_day_start(now)) + (1 if busy else 0) + 1
         fee = fee_for_ride(number, self.cfg.fees)

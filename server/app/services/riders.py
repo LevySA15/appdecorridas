@@ -221,11 +221,18 @@ class RiderService:
             profile.crlv_expires_on and profile.crlv_expires_on < today
         ):
             raise CannotGoOnline("documents_expired", "Um dos seus documentos venceu. Envie o novo para continuar.")
-        if offer_block_reason(repo.get_rider_account(session, rider_id), self.fee_cfg) is not None:
+        account = repo.get_rider_account(session, rider_id)
+        reason = offer_block_reason(account, self.fee_cfg)
+        if reason == "entrada_pendente":
             raise CannotGoOnline(
                 "entry_pending",
                 f"Você fez as {self.fee_cfg.trial_rides} corridas de teste. "
                 f"Pague a entrada de {brl(self.fee_cfg.entry_fee_cents)} para continuar.",
+            )
+        if reason == "divida_pendente":
+            raise CannotGoOnline(
+                "debt_pending",
+                f"Você tem uma taxa de {brl(account.cash_debt_cents)} para pagar. Pague para voltar a receber corridas.",
             )
         profile.online = True
         session.flush()

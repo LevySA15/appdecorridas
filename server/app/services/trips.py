@@ -96,10 +96,17 @@ class TripService:
         count_completed_ride(acc)
         repo.save_ride(session, ride)
         repo.save_rider_account(session, acc)
-        if offer_block_reason(acc, self.cfg.fees) is not None:
-            # chegou nas corridas de teste sem pagar a entrada: para de aparecer como disponível e o app avisa
+        reason = offer_block_reason(acc, self.cfg.fees)
+        if reason is not None:
+            # chegou nas corridas de teste sem pagar a entrada, ou deve a taxa: para de aparecer como disponível e o app avisa
             session.get(RiderProfileRow, rider_id).online = False
-            self.events.add(rider_id, "entry_required", {"entry_fee_cents": self.cfg.fees.entry_fee_cents})
+            if reason == "entrada_pendente":
+                self.events.add(rider_id, "entry_required", {"entry_fee_cents": self.cfg.fees.entry_fee_cents})
+            else:
+                self.events.add(
+                    rider_id, "debt_required",
+                    {"cash_debt_cents": acc.cash_debt_cents, "debt_limit_cents": self.cfg.fees.cash_debt_limit_cents},
+                )
         repo.log_ride_event(session, ride_id, "completed", {}, now)
         pay = None
         if ride.payment_method is PaymentMethod.CASH:
@@ -146,10 +153,13 @@ class TripService:
             return
         queued = repo.get_ride(session, queued_id, for_update=True)
         acc = repo.get_rider_account(session, rider_id, for_update=True)
-        if offer_block_reason(acc, self.cfg.fees) is not None:
+        reason = offer_block_reason(acc, self.cfg.fees)
+        if reason is not None:
             refunded = self.payments.release_queued_ride(session, queued_id, now)
             repo.log_ride_event(
-                session, queued_id, "queue_released", {"reason": "entrada pendente", "refunded": refunded}, now
+                session, queued_id, "queue_released",
+                {"reason": "entrada pendente" if reason == "entrada_pendente" else "dívida pendente", "refunded": refunded},
+                now,
             )
             self.events.add(queued.passenger_id, "queue_released", {"ride_id": queued_id, "refunded": refunded})
             self.dispatcher.offer_next(session, queued_id, now)
