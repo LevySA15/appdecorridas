@@ -40,7 +40,7 @@ def seed_database(session: Session, *, fast: bool) -> None:
     Com `fast`, encurta os prazos do servidor (Pix, espera, procura, aviso de parada) para a simulação mostrar tudo em minutos.
     """
     save_config(session, "auth", AuthConfig(otp_requests_per_hour=1000, otp_requests_per_ip_hour=1_000_000))
-    save_config(session, "balance", BalanceConfig(topup_enabled=True))      # no servidor descartável a recarga vale
+    save_config(session, "balance", BalanceConfig(topup_enabled=True, withdraw_enabled=True))   # aqui recarga e saque valem
     if fast:
         save_config(
             session, "rides",

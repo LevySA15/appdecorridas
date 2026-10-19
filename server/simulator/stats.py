@@ -45,7 +45,7 @@ class Stats:
         self.rides: dict[str, RideRecord] = {}
         self.price_reasons: Counter[str] = Counter()
         # taxa de cancelamento tardio: cobradas, centavos, do_saldo, retidas, pendentes, pagas_depois,
-        # recursos_pedidos, recursos_aceitos, recursos_recusados, recargas
+        # recursos_pedidos, recursos_aceitos, recursos_recusados, recargas, pagas_com_saldo, saques, saques_centavos
         self.fees: Counter[str] = Counter()
 
     def record_call(self, method: str, template: str, status: int, seconds: float) -> None:

@@ -83,7 +83,7 @@ def find_problems(outcome: Outcome, server_problems: list[str]) -> list[str]:
 def _fees_section(stats) -> list[str]:
     fees = stats.fees
     lines = ["", "## Taxas de cancelamento tardio", ""]
-    if not fees["cobradas"] and not fees["recargas"]:
+    if not (fees["cobradas"] or fees["recargas"] or fees["saques"] or fees["pagas_com_saldo"]):
         return lines + ["- nenhuma taxa cobrada"]
     if fees["cobradas"]:
         lines += [
@@ -94,6 +94,8 @@ def _fees_section(stats) -> list[str]:
             f"recusados {fees['recursos_recusados']}",
         ]
     lines.append(f"- Recargas de saldo: {fees['recargas']}")
+    lines.append(f"- Corridas pagas com o saldo: {fees['pagas_com_saldo']}")
+    lines.append(f"- Saques de saldo: {fees['saques']} ({brl(fees['saques_centavos'])})")
     return lines
 
 
@@ -121,7 +123,7 @@ def build_report(
         f"- Da saída até o fim da corrida: {_spread(_gaps(done, 'started_at', 'ended_at'))}", "",
         "## Dinheiro", "",
     ]
-    for method, name in (("pix", "Pix"), ("cash", "dinheiro")):
+    for method, name in (("pix", "Pix"), ("balance", "saldo"), ("cash", "dinheiro")):
         mine = [r for r in done if r.method == method]
         lines.append(f"- {name}: {len(mine)} corridas, {brl(sum(r.price_cents for r in mine))}")
     if stats.price_reasons:

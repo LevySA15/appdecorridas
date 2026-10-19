@@ -119,3 +119,12 @@ def test_erros_do_servidor_aparecem_com_a_pilha_no_relatorio():
     texto = build_report(rodada([corrida()]), ["ERROR: x"], server_details=["ERROR:    Exception in ASGI application\nTraceback (most recent call last):\n  boom"]).text
     assert "## Erros no registro do servidor" in texto and "Traceback (most recent call last):" in texto and "  boom" in texto
     assert "## Erros no registro do servidor" not in build_report(rodada([corrida()])).text
+
+
+def test_corridas_pagas_com_saldo_e_saques_aparecem_no_relatorio():
+    stats = Stats()
+    stats.fees.update({"recargas": 1, "pagas_com_saldo": 2, "saques": 2, "saques_centavos": 1500})
+    texto = build_report(rodada([corrida(method="balance", price=700), corrida("ride-2", price=900)], stats=stats)).text
+    assert "- saldo: 1 corridas, R$ 7,00" in texto and "- Pix: 1 corridas, R$ 9,00" in texto
+    assert "Corridas pagas com o saldo: 2" in texto and "Saques de saldo: 2 (R$ 15,00)" in texto
+    assert "nenhuma taxa cobrada" not in texto

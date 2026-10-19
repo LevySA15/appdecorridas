@@ -190,3 +190,26 @@ def test_motoqueiro_que_escolhe_nao_pagar_fica_bloqueado_e_a_rodada_termina(box)
     assert resultados.count("completed") == 1 and "completed" in resultados and len(resultados) == 2
     assert outcome.stats.notes["dívida da taxa não paga (por escolha)"] == 1
     assert outcome.stats.notes["dívida da taxa paga"] == 0
+
+
+@pytest.mark.slow
+def test_passageiro_recarrega_e_saca_o_saldo_e_o_extrato_do_provedor_confere(box):
+    perfil = dataclasses.replace(perfil_rapido(0.0), topup=1.0, withdraw=1.0, use_balance=0.0)
+    outcome, relatorio = rodar_taxa(box, perfil)
+    assert relatorio.passed, relatorio.text
+    fees = outcome.stats.fees
+    assert fees["recargas"] == 1 and fees["saques"] >= 1 and fees["saques_centavos"] >= 500   # com 100% saca de novo enquanto sobra o mínimo
+    assert outcome.audit["balance_matches_ledger"] is True and outcome.audit["reconcile_diff"] == {}
+    assert f"Saques de saldo: {fees['saques']}" in relatorio.text
+
+
+@pytest.mark.slow
+def test_passageiro_com_saldo_paga_a_corrida_com_ele_e_o_livro_fecha(box):
+    perfil = dataclasses.replace(perfil_rapido(0.0), topup=1.0, withdraw=0.0, use_balance=1.0)
+    outcome, relatorio = rodar_taxa(box, perfil)
+    assert relatorio.passed, relatorio.text
+    [corrida] = outcome.stats.rides.values()
+    assert corrida.method == "balance" and corrida.outcome == "completed"
+    assert outcome.stats.fees["pagas_com_saldo"] == 1
+    assert outcome.audit["balance_matches_ledger"] is True and outcome.audit["reconcile_diff"] == {}
+    assert outcome.stats.events["balance_paid"] == 1

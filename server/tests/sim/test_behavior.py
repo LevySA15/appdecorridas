@@ -100,3 +100,13 @@ def test_perfis_tem_chance_de_pagar_a_divida_do_motoqueiro():
     assert calmo.pay_debt == 1.0 and bagunca.pay_debt < normal.pay_debt < 1.0
     with pytest.raises(ValueError, match="pay_debt"):
         Profile(pay_debt=2.0).check()
+
+
+def test_chances_de_saldo_ficam_entre_zero_e_um_e_o_calmo_nao_usa():
+    calmo, normal, bagunca = preset("calmo"), preset("normal"), preset("bagunca")
+    assert (calmo.use_balance, calmo.withdraw) == (0.0, 0.0)
+    assert 0 < normal.use_balance <= bagunca.use_balance <= 1 and 0 < normal.withdraw <= bagunca.withdraw <= 1
+    for campo in ("use_balance", "withdraw"):
+        for ruim in (-0.1, 1.5):
+            with pytest.raises(ValueError, match=campo):
+                Profile(**{campo: ruim}).check()

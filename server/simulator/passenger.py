@@ -13,6 +13,9 @@ from simulator.world import Login, World
 END_WAIT_S = 3.0                # quanto esperar pelo aviso final depois que a corrida some do estado
 
 
+SIM_CPF = "529.982.247-25"       # chave Pix de mentira (CPF de exemplo, com dígitos verificadores certos) dos saques
+
+
 def _place(place) -> dict:
     return {"lat": place.point[0], "lng": place.point[1], "text": place.text}
 
@@ -127,6 +130,8 @@ class PassengerActor:
             return True
         if await self._rate(now):
             return True
+        if await self._withdraw(s, now):
+            return True
         if now >= self._next_request_at and s["blocked_reason"] is None:
             return await self._request(now)
         return False
@@ -156,7 +161,11 @@ class PassengerActor:
             self.w.release_request()
             self._next_request_at = now + self.ch.gap_s()
             return False
-        method = self.ch.method(quote.body["payment_methods"])
+        allowed = quote.body["payment_methods"]
+        if "balance" in allowed and self.p.use_balance > 0 and self.ch.chance(self.p.use_balance):
+            method = "balance"
+        else:
+            method = self.ch.method([m for m in allowed if m != "balance"])
         body = {"quote_id": quote.body["quote_id"], "method": method}
 
         async def asked():
@@ -176,6 +185,8 @@ class PassengerActor:
         self.current = RideRecord(
             ride["ride_id"], self.identity.index, method, ride["price_cents"], ride["price_reason"], now,
         )
+        if method == "balance":
+            self.w.stats.fees["pagas_com_saldo"] += 1
         self.w.stats.rides[ride["ride_id"]] = self.current
         self._generation = self.feed.generation
         self._cancelled_by_me = False
@@ -363,6 +374,28 @@ class PassengerActor:
             await self.w.pay_pix(reply.body["charge_id"])
             self.w.stats.fees["recargas"] += 1
             self.note("saldo recarregado")
+
+    async def _withdraw(self, s: dict, now: float) -> bool:
+        """Às vezes saca parte do saldo por Pix (só se o servidor deixa e o saldo passa do mínimo)."""
+        balance = s.get("balance_cents", 0)
+        if not (s.get("withdraw_enabled") and self.p.withdraw > 0 and balance >= s.get("withdraw_min_cents", 500)):
+            return False
+        key = ("withdraw", balance)
+        at = self._when(key, lambda: now + self.ch.think(10, 60) if self.ch.chance(self.p.withdraw) else None)
+        if at is None or now < at or key in self._done:
+            return False
+        self._done.add(key)
+        amount = min(balance, s["withdraw_max_cents"], self.ch.rng.choice([500, 1000, balance]))
+        amount = min(balance, max(amount, s["withdraw_min_cents"]))
+        reply = await self.call(
+            "POST", "/v1/passenger/balance/withdraw", json={"amount_cents": amount, "pix_key": SIM_CPF},
+            ok=("withdraw_disabled", "not_allowed"),
+        )
+        if reply.ok:
+            self.w.stats.fees["saques"] += 1
+            self.w.stats.fees["saques_centavos"] += amount
+            self.note("saldo sacado")
+        return True
 
     async def _pay_fee(self, fee: dict, now: float) -> bool:
         """Paga a taxa de cancelamento pendente (com o saldo ou pelo Pix) ou escolhe ficar bloqueado."""
