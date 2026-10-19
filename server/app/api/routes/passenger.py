@@ -24,7 +24,7 @@ class QuoteIn(BaseModel):
 
 class RideIn(BaseModel):
     quote_id: str = Field(min_length=1, max_length=40)
-    method: Literal["pix", "cash"]
+    method: Literal["pix", "cash", "balance"]
 
 
 class AppealIn(BaseModel):
@@ -59,10 +59,13 @@ def request_ride(body: RideIn, request: Request, user: AuthUser = Depends(passen
     runtime = get_runtime(request)
 
     def work(unit):
-        method = PaymentMethod(body.method)
-        if method is PaymentMethod.PIX and runtime.pix_health.is_down(unit.now):
+        with_balance = body.method == "balance"        # corrida Pix quitada com o saldo no aceite da moto
+        method = PaymentMethod.PIX if with_balance else PaymentMethod(body.method)
+        if method is PaymentMethod.PIX and not with_balance and runtime.pix_health.is_down(unit.now):
             raise NotAllowed("O Pix está fora do ar agora. Escolha pagar em dinheiro.")
-        ride = unit.requests.request_ride(unit.session, user.user_id, body.quote_id, method, unit.now)
+        ride = unit.requests.request_ride(
+            unit.session, user.user_id, body.quote_id, method, unit.now, pay_with_balance=with_balance
+        )
         return passenger_ride_view(unit, ride.ride_id)
 
     return runtime.run(work)

@@ -55,12 +55,15 @@ def w(positions, reservas, provider, events):
 
 
 def aceitar(session, positions, w, method=PaymentMethod.PIX, ride_id="ride-1", passenger_id="p1", rider_n=1,
-            destination=None, now=AGORA):
+            destination=None, now=AGORA, pay_with_balance=False):
     """Corrida pedida, oferecida e aceita pelo motoqueiro `r<rider_n>`."""
     rider_id = f"r{rider_n}"
     if session.get(RiderProfileRow, rider_id) is None:
         make_online_rider(session, positions, rider_n, pt(100 * rider_n, 0), now=now)
-    add_searching_ride(session, ride_id, passenger_id, method=method, destination=destination, now=now)
+    add_searching_ride(
+        session, ride_id, passenger_id, method=method, destination=destination, now=now,
+        pay_with_balance=pay_with_balance,
+    )
     assert w.dispatch.offer_next(session, ride_id, now) == rider_id
     return w.dispatch.accept_offer(session, rider_id, ride_id, now + 4)
 

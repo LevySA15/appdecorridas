@@ -24,8 +24,9 @@ from app.domain.balance import (
     plan_fee_collection,
     spend_up_to,
 )
-from app.domain.config import FeeConfig, RideConfig
+from app.domain.config import BalanceConfig, FeeConfig, RideConfig
 from app.domain.fees import RiderAccount, add_cash_fee_debt, debt_to_pay_cents, mark_entry_paid, offer_block_reason
+from app.domain.ids import new_id
 from app.domain.payments import (
     DebtState,
     PaymentProvider,
@@ -79,8 +80,10 @@ class PaymentService:
         ride_cfg: RideConfig | None = None,
         events: EventCollector | None = None,
         positions: PositionStore | None = None,
+        balance_cfg: BalanceConfig | None = None,
     ) -> None:
         self.positions = positions
+        self.balance_cfg = balance_cfg or BalanceConfig()
         self.provider = provider
         self.fee_cfg = fee_cfg or FeeConfig()
         self.ride_cfg = ride_cfg or RideConfig()
@@ -113,14 +116,19 @@ class PaymentService:
         """
         send = charge.amount_cents - keep_cents
         destination = "pix"
-        try:
-            if send > 0:
-                self.provider.refund(charge.charge_id, send)
-            ledger.post_refund(charge.charge_id, keep_cents=keep_cents)
-        except RefundUndeliverable:
+        to_balance = charge.source == "balance"        # pago com o saldo: o dinheiro nunca saiu daqui, volta ao saldo
+        if not to_balance:
+            try:
+                if send > 0:
+                    self.provider.refund(charge.charge_id, send)
+                ledger.post_refund(charge.charge_id, keep_cents=keep_cents)
+            except RefundUndeliverable:
+                to_balance = True
+        if to_balance:
             ledger.post_refund_to_balance(charge.charge_id, passenger_id, keep_cents=keep_cents)
             passenger = repo.get_passenger_account(session, passenger_id, for_update=True)
-            credit(passenger, send)
+            if send > 0:
+                credit(passenger, send)
             repo.save_passenger_account(session, passenger)
             destination = "balance"
         charge.refunded = True
@@ -161,11 +169,54 @@ class PaymentService:
         if existing_id is not None:
             return repo.get_charge(session, existing_id)
         acc = repo.get_rider_account(session, ride.rider_id, for_update=True)
+        if ride.pay_with_balance:
+            paid = self._pay_with_balance(session, ride, acc, fee_cents)
+            if paid is not None:
+                return paid
         split = reserve_pix_split(acc, ride.price_cents, fee_cents, self.fee_cfg.max_debt_share)
         charge = self.provider.create_pix_charge(ride.ride_id, ride.rider_id, ride.price_cents, split)
         repo.add_charge(session, charge)
         repo.set_current_charge(session, ride_id, charge.charge_id)
         repo.save_rider_account(session, acc)
+        return charge
+
+    def _pay_with_balance(self, session: Session, ride: Ride, acc: RiderAccount, fee_cents: int) -> PixCharge | None:
+        """Corrida marcada para pagar com o saldo: quita a cobrança já no aceite, sem passar pelo provedor.
+
+        Se o saldo não cobre mais (o passageiro gastou ou sacou entre o pedido e o aceite) ou o recurso foi
+        desligado, tira a marca, avisa o passageiro e devolve `None`: a corrida segue como Pix comum.
+        """
+        passenger = repo.get_passenger_account(session, ride.passenger_id, for_update=True)
+        if not self.balance_cfg.pay_rides_enabled or passenger.balance_cents < ride.price_cents:
+            ride.pay_with_balance = False
+            repo.save_ride(session, ride)
+            self._emit(
+                ride.passenger_id, "balance_short",
+                {"ride_id": ride.ride_id, "balance_cents": passenger.balance_cents, "price_cents": ride.price_cents},
+            )
+            return None
+        split = reserve_pix_split(acc, ride.price_cents, fee_cents, self.fee_cfg.max_debt_share)
+        charge = PixCharge(
+            charge_id=new_id("bal"), ride_id=ride.ride_id, rider_id=ride.rider_id, amount_cents=ride.price_cents,
+            split=split, paid=True, source="balance",
+        )
+        repo.add_charge(session, charge)
+        repo.set_current_charge(session, ride.ride_id, charge.charge_id)
+        spend_up_to(passenger, ride.price_cents)
+        PgLedger(session).post_charge_payment_from_balance(
+            charge.charge_id, ride.passenger_id, ride.rider_id, ride.price_cents, split
+        )
+        on_pix_paid(ride)
+        confirm_charge_debt(acc, charge)
+        repo.save_charge(session, charge)
+        repo.save_passenger_account(session, passenger)
+        repo.save_rider_account(session, acc)
+        repo.save_ride(session, ride)
+        self._emit(
+            ride.passenger_id, "balance_paid",
+            {"ride_id": ride.ride_id, "amount_cents": ride.price_cents, "balance_cents": passenger.balance_cents},
+        )
+        self._emit(ride.rider_id, "payment_received", {"ride_id": ride.ride_id, "late": False})
         return charge
 
     def on_provider_event(self, session: Session, event: dict) -> str:

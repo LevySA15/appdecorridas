@@ -127,7 +127,7 @@ class Runtime:
     def make_unit(self, session: Session) -> Unit:
         cfg = self.config(session)
         events = EventCollector()
-        payments = PaymentService(self.provider, cfg.fees, cfg.rides, events, self.positions)
+        payments = PaymentService(self.provider, cfg.fees, cfg.rides, events, self.positions, cfg.balance)
         dispatch = DispatchService(self.positions, self.reservations, self.maps, payments, events, cfg)
         trips = TripService(payments, dispatch, events, cfg, self.positions)
         safety = SafetyService(self.safety_store, self.positions, self.notifier, events, cfg)

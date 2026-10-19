@@ -81,8 +81,9 @@ def add_searching_ride(
     pickup: GeoPoint = ORIGIN,
     destination: GeoPoint | None = None,
     now: float = 10.0,
+    pay_with_balance: bool = False,
 ) -> Ride:
-    ride = Ride(ride_id, passenger_id, price, method, pin="4821")
+    ride = Ride(ride_id, passenger_id, price, method, pin="4821", pay_with_balance=pay_with_balance)
     start_search(ride, now)
     repo.add_ride(session, ride)
     repo.set_ride_details(

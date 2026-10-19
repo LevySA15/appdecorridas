@@ -32,20 +32,28 @@ class RideRequestService:
         self.cfg = cfg or AppConfig.defaults()
 
     def request_ride(
-        self, session: Session, passenger_id: str, quote_id: str, method: PaymentMethod, now: float
+        self, session: Session, passenger_id: str, quote_id: str, method: PaymentMethod, now: float,
+        pay_with_balance: bool = False,
     ) -> Ride:
         quote = session.execute(select(QuoteRow).where(QuoteRow.id == quote_id).with_for_update()).scalar_one_or_none()
         if quote is None or quote.passenger_id != passenger_id or quote.used or now > quote.expires_at:
             raise QuoteExpired("Esse preço não vale mais. Peça de novo.")
         # Trava o passageiro antes de conferir: dois pedidos ao mesmo tempo (duas cotações) esperam um ao outro
         # e o segundo já enxerga a corrida do primeiro.
-        repo.get_passenger_account(session, passenger_id, for_update=True)
+        passenger = repo.get_passenger_account(session, passenger_id, for_update=True)
         blocked = passenger_block_reason(session, passenger_id)
         if blocked:
             raise NotAllowed(blocked)
+        if pay_with_balance:
+            if method is not PaymentMethod.PIX:
+                raise NotAllowed("Pagar com o saldo só vale para corrida paga pelo app.")
+            if not self.cfg.balance.pay_rides_enabled:
+                raise NotAllowed("Pagar com o saldo não está disponível agora.")
+            if passenger.balance_cents < quote.price_cents:
+                raise NotAllowed("Seu saldo não cobre esta corrida. Escolha outro jeito de pagar.")
         ride = Ride(
             ride_id=new_id("ride"), passenger_id=passenger_id, price_cents=quote.price_cents,
-            payment_method=method, pin=f"{secrets.randbelow(10000):04d}",
+            payment_method=method, pin=f"{secrets.randbelow(10000):04d}", pay_with_balance=pay_with_balance,
         )
         start_search(ride, now)
         try:
@@ -64,10 +72,10 @@ class RideRequestService:
             ),
         )
         quote.used = True
-        repo.log_ride_event(
-            session, ride.ride_id, "requested",
-            {"price_cents": ride.price_cents, "method": method.value, "quote_id": quote_id}, now,
-        )
+        requested = {"price_cents": ride.price_cents, "method": method.value, "quote_id": quote_id}
+        if pay_with_balance:
+            requested["pay_with_balance"] = True
+        repo.log_ride_event(session, ride.ride_id, "requested", requested, now)
         session.flush()
         if self.dispatcher is not None:
             self.dispatcher.offer_next(session, ride.ride_id, now)

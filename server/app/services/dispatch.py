@@ -197,10 +197,11 @@ class DispatchService:
                 "ride_id": ride_id, "queued": busy, "pin": ride.pin,
                 "queue": queries.queue_info(session, ride_id, rider_id) if busy else None,
                 "rider": card.public(),
-                "pay": None if charge is None else {
+                "pay": None if charge is None or charge.paid else {
                     "charge_id": charge.charge_id, "amount_cents": charge.amount_cents,
                     "expires_at": now + self.cfg.rides.pix_window_s,
                 },
+                "paid_with_balance": charge is not None and charge.source == "balance",
             },
         )
         return repo.get_ride(session, ride_id)
