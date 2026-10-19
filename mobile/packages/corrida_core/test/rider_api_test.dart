@@ -155,4 +155,11 @@ void main() {
     expect(m.chamadas[0].body, {'cnh_expires_on': '2030-01-02', 'crlv_expires_on': '2029-03-04'});
     expect(m.chamadas[1].body, {'cnh_expires_on': '2030-01-02', 'crlv_expires_on': '2029-03-04', 'cnh_photo_key': 'nova'});
   });
+
+  test('o motoqueiro também avalia a corrida', () async {
+    final m = mundo((r) => http.Response('', 204));
+    await m.api.rate('ride-1', 4);
+    expect((m.chamadas.single.method, m.chamadas.single.path), ('POST', '/v1/rides/ride-1/rating'));
+    expect(m.chamadas.single.body, {'stars': 4});
+  });
 }

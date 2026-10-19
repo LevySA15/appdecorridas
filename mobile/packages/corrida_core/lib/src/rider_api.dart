@@ -53,6 +53,11 @@ class RiderApi {
     await client.post('/v1/rider/rides/${_id(rideId)}/cash-received');
   }
 
+  /// Avalia o passageiro depois que a corrida acabou (mesma rota que o passageiro usa para avaliar o motoqueiro).
+  Future<void> rate(String rideId, int stars) async {
+    await client.post('/v1/rides/${_id(rideId)}/rating', body: {'stars': stars});
+  }
+
   Future<Charge> entryCharge() async => Charge.fromJson(_map(await client.post('/v1/rider/entry-charge')));
 
   Future<Charge> debtCharge() async => Charge.fromJson(_map(await client.post('/v1/rider/debt-charge')));
