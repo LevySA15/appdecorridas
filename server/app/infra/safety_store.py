@@ -21,6 +21,9 @@ class SafetyStore(Protocol):
     def add_sample(self, ride_id: str, sample: PositionSample, max_samples: int) -> list[PositionSample]:
         """Acrescenta a posição e devolve as últimas `max_samples`, da mais antiga à mais nova."""
 
+    def last_sample_t(self, ride_id: str) -> float | None:
+        """A hora da última posição guardada desta corrida, ou None se não há nenhuma."""
+
     def get_route(self, ride_id: str) -> list[GeoPoint] | None:
         """A rota esperada, `[]` se a corrida não tem rota guardada, ou None se ainda não foi carregada."""
 
@@ -41,6 +44,10 @@ class InMemorySafetyStore:
         samples.append(sample)
         del samples[:-max_samples]
         return list(samples)
+
+    def last_sample_t(self, ride_id: str) -> float | None:
+        samples = self._samples.get(ride_id)
+        return samples[-1].t if samples else None
 
     def get_route(self, ride_id: str) -> list[GeoPoint] | None:
         return self._routes.get(ride_id)
@@ -86,6 +93,10 @@ class RedisSafetyStore:
             t, lat, lng = item.split(",")
             samples.append(PositionSample(GeoPoint(float(lat), float(lng)), float(t)))
         return samples
+
+    def last_sample_t(self, ride_id: str) -> float | None:
+        raw = self.r.lindex(f"{self.prefix}s:{ride_id}", -1)
+        return None if raw is None else float(raw.split(",")[0])
 
     def get_route(self, ride_id: str) -> list[GeoPoint] | None:
         raw = self.r.get(f"{self.prefix}r:{ride_id}")

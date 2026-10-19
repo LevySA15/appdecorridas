@@ -147,3 +147,18 @@ def test_quem_nao_deve_nada_continua_podendo_ficar_disponivel(session, positions
     w.riders.go_offline(session, "r1")
     w.riders.go_online(session, "r1", HOJE)
     assert online(session) is True
+
+
+def test_corrida_cancelada_tambem_deixa_o_motoqueiro_bloqueado_em_nao_estou(session, positions, w, events):
+    corrida_em_dinheiro_terminada(session, positions, w)                        # ride-1 terminada, dinheiro por confirmar
+    add_passenger(session, "p2", "+5575900000012")
+    positions.update("r1", pt(100, 0), AGORA + 450)
+    add_searching_ride(session, "ride-2", "p2", method=PaymentMethod.CASH, now=AGORA + 450)
+    w.dispatch.offer_next(session, "ride-2", AGORA + 450)
+    w.dispatch.accept_offer(session, "r1", "ride-2", AGORA + 455)
+    w.trips.confirm_cash_received(session, "r1", "ride-1", AGORA + 460)           # durante a corrida 2: segue online
+    assert online(session) is True
+    events.drain()
+    w.trips.cancel_by_passenger(session, "p2", "ride-2", AGORA + 470)             # a corrida 2 acaba cancelada
+    assert online(session) is False and positions.get("r1") is None
+    assert eventos(events, "r1", "debt_required") == [{"cash_debt_cents": 100, "debt_limit_cents": 70}]

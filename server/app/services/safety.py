@@ -115,7 +115,10 @@ class SafetyService:
         """A moto de uma corrida em andamento ficou tempo demais sem mandar posição? Avisa o passageiro, o contato de
         emergência e os administradores (uma vez por silêncio: o mesmo alerta só volta depois do prazo de repetição)."""
         cfg = self.cfg.safety
-        gap = signal_gap_s(self.positions.last_seen(ride.rider_id), ride.started_at, now)
+        # O último sinal é o mais recente entre a posição da moto no mapa e o último ponto guardado da corrida:
+        # "não estou" no meio da corrida tira a moto do mapa, mas as posições da corrida continuam valendo.
+        signals = [t for t in (self.positions.last_seen(ride.rider_id), self.store.last_sample_t(ride.ride_id)) if t is not None]
+        gap = signal_gap_s(max(signals) if signals else None, ride.started_at, now)
         if gap is None or gap < no_signal_after_s(ride.distance_m, cfg):
             return None
         if not self.store.claim(f"{ride.ride_id}:{AlertType.NO_SIGNAL.value}", now, cfg.alert_cooldown_s):

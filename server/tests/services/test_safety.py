@@ -369,3 +369,18 @@ def test_moto_que_ficou_indisponivel_no_meio_da_corrida_continua_sendo_vigiada(s
     session.get(RiderProfileRow, "r1").online = False
     positions.remove("r1")                                              # saiu do mapa de propósito
     assert sinal(session, safety, AGORA + 121) is not None             # cai para a hora em que a corrida começou
+
+
+def test_moto_que_fica_indisponivel_depois_de_mandar_posicao_ate_agora_nao_gera_alerta_falso(
+    safety, session, mundo, positions, notifier
+):
+    # "não estou" no meio da corrida tira a moto do mapa (apaga o último sinal), mas as posições da corrida
+    # continuam guardadas por corrida: o silêncio conta do último ponto da corrida, não da hora em que ela começou.
+    iniciada(session)
+    com_contato(session)
+    for i in range(0, 300, 4):
+        safety.on_rider_position(session, "ride-1", "p1", pt(10 + i, 0), AGORA + i)
+    positions.remove("r1")                                              # o motoqueiro tocou em "não estou"
+    assert sinal(session, safety, AGORA + 301) is None
+    assert notifier.sent == [] and session.query(SafetyAlertRow).count() == 0
+    assert sinal(session, safety, AGORA + 296 + 121) is not None        # silêncio de verdade: alerta, contando do último ponto

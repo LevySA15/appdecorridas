@@ -32,3 +32,14 @@ def test_aviso_so_sai_uma_vez_por_periodo(store):
     assert store.claim("ride-1:stopped", now=1100.0, cooldown_s=600.0) is False
     assert store.claim("ride-1:off_route", now=1100.0, cooldown_s=600.0) is True       # outro tipo, outra conta
     assert store.claim("ride-1:stopped", now=1601.0, cooldown_s=600.0) is True         # passou o prazo
+
+
+def test_hora_da_ultima_posicao_da_corrida(store):
+    from app.domain.geo import GeoPoint
+    from app.domain.safety import PositionSample
+
+    assert store.last_sample_t("ride-1") is None
+    store.add_sample("ride-1", PositionSample(GeoPoint(-12.96, -39.26), 100.0), 120)
+    store.add_sample("ride-1", PositionSample(GeoPoint(-12.97, -39.26), 104.5), 120)
+    assert store.last_sample_t("ride-1") == 104.5
+    assert store.last_sample_t("outra") is None

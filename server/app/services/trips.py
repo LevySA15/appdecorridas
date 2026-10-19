@@ -144,17 +144,37 @@ class TripService:
         if queued_id is not None:
             repo.get_ride(session, queued_id, for_update=True)
 
+    def _stop_if_in_debt(self, session: Session, rider_id: str, acc=None) -> None:
+        """Terminou (ou foi cancelada) a corrida de um motoqueiro que ficou devendo no meio dela: vai para "não estou",
+        sai do mapa e é avisado. A entrada pendente já é tratada ao concluir a corrida."""
+        acc = acc or repo.get_rider_account(session, rider_id, for_update=True)
+        if offer_block_reason(acc, self.cfg.fees) != "divida_pendente":
+            return
+        profile = session.get(RiderProfileRow, rider_id)
+        if not profile.online:
+            return
+        profile.online = False
+        session.flush()
+        if self.positions is not None:
+            self.positions.remove(rider_id)
+        self.events.add(
+            rider_id, "debt_required",
+            {"cash_debt_cents": acc.cash_debt_cents, "debt_limit_cents": self.cfg.fees.cash_debt_limit_cents},
+        )
+
     def after_ride_ends(self, session: Session, rider_id: str, now: float) -> None:
         """O motoqueiro ficou livre: assume a corrida da fila, ou a devolve se ele não pode continuar."""
         if queries.rider_active_ride_id(session, rider_id) is not None:
             return
         queued_id = queries.queued_ride_id_of_rider(session, rider_id)
         if queued_id is None:
+            self._stop_if_in_debt(session, rider_id)
             return
         queued = repo.get_ride(session, queued_id, for_update=True)
         acc = repo.get_rider_account(session, rider_id, for_update=True)
         reason = offer_block_reason(acc, self.cfg.fees)
         if reason is not None:
+            self._stop_if_in_debt(session, rider_id, acc)
             refunded = self.payments.release_queued_ride(session, queued_id, now)
             repo.log_ride_event(
                 session, queued_id, "queue_released",
