@@ -134,10 +134,13 @@ def test_um_dia_inteiro_pela_api(client, runtime, session, clock, listen):
     assert client.post("/v1/rider/online", headers=rider.headers).json()["error"]["code"] == "entry_pending"
     entrada = client.post("/v1/rider/entry-charge", headers=rider.headers).json()
     assert client.post(f"/v1/dev/pix/{entrada['charge_id']}/pay").json() == {"status": "applied"}
+    acc = repo.get_rider_account(session, rider.user_id, for_update=True)
+    acc.cash_debt_cents = 0                      # a dívida de R$ 1,00 também bloqueia; quitada (a cobrança Pix dela é testada à parte)
+    repo.save_rider_account(session, acc)
     assert client.post("/v1/rider/online", headers=rider.headers).status_code == 204
     conta = client.get("/v1/rider/state", headers=rider.headers).json()["account"]
     assert (conta["completed_rides"], conta["entry_paid"], conta["cash_debt_cents"], conta["needs_entry"]) == (
-        10, True, 100, False,
+        10, True, 0, False,
     )
 
     # 5) o livro-caixa fecha e bate com o extrato do provedor; o dono viu o alerta e a nota do motoqueiro subiu

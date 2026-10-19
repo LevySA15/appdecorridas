@@ -131,7 +131,7 @@ def test_saldo_curto_deixa_pendencia_e_bloqueia(session, positions, w):
     assert PgLedger(session).balance("rider:r1") == 100 and PgLedger(session).is_balanced() is True
 
 
-def _pix_pago(session, positions, w, provider, metros_andados=1000, debt=1000):
+def _pix_pago(session, positions, w, provider, metros_andados=1000, debt=60):
     """Pix de R$ 7,00 pago com a moto a 1000 m do ponto (progresso 0,5 = taxa de R$ 4,00)."""
     add_passenger(session)
     make_online_rider(session, positions, 1, pt(2000, 0), now=AGORA)
@@ -155,7 +155,7 @@ def test_pix_pago_sem_saldo_retem_a_taxa_da_devolucao(session, positions, w, pro
     assert ledger.balance(PgLedger.PROVIDER) == -400
     assert ledger.is_balanced() is True
     acc = repo.get_rider_account(session, "r1")
-    assert (acc.cash_debt_cents, acc.debt_reserved_cents) == (1000, 0)       # a dívida abatida voltou
+    assert (acc.cash_debt_cents, acc.debt_reserved_cents) == (60, 0)         # a dívida abatida voltou
 
 
 def test_pix_pago_com_saldo_parcial_usa_o_saldo_primeiro(session, positions, w, provider):

@@ -50,9 +50,17 @@ class RiderAccount:
 
 
 def offer_block_reason(acc: RiderAccount, cfg: FeeConfig = _DEFAULT) -> str | None:
+    """Por que o motoqueiro não pode receber nem aceitar corrida, ou None. A entrada vem antes da dívida."""
     if acc.completed_rides >= cfg.trial_rides and not acc.entry_paid:
         return "entrada_pendente"
+    if acc.cash_debt_cents >= cfg.cash_debt_limit_cents:
+        return "divida_pendente"     # uma corrida de folga: a que cria a primeira dívida; depois, nenhuma
     return None
+
+
+def debt_to_pay_cents(acc: RiderAccount) -> int:
+    """Quanto o motoqueiro deve e pode pagar agora (a parte reservada por Pix pendente não entra)."""
+    return max(0, acc.cash_debt_cents - acc.debt_reserved_cents)
 
 
 def can_receive_offers(acc: RiderAccount, cfg: FeeConfig = _DEFAULT) -> bool:
@@ -60,7 +68,8 @@ def can_receive_offers(acc: RiderAccount, cfg: FeeConfig = _DEFAULT) -> bool:
 
 
 def can_receive_cash_offers(acc: RiderAccount, cfg: FeeConfig = _DEFAULT) -> bool:
-    return can_receive_offers(acc, cfg) and acc.cash_debt_cents < cfg.cash_debt_limit_cents
+    """O bloqueio por dívida vale para todas as ofertas, não só as em dinheiro (decisão do Levy, 19/10/2026)."""
+    return can_receive_offers(acc, cfg)
 
 
 def register_completed_ride(

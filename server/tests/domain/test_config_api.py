@@ -10,6 +10,12 @@ def test_limites_novos_tem_padrao():
     assert (SafetyConfig().alert_cooldown_s, SafetyConfig().max_samples) == (600, 120)
 
 
+def test_limite_da_divida_do_motoqueiro_e_uma_taxa():
+    from app.domain.config import FeeConfig
+
+    assert FeeConfig().cash_debt_limit_cents == FeeConfig().min_fee_cents == 70
+
+
 def test_tabela_provisoria_do_sem_sinal_tem_o_padrao_do_levy():
     cfg = SafetyConfig()
     assert (cfg.no_signal_short_m, cfg.no_signal_long_m) == (3000, 10_000)

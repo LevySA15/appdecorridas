@@ -258,16 +258,19 @@ def test_motoqueiro_na_10a_corrida_livre_ainda_recebe_a_10a(dispatch, session, p
     assert dispatch.offer_next(session, "ride-1", AGORA) == rider
 
 
-def test_divida_de_corridas_em_dinheiro_no_limite_so_recebe_pix(dispatch, session, positions):
+def test_divida_de_uma_taxa_nao_recebe_oferta_nenhuma_nem_em_dinheiro_nem_em_pix(dispatch, session, positions):
     add_passenger(session)
     rider = make_online_rider(session, positions, 1, pt(100, 0), now=AGORA)
     acc = repo.get_rider_account(session, rider)
-    acc.cash_debt_cents = 1000
+    acc.cash_debt_cents = 100
     repo.save_rider_account(session, acc)
     add_searching_ride(session, "ride-1", method=PaymentMethod.CASH, now=AGORA)
     assert dispatch.offer_next(session, "ride-1", AGORA) is None
     add_passenger(session, "p2", "+5575900000012")
     add_searching_ride(session, "ride-2", "p2", method=PaymentMethod.PIX, now=AGORA)
+    assert dispatch.offer_next(session, "ride-2", AGORA) is None
+    acc.cash_debt_cents = 69                                   # pagou quase tudo: abaixo do limite volta a receber
+    repo.save_rider_account(session, acc)
     assert dispatch.offer_next(session, "ride-2", AGORA) == rider
 
 

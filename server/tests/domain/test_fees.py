@@ -5,6 +5,7 @@ from app.domain.fees import (
     RiderAccount,
     can_receive_cash_offers,
     can_receive_offers,
+    debt_to_pay_cents,
     fee_for_ride,
     mark_entry_paid,
     offer_block_reason,
@@ -88,12 +89,35 @@ def test_corrida_em_dinheiro_paga_pelo_qr_do_fim_nao_vira_divida():
     assert acc.completed_rides == 1
 
 
-def test_limite_de_divida_bloqueia_so_corridas_em_dinheiro():
-    acc = RiderAccount("r1", cash_debt_cents=999)
-    assert can_receive_cash_offers(acc) is True
-    acc.cash_debt_cents = 1000
-    assert can_receive_cash_offers(acc) is False
-    assert can_receive_offers(acc) is True
+def test_sem_divida_ninguem_e_bloqueado():
+    assert offer_block_reason(RiderAccount("r1")) is None
+    assert can_receive_offers(RiderAccount("r1")) is True
+
+
+@pytest.mark.parametrize("divida, bloqueado", [(69, False), (70, True), (80, True), (100, True)])
+def test_primeira_taxa_em_dinheiro_ja_alcanca_o_limite(divida, bloqueado):
+    acc = RiderAccount("r1", cash_debt_cents=divida)
+    assert (offer_block_reason(acc) == "divida_pendente") is bloqueado
+    assert can_receive_offers(acc) is not bloqueado
+    assert can_receive_cash_offers(acc) is not bloqueado       # o bloqueio vale para todas as ofertas
+
+
+def test_entrada_pendente_aparece_antes_da_divida():
+    acc = RiderAccount("r1", completed_rides=10, cash_debt_cents=500)
+    assert offer_block_reason(acc) == "entrada_pendente"
+
+
+def test_divida_que_cai_abaixo_do_limite_desbloqueia():
+    acc = RiderAccount("r1", cash_debt_cents=100)
+    assert offer_block_reason(acc) == "divida_pendente"
+    acc.cash_debt_cents = 30
+    assert offer_block_reason(acc) is None
+
+
+def test_divida_a_pagar_nao_conta_a_parte_reservada():
+    assert debt_to_pay_cents(RiderAccount("r1", cash_debt_cents=100, debt_reserved_cents=40)) == 60
+    assert debt_to_pay_cents(RiderAccount("r1", cash_debt_cents=100)) == 100
+    assert debt_to_pay_cents(RiderAccount("r1", cash_debt_cents=0)) == 0
 
 
 def test_entrada_pendente_bloqueia_tambem_o_dinheiro():

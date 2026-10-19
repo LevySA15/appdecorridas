@@ -34,7 +34,7 @@ class FeeConfig:
     min_fee_cents: int = 70             # piso de lucro: Pix R$ 0,50 + mapas ~R$ 0,19
     trial_rides: int = 10               # corridas antes de pagar a entrada
     entry_fee_cents: int = 5000         # R$ 50, uma vez só
-    cash_debt_limit_cents: int = 1000   # R$ 10 de dívida de corridas em dinheiro
+    cash_debt_limit_cents: int = 70     # dívida de uma taxa (o piso de lucro): a primeira taxa em dinheiro já bloqueia
     max_debt_share: float = 0.5         # no máximo 50% do ganho da corrida Pix abate dívida
 
 
