@@ -13,7 +13,7 @@ A especificação cobre várias partes independentes. Cada parte vira um plano p
 | 3 | **Simulador** (`2026-10-18-03-simulador.md`) | Pacote `simulator/`: motoqueiros e passageiros de mentira andando por Santo Antônio de Jesus e fazendo corridas inteiras só pela API (HTTP + WebSocket), com servidor descartável (`demo`), perfis de comportamento (`calmo`, `normal`, `bagunca`), relatório em português com veredito e a rota de conferência `GET /v1/dev/audit`. Guia em `docs/simulador.md`. | 2C | não |
 | 4B | **Cancelamento tardio e saldo do passageiro** — **feito** (`2026-10-19-04b-cancelamento-tardio-e-saldo.md`) | Taxa de R$ 3 a R$ 5 pela distância que a moto já andou, cobrada do saldo do passageiro, da devolução do Pix ou como pendência; saldo do passageiro (crédito de devolução que não chegou, recarga desligada por padrão); recurso. | 2C | não |
 | 4C | **Alerta de sem sinal** — **feito** (`2026-10-19-04c-sem-sinal.md`) | Moto sem mandar posição no meio da corrida: tempo pelo tamanho da corrida, aviso ao passageiro e ao contato de emergência. | 2C | não |
-| 4D | **Bloqueio por dívida do motoqueiro** (`2026-10-19-04d-bloqueio-por-divida.md`) | Uma corrida de folga e depois nenhuma oferta e "não estou rodando" travado até pagar; pagamento da dívida por Pix. | 2C | não |
+| 4D | **Bloqueio por dívida do motoqueiro** — **feito** (`2026-10-19-04d-bloqueio-por-divida.md`) | Uma corrida de folga e depois nenhuma oferta e "não estou rodando" travado até pagar; pagamento da dívida por Pix. | 2C | não |
 | 4A | **Painel do dono** | Site para aprovar cadastros, ver corridas, dinheiro, taxas, bloqueios, fila de recursos. Feito por último (o Levy pediu a ordem B, C, D, A em 19/10/2026). | 2, 4B, 4C, 4D | não |
 | 5 | **App do motoqueiro (Flutter, Android)** | Cadastro, ficar disponível, oferta, fila, capacete, QR, extrato. | 2 | não |
 | 6 | **App do passageiro (Flutter, Android)** | Pedir, pagar, acompanhar, código, SOS, avaliar. | 2 | não |
@@ -55,6 +55,10 @@ Menores adiados da revisão final do 4B: `unpaid_cents` mistura corrida em dinhe
 ## Itens que sobraram do plano 4C
 
 Do Levy decidir: o "algoritmo de distância" que troca a tabela do tempo sem sinal (hoje 2, 4 e 6 minutos para corridas de até 3 km, de 3 a 10 km e acima de 10 km; função `no_signal_after_s`); se a moto sem sinal **a caminho** do passageiro também deve alertar (hoje só com o passageiro na moto). Plano 4A (painel): mostrar a última posição conhecida no mapa. O aviso ao contato de emergência continua falso até o plano 7 (WhatsApp).
+
+## Itens que sobraram do plano 4D
+
+Do Levy decidir: se quer mais de uma corrida de folga (hoje o limite da dívida é uma taxa, R$ 0,70, em `app_config` chave `fees`, `cash_debt_limit_cents`; subir o número dá mais folga); saldo pré-pago do motoqueiro (hoje o "saldo do app" dele é a dívida abatida dos repasses Pix; um saldo pré-pago entra na dúvida do advogado, spec 7.5). O motoqueiro bloqueado paga a dívida sozinho por `POST /v1/rider/debt-charge` e depois toca em "estou rodando" (não volta sozinho). Plano 4A (painel): lista de devedores e da dívida de cada motoqueiro. Quem tem entrada e dívida pendentes vê primeiro a entrada (`blocked_reason: "entry_pending"`).
 
 ## Itens que sobraram do plano 3
 
