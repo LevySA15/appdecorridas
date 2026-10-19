@@ -43,6 +43,20 @@ class PgLedger:
         ledger.post_charge_payment(charge_id, rider_id, price_cents, split)
         self._store_new(ledger, before)
 
+    def post_charge_payment_from_balance(
+        self, charge_id: str, passenger_id: str, rider_id: str, price_cents: int, split: Split
+    ) -> None:
+        ledger = self._load(f"charge:{charge_id}")
+        before = len(ledger.entries)
+        ledger.post_charge_payment_from_balance(charge_id, passenger_id, rider_id, price_cents, split)
+        self._store_new(ledger, before)
+
+    def post_withdrawal(self, withdrawal_id: str, passenger_id: str, amount_cents: int) -> None:
+        ledger = self._load(f"withdraw:{withdrawal_id}")
+        before = len(ledger.entries)
+        ledger.post_withdrawal(withdrawal_id, passenger_id, amount_cents)
+        self._store_new(ledger, before)
+
     def post_refund(self, charge_id: str, *, keep_cents: int = 0) -> None:
         ledger = self._load(f"charge:{charge_id}")
         before = len(ledger.entries)

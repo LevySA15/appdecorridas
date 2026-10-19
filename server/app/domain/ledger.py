@@ -22,6 +22,7 @@ class EntryKind(str, Enum):
     BALANCE_SPEND = "balance_spend"     # saldo do passageiro paga a taxa ao motoqueiro
     TOPUP = "topup"                     # recarga do saldo por Pix
     DEBT_PAYMENT = "debt_payment"       # o motoqueiro pagou por Pix a dívida da taxa das corridas em dinheiro
+    WITHDRAWAL = "withdrawal"           # o passageiro sacou o saldo por Pix
 
 
 @dataclass(frozen=True)
@@ -77,20 +78,37 @@ class Ledger:
         self._append(ref, f"rider:{rider_id}", split.rider_cents, EntryKind.RIDE_PAYMENT)
         self._append(ref, self.COMPANY, split.company_cents, EntryKind.RIDE_PAYMENT)
 
+    def post_charge_payment_from_balance(
+        self, charge_id: str, passenger_id: str, rider_id: str, price_cents: int, split: Split
+    ) -> None:
+        """Lança uma corrida paga com o saldo do passageiro: o dinheiro sai de `balance:<id>`, não do provedor."""
+        if split.rider_cents + split.company_cents != price_cents:
+            raise ValueError("a divisão não fecha com o preço da corrida")
+        ref = f"charge:{charge_id}"
+        if self._has(ref, EntryKind.RIDE_PAYMENT):
+            raise ValueError(f"pagamento da cobrança {charge_id} já lançado")
+        self._append(ref, self.balance_account(passenger_id), -price_cents, EntryKind.RIDE_PAYMENT)
+        self._append(ref, f"rider:{rider_id}", split.rider_cents, EntryKind.RIDE_PAYMENT)
+        self._append(ref, self.COMPANY, split.company_cents, EntryKind.RIDE_PAYMENT)
+
     def _reverse(self, charge_id: str, destination: str, kind: EntryKind, keep_cents: int) -> None:
         """Desfaz um pagamento. O motoqueiro fica com `keep_cents` (taxa retida), a empresa devolve a sua parte
-        e o resto do valor vai para `destination` (o provedor, que devolve o Pix, ou o saldo do passageiro)."""
+        e o resto do valor vai para `destination` (o provedor, que devolve o Pix, ou o saldo do passageiro).
+        Pagamento feito com o saldo só volta para o mesmo saldo: o provedor nunca recebeu esse dinheiro."""
         ref = f"charge:{charge_id}"
         originals = [e for e in self._entries if e.ref == ref and e.kind is EntryKind.RIDE_PAYMENT]
         if not originals:
             raise ValueError(f"pagamento da cobrança {charge_id} não encontrado")
         if self._has(ref, EntryKind.REFUND) or self._has(ref, EntryKind.BALANCE_CREDIT):
             raise ValueError(f"cobrança {charge_id} já devolvida")
-        price = -sum(e.amount_cents for e in originals if e.account == self.PROVIDER)
+        source = next(e for e in originals if e.amount_cents < 0)      # de onde o dinheiro saiu: provedor ou saldo
+        if source.account.startswith("balance:") and destination != source.account:
+            raise ValueError("pagamento feito com saldo só volta para o saldo")
+        price = -source.amount_cents
         if not 0 <= keep_cents <= price:
             raise ValueError("a parte retida precisa estar entre zero e o valor da cobrança")
         for e in originals:
-            if e.account == self.PROVIDER:
+            if e is source:
                 continue
             adjust = keep_cents - e.amount_cents if e.account.startswith("rider:") else -e.amount_cents
             self._append(ref, e.account, adjust, kind)
@@ -111,6 +129,16 @@ class Ledger:
             raise ValueError(f"gasto do saldo {ref} já lançado")
         self._append(ref, self.balance_account(passenger_id), -amount_cents, EntryKind.BALANCE_SPEND)
         self._append(ref, f"rider:{rider_id}", amount_cents, EntryKind.BALANCE_SPEND)
+
+    def post_withdrawal(self, withdrawal_id: str, passenger_id: str, amount_cents: int) -> None:
+        """O passageiro sacou o saldo: sai do saldo dele e vira Pix pelo provedor."""
+        if amount_cents <= 0:
+            raise ValueError("o valor do saque precisa ser positivo")
+        ref = f"withdraw:{withdrawal_id}"
+        if self._has(ref, EntryKind.WITHDRAWAL):
+            raise ValueError(f"saque {withdrawal_id} já lançado")
+        self._append(ref, self.balance_account(passenger_id), -amount_cents, EntryKind.WITHDRAWAL)
+        self._append(ref, self.PROVIDER, amount_cents, EntryKind.WITHDRAWAL)
 
     def post_topup(self, charge_id: str, passenger_id: str, amount_cents: int) -> None:
         if amount_cents <= 0:
