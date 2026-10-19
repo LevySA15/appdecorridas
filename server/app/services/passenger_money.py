@@ -7,15 +7,17 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.db import queries
 from app.db import repositories as repo
 from app.db.config_store import AppConfig
 from app.db.pg_ledger import PgLedger
-from app.domain.balance import apply_pending_payment, spend_up_to
+from app.domain.balance import apply_pending_payment, credit, spend_up_to, waive_pending
 from app.domain.money import brl
 from app.domain.payments import PixCharge, Split
 from app.services.events import EventCollector
 from app.services.payments import PaymentService
 from app.services.quotes import NotAllowed
+from app.services.trips import NotYourRide
 
 
 class NothingToPay(Exception):
@@ -24,6 +26,10 @@ class NothingToPay(Exception):
 
 class TopupDisabled(NotAllowed):
     """A recarga de saldo está desligada (depende da resposta do advogado, spec seção 7.5)."""
+
+
+class AppealNotAllowed(Exception):
+    """O recurso não pode ser pedido ou decidido agora (já pedido, fora do prazo, já decidido, não pedido)."""
 
 
 class PassengerMoneyService:
@@ -85,3 +91,57 @@ class PassengerMoneyService:
         )
         repo.add_charge(session, charge)
         return charge
+
+    # --- recurso da taxa -----------------------------------------------------------------------
+
+    def file_appeal(self, session: Session, passenger_id: str, ride_id: str, text: str, now: float) -> None:
+        """O passageiro pede revisão da taxa (uma vez, até `appeal_window_s` depois do cancelamento)."""
+        if repo.get_cancel_fee(session, ride_id).passenger_id != passenger_id:
+            raise NotYourRide("Essa corrida não é sua.")
+        text = text.strip()
+        if not 3 <= len(text) <= 500:
+            raise ValueError("Conte em poucas palavras o que aconteceu (de 3 a 500 letras).")
+        repo.get_passenger_account(session, passenger_id, for_update=True)
+        fee = repo.get_cancel_fee(session, ride_id, for_update=True)
+        if fee.appeal_state != "none":
+            raise AppealNotAllowed("Você já pediu a revisão desta taxa.")
+        if now - fee.created_at > self.cfg.rides.appeal_window_s:
+            raise AppealNotAllowed("O prazo para pedir revisão acabou.")
+        fee.appeal_state, fee.appeal_text, fee.appealed_at = "open", text, now
+        repo.save_cancel_fee(session, fee)
+        repo.log_ride_event(session, ride_id, "fee_appeal_opened", {}, now)
+        for admin_id in queries.admin_ids(session):
+            self.events.add(admin_id, "appeal_opened", {"ride_id": ride_id})
+
+    def decide_appeal(
+        self, session: Session, admin_id: str, ride_id: str, accept: bool, note: str, now: float
+    ) -> None:
+        """O administrador decide. Aceitar perdoa a pendência e devolve ao saldo do passageiro tudo o que já foi
+        cobrado (a empresa paga; o motoqueiro fica com a taxa). Recusar não muda nada de dinheiro."""
+        passenger_id = repo.get_cancel_fee(session, ride_id).passenger_id
+        passenger = repo.get_passenger_account(session, passenger_id, for_update=True)
+        fee = repo.get_cancel_fee(session, ride_id, for_update=True)
+        if fee.appeal_state == "none":
+            raise AppealNotAllowed("Este recurso não foi pedido.")
+        if fee.appeal_state != "open":
+            raise AppealNotAllowed("Este recurso já foi decidido.")
+        waived = credited = 0
+        if accept:
+            waived = waive_pending(fee)
+            passenger.unpaid_cents = max(0, passenger.unpaid_cents - waived)
+            credited = fee.from_balance_cents + fee.retained_cents + fee.paid_later_cents - fee.credited_back_cents
+            if credited > 0:
+                PgLedger(session).post_credit_from_company(f"fee:{ride_id}:appeal", passenger_id, credited)
+                credit(passenger, credited)
+                fee.credited_back_cents += credited
+        fee.appeal_state = "accepted" if accept else "rejected"
+        fee.decided_at, fee.decided_by, fee.decision_note = now, admin_id, note.strip() or None
+        repo.save_passenger_account(session, passenger)
+        repo.save_cancel_fee(session, fee)
+        repo.log_ride_event(session, ride_id, "fee_appeal_decided", {"decision": fee.appeal_state, "by": admin_id}, now)
+        self.events.add(
+            passenger_id, "appeal_decided",
+            {"ride_id": ride_id, "decision": "accept" if accept else "reject", "credited_cents": credited},
+        )
+        if waived and passenger.unpaid_cents == 0:
+            self.events.add(passenger_id, "unblocked", {"ride_id": ride_id})
