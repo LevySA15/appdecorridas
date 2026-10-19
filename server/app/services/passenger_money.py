@@ -11,9 +11,11 @@ from app.db import queries
 from app.db import repositories as repo
 from app.db.config_store import AppConfig
 from app.db.pg_ledger import PgLedger
-from app.domain.balance import apply_pending_payment, credit, spend_up_to, waive_pending
+from app.domain.balance import Withdrawal, apply_pending_payment, credit, spend_up_to, waive_pending
+from app.domain.ids import new_id
 from app.domain.money import brl
 from app.domain.payments import PixCharge, Split
+from app.domain.pix_key import normalize_pix_key
 from app.services.events import EventCollector
 from app.services.payments import PaymentService
 from app.services.quotes import NotAllowed
@@ -26,6 +28,10 @@ class NothingToPay(Exception):
 
 class TopupDisabled(NotAllowed):
     """A recarga de saldo está desligada (depende da resposta do advogado, spec seção 7.5)."""
+
+
+class WithdrawDisabled(NotAllowed):
+    """O saque do saldo está desligado (depende da resposta do advogado, spec seção 7.5)."""
 
 
 class AppealNotAllowed(Exception):
@@ -91,6 +97,39 @@ class PassengerMoneyService:
         )
         repo.add_charge(session, charge)
         return charge
+
+    # --- saque do saldo -------------------------------------------------------------------------
+
+    def withdraw(self, session: Session, passenger_id: str, amount_cents: int, pix_key: str, now: float) -> Withdrawal:
+        """Saca parte do saldo por Pix. Desligado por padrão (ver `BalanceConfig`).
+
+        Primeiro tudo o que pode recusar, depois o débito e o livro, e o Pix por último: se o provedor falhar, a
+        unidade de trabalho inteira é desfeita por quem chama e nada fica gravado.
+        """
+        limits = self.cfg.balance
+        if not limits.withdraw_enabled:
+            raise WithdrawDisabled("O saque do saldo ainda não está disponível.")
+        if not limits.withdraw_min_cents <= amount_cents <= limits.withdraw_max_cents:
+            raise ValueError(f"O saque vai de {brl(limits.withdraw_min_cents)} a {brl(limits.withdraw_max_cents)}.")
+        key = normalize_pix_key(pix_key)
+        passenger = repo.get_passenger_account(session, passenger_id, for_update=True)
+        if passenger.unpaid_cents > 0 or repo.pending_cancel_fee(session, passenger_id, for_update=True) is not None:
+            raise NotAllowed("Pague o que está pendente antes de sacar.")
+        if passenger.balance_cents < amount_cents:
+            raise NotAllowed("Seu saldo é menor que o valor do saque.")
+        withdrawal_id = new_id("wd")
+        spend_up_to(passenger, amount_cents)
+        PgLedger(session).post_withdrawal(withdrawal_id, passenger_id, amount_cents)
+        repo.save_passenger_account(session, passenger)
+        provider_ref = self.payments.provider.payout(withdrawal_id, key.value, amount_cents)
+        withdrawal = Withdrawal(withdrawal_id, passenger_id, amount_cents, key.kind, key.masked, provider_ref, now)
+        repo.add_withdrawal(session, withdrawal)
+        self.events.add(passenger_id, "balance_changed", {"balance_cents": passenger.balance_cents})
+        self.events.add(
+            passenger_id, "withdrawal_done",
+            {"withdrawal_id": withdrawal_id, "amount_cents": amount_cents, "balance_cents": passenger.balance_cents},
+        )
+        return withdrawal
 
     # --- recurso da taxa -----------------------------------------------------------------------
 

@@ -46,6 +46,8 @@ def audit(request: Request) -> dict:
             for c in runtime.provider.charges.values()
             if c.paid and c.amount_cents - c.refunded_cents > 0     # devolução parcial deixa o resto com o provedor
         }
+        for withdrawal_id, (_, amount) in runtime.provider.payouts.items():       # o que o provedor pagou em saques
+            extract[f"withdraw:{withdrawal_id}"] = -amount
         return {
             "ledger_balanced": ledger.is_balanced(),
             "reconcile_diff": ledger.reconcile(extract),

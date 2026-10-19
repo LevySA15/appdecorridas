@@ -5,9 +5,11 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from app.api.deps import admin_user, get_runtime
 from app.db import queries
+from app.db import repositories as repo
 from app.db.config_store import all_configs, parse_config, save_config
 from app.db.models import UserRow
 from app.services.admin_log import list_admin_actions, log_admin_action
@@ -142,6 +144,33 @@ def list_appeals(
         }
         for i in items
     ]
+
+
+@router.get("/withdrawals")
+def list_withdrawals(
+    request: Request,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: AuthUser = Depends(admin_user),
+) -> list[dict]:
+    """Saques de saldo por Pix, do mais novo para o mais antigo (a chave aparece só pelo final)."""
+
+    def work(unit):
+        saques = repo.list_withdrawals(unit.session, limit, offset)
+        linhas = unit.session.execute(
+            select(UserRow.id, UserRow.name).where(UserRow.id.in_({s.passenger_id for s in saques}))
+        ).all()
+        nomes = {user_id: name for user_id, name in linhas}
+        return [
+            {
+                "withdrawal_id": s.withdrawal_id, "passenger_id": s.passenger_id,
+                "passenger_name": nomes.get(s.passenger_id), "amount_cents": s.amount_cents,
+                "key_kind": s.key_kind, "key_masked": s.key_masked, "created_at": s.created_at,
+            }
+            for s in saques
+        ]
+
+    return get_runtime(request).run(work)
 
 
 @router.post("/appeals/{ride_id}/decide", status_code=204)

@@ -35,6 +35,11 @@ class TopupIn(BaseModel):
     amount_cents: int
 
 
+class WithdrawIn(BaseModel):
+    amount_cents: int
+    pix_key: str = Field(min_length=1, max_length=100)
+
+
 class ContactIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     phone: str = Field(min_length=1, max_length=30)
@@ -114,6 +119,21 @@ def topup_balance(body: TopupIn, request: Request, user: AuthUser = Depends(pass
     def work(unit):
         charge = unit.money.topup(unit.session, user.user_id, body.amount_cents, unit.now)
         return {"charge_id": charge.charge_id, "amount_cents": charge.amount_cents, "br_code": charge.br_code}
+
+    return get_runtime(request).run(work)
+
+
+@router.post("/balance/withdraw", status_code=201)
+def withdraw_balance(body: WithdrawIn, request: Request, user: AuthUser = Depends(passenger_user)) -> dict:
+    """Saca parte do saldo por Pix. Desligado por padrão (erro `withdraw_disabled`)."""
+
+    def work(unit):
+        saque = unit.money.withdraw(unit.session, user.user_id, body.amount_cents, body.pix_key, unit.now)
+        saldo = repo.get_passenger_account(unit.session, user.user_id).balance_cents
+        return {
+            "withdrawal_id": saque.withdrawal_id, "amount_cents": saque.amount_cents, "balance_cents": saldo,
+            "key": saque.key_masked,
+        }
 
     return get_runtime(request).run(work)
 

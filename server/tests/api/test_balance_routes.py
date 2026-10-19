@@ -103,3 +103,74 @@ def test_rota_aceita_method_balance_com_saldo_que_cobre(client, pax, session, ru
     )
     assert resposta.status_code == 201, resposta.text
     assert resposta.json()["method"] == "pix"
+
+
+# --- sacar o saldo -------------------------------------------------------------------------------
+
+CPF = "529.982.247-25"
+
+
+def _admin(client, runtime, session):
+    from app.db import repositories as repo
+
+    repo.add_user(session, user_id="adm-1", phone="+5575999990000", name="Levy", role="admin")
+    return login(client, runtime, "75 99999-0000", "admin")
+
+
+def test_saque_desligado_por_padrao_responde_erro_claro(client, pax):
+    resposta = client.post("/v1/passenger/balance/withdraw", json={"amount_cents": 1500, "pix_key": CPF}, headers=pax.headers)
+    assert resposta.status_code == 403
+    assert resposta.json()["error"]["code"] == "withdraw_disabled"
+    assert client.get("/v1/passenger/state", headers=pax.headers).json()["balance_cents"] == 0
+
+
+def test_saque_ligado_responde_201_a_mascara_e_o_extrato_confere(client, pax, session, runtime, listen):
+    _recarregar(client, pax, session, runtime)
+    ligar(session, runtime, withdraw_enabled=True)
+    avisos = listen(pax.user_id)
+    resposta = client.post("/v1/passenger/balance/withdraw", json={"amount_cents": 1500, "pix_key": CPF}, headers=pax.headers)
+    assert resposta.status_code == 201, resposta.text
+    corpo = resposta.json()
+    assert (corpo["amount_cents"], corpo["balance_cents"], corpo["key"]) == (1500, 500, "final 4725")
+    assert corpo["withdrawal_id"]
+    assert client.get("/v1/passenger/state", headers=pax.headers).json()["balance_cents"] == 500
+    assert avisos.types == ["balance_changed", "withdrawal_done"]
+    auditoria = client.get("/v1/dev/audit").json()
+    assert auditoria["reconcile_diff"] == {} and auditoria["balance_matches_ledger"] is True
+
+
+def test_saque_com_chave_ruim_ou_valor_fora_dos_limites_responde_422(client, pax, session, runtime):
+    _recarregar(client, pax, session, runtime)
+    ligar(session, runtime, withdraw_enabled=True)
+    ruim = client.post("/v1/passenger/balance/withdraw", json={"amount_cents": 1500, "pix_key": "xyz"}, headers=pax.headers)
+    assert ruim.status_code == 422 and "Chave Pix" in ruim.json()["error"]["message"]
+    baixo = client.post("/v1/passenger/balance/withdraw", json={"amount_cents": 100, "pix_key": CPF}, headers=pax.headers)
+    assert baixo.status_code == 422 and "R$ 5,00 a R$ 500,00" in baixo.json()["error"]["message"]
+    assert client.get("/v1/passenger/state", headers=pax.headers).json()["balance_cents"] == 2000
+
+
+def test_saque_maior_que_o_saldo_responde_403(client, pax, session, runtime):
+    _recarregar(client, pax, session, runtime)
+    ligar(session, runtime, withdraw_enabled=True)
+    resposta = client.post("/v1/passenger/balance/withdraw", json={"amount_cents": 2500, "pix_key": CPF}, headers=pax.headers)
+    assert resposta.status_code == 403 and resposta.json()["error"]["code"] == "not_allowed"
+
+
+def test_motoqueiro_nao_saca(client, runtime, session):
+    ligar(session, runtime, withdraw_enabled=True)
+    outro = login(client, runtime, "75 99999-0007", "rider")
+    resposta = client.post("/v1/passenger/balance/withdraw", json={"amount_cents": 1500, "pix_key": CPF}, headers=outro.headers)
+    assert resposta.status_code == 403
+
+
+def test_lista_de_saques_so_para_administrador(client, pax, session, runtime):
+    _recarregar(client, pax, session, runtime)
+    ligar(session, runtime, withdraw_enabled=True)
+    client.post("/v1/passenger/balance/withdraw", json={"amount_cents": 1500, "pix_key": CPF}, headers=pax.headers)
+    assert client.get("/v1/admin/withdrawals", headers=pax.headers).status_code == 403
+    admin = _admin(client, runtime, session)
+    lista = client.get("/v1/admin/withdrawals", headers=admin.headers).json()
+    assert len(lista) == 1
+    assert lista[0]["passenger_id"] == pax.user_id and lista[0]["passenger_name"] == "Ana Lima"
+    assert (lista[0]["amount_cents"], lista[0]["key_kind"], lista[0]["key_masked"]) == (1500, "cpf", "final 4725")
+    assert "pix_key" not in lista[0] and "52998224725" not in str(lista[0])
