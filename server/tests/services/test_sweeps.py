@@ -137,10 +137,14 @@ def test_espera_na_chegada_de_5_minutos_cancela_com_devolucao_do_pix(w, session,
     relatorio = w.sweeps.run(session, AGORA + 50 + 300)
     assert relatorio.arrival_cancelled == 1
     assert repo.get_ride(session, "ride-1").state is RideState.CANCELLED
-    assert provider.charges[charge_id].refunded is True
-    assert PgLedger(session).balance("rider:r1") == 0
+    assert provider.charges[charge_id].refunded_cents == 200          # R$ 7,00 pagos menos a taxa de R$ 5,00
+    assert PgLedger(session).balance("rider:r1") == 500
     tipo, dados = repo.ride_events(session, "ride-1")[-1]
     assert tipo == "cancelled" and dados["by"] == "timeout" and dados["fee_cents"] == 500
+    taxa = repo.get_cancel_fee(session, "ride-1")
+    assert (taxa.reason, taxa.retained_cents, taxa.pending_cents) == ("arrival_timeout", 500, 0)
+    assert [e.payload["fee_cents"] for e in events.events if e.type == "ride_cancelled" and e.user_id == "r1"] == [500]
+    assert [e.payload["fee_cents"] for e in events.events if e.type == "cancel_fee" and e.user_id == "p1"] == [500]
 
 
 def test_pagamento_em_dinheiro_nao_confirmado_bloqueia_o_passageiro(w, session, positions):

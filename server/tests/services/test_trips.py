@@ -11,7 +11,7 @@ from app.db.models import RideOfferRow, RiderProfileRow
 from app.db.pg_ledger import PgLedger
 from app.domain.dispatch import ReservationBook
 from app.domain.payments import PaymentProviderError
-from app.domain.rides import CancelResult, InvalidTransition, RideState
+from app.domain.rides import InvalidTransition, RideState
 from app.domain.types import PaymentMethod
 from app.infra.redis_store import InMemoryPositionStore
 from app.services.dispatch import DispatchService
@@ -19,7 +19,7 @@ from app.services.events import EventCollector
 from app.services.payments import PaymentService
 from app.services.riders import CannotGoOnline, RiderService
 from app.services.trips import AlreadyRated, NotYourRide, TripService
-from tests.helpers import pt
+from tests.helpers import par, pt
 from tests.helpers_db import add_passenger, add_searching_ride, make_online_rider
 
 AGORA = 1_800_000_000.0
@@ -154,7 +154,7 @@ def test_cancelar_em_procura_retira_a_oferta_e_solta_a_moto(w, session, position
     make_online_rider(session, positions, 1, pt(100, 0), now=AGORA)
     add_searching_ride(session, now=AGORA)
     w.dispatch.offer_next(session, "ride-1", AGORA)
-    assert w.trips.cancel_by_passenger(session, "p1", "ride-1", AGORA + 3) == CancelResult(0, False)
+    assert par(w.trips.cancel_by_passenger(session, "p1", "ride-1", AGORA + 3)) == (0, False)
     assert repo.get_ride(session, "ride-1").state is RideState.CANCELLED
     assert session.query(RideOfferRow).one().status == "expired"
     assert reservas.reserve("r1", "ride-qualquer") is True
@@ -165,7 +165,7 @@ def test_cancelar_depois_do_prazo_gratis_registra_a_taxa(w, session, positions):
     add_passenger(session)
     aceitar(session, positions, w, method=PaymentMethod.CASH)           # aceita em AGORA + 4
     resultado = w.trips.cancel_by_passenger(session, "p1", "ride-1", AGORA + 4 + 301)
-    assert resultado == CancelResult(300, False)
+    assert par(resultado) == (300, False)
     tipo, dados = repo.ride_events(session, "ride-1")[-1]
     assert tipo == "cancelled" and dados["fee_cents"] == 300 and dados["by"] == "passenger"
 
@@ -173,7 +173,7 @@ def test_cancelar_depois_do_prazo_gratis_registra_a_taxa(w, session, positions):
 def test_cancelar_dentro_do_prazo_gratis_nao_tem_compensacao(w, session, positions):
     add_passenger(session)
     aceitar(session, positions, w, method=PaymentMethod.CASH)
-    assert w.trips.cancel_by_passenger(session, "p1", "ride-1", AGORA + 4 + 300) == CancelResult(0, False)
+    assert par(w.trips.cancel_by_passenger(session, "p1", "ride-1", AGORA + 4 + 300)) == (0, False)
 
 
 def test_cancelar_corrida_paga_devolve_o_pix_e_libera_o_motoqueiro(w, session, positions, provider, events):

@@ -5,7 +5,6 @@ from app.db import repositories as repo
 from app.db.pg_ledger import PgLedger
 from app.domain.payments import DebtState
 from app.domain.rides import (
-    CancelResult,
     InvalidTransition,
     Ride,
     RideState,
@@ -14,6 +13,7 @@ from app.domain.rides import (
 )
 from app.domain.types import PaymentMethod
 from app.services.payments import PaymentService
+from tests.helpers import par
 from tests.helpers_db import add_accepted_ride, add_passenger, add_rider
 
 FEE = 100
@@ -132,7 +132,7 @@ def test_cancelar_antes_de_pagar_libera_a_reserva(session, service):
     # Review Focus 2
     mundo(session)
     charge = service.start_pix_charge(session, "ride-1", FEE)
-    assert service.cancel_ride(session, "ride-1", now=20) == CancelResult(0, False)
+    assert par(service.cancel_ride(session, "ride-1", now=20)) == (0, False)
     assert divida(session) == (1000, 0)
     assert repo.get_charge(session, charge.charge_id).debt_state is DebtState.RELEASED
     assert repo.get_ride(session, "ride-1").state is RideState.CANCELLED
@@ -143,7 +143,7 @@ def test_cancelar_corrida_paga_devolve_o_dinheiro_e_a_divida(session, service, p
     mundo(session)
     charge = service.start_pix_charge(session, "ride-1", FEE)
     service.on_provider_event(session, provider.mark_paid(charge.charge_id))
-    assert service.cancel_ride(session, "ride-1", now=20) == CancelResult(0, True)
+    assert par(service.cancel_ride(session, "ride-1", now=20)) == (0, True)
     assert provider.charges[charge.charge_id].refunded is True
     ledger = PgLedger(session)
     assert ledger.balance("rider:r1") == 0
@@ -242,15 +242,17 @@ def test_espera_na_chegada_esgotada_com_pix_pago_devolve_o_dinheiro_e_a_divida(s
     service.on_provider_event(session, provider.mark_paid(charge.charge_id))
     _chegada(session)
     resultado = service.cancel_after_arrival_timeout(session, "ride-1", now=100 + 300)
-    assert resultado == CancelResult(500, True)
-    assert provider.charges[charge.charge_id].refunded is True
+    assert par(resultado) == (500, True)
+    assert (resultado.retained_cents, resultado.refund_to) == (500, "pix")      # quem não apareceu paga a taxa máxima
+    assert provider.charges[charge.charge_id].refunded_cents == 200             # R$ 7,00 pagos menos R$ 5,00 retidos
     ledger = PgLedger(session)
-    assert ledger.balance("rider:r1") == 0
+    assert ledger.balance("rider:r1") == 500
     assert ledger.is_balanced() is True
     assert divida(session) == (1000, 0)
     assert repo.get_ride(session, "ride-1").state is RideState.CANCELLED
     salva = repo.get_charge(session, charge.charge_id)
     assert salva.refunded is True and salva.debt_state is DebtState.RESTORED
+    assert repo.get_cancel_fee(session, "ride-1").reason == "arrival_timeout"
 
 
 def test_espera_na_chegada_antes_do_prazo_nao_cancela_nada(session, service, provider):
@@ -265,12 +267,14 @@ def test_espera_na_chegada_antes_do_prazo_nao_cancela_nada(session, service, pro
     assert PgLedger(session).balance("rider:r1") == 300
 
 
-def test_espera_na_chegada_esgotada_em_dinheiro_so_cancela_com_compensacao(session, service):
+def test_espera_na_chegada_esgotada_em_dinheiro_cancela_e_deixa_a_taxa_pendente(session, service):
     mundo(session, method=PaymentMethod.CASH)
     _chegada(session)
-    assert service.cancel_after_arrival_timeout(session, "ride-1", now=100 + 300) == CancelResult(500, False)
+    resultado = service.cancel_after_arrival_timeout(session, "ride-1", now=100 + 300)
+    assert par(resultado) == (500, False) and resultado.pending_cents == 500
     assert repo.get_ride(session, "ride-1").state is RideState.CANCELLED
     assert divida(session) == (1000, 0)
+    assert repo.get_passenger_account(session, "p1").unpaid_cents == 500
 
 
 def test_pix_pago_avisa_o_passageiro_e_o_motoqueiro(session, provider):

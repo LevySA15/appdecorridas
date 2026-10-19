@@ -12,3 +12,8 @@ def pt(north_m: float = 0.0, east_m: float = 0.0) -> GeoPoint:
     lat = ORIGIN.lat + north_m / _M_PER_DEG_LAT
     lng = ORIGIN.lng + east_m / (_M_PER_DEG_LAT * math.cos(math.radians(ORIGIN.lat)))
     return GeoPoint(lat, lng)
+
+
+def par(outcome) -> tuple[int, bool]:
+    """(taxa de cancelamento, há Pix para devolver) de um resultado de cancelamento."""
+    return outcome.fee_cents, outcome.refund_needed

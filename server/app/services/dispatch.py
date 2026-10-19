@@ -28,6 +28,18 @@ from app.services.payments import PaymentService
 _MAX_PLAUSIBLE_SPEED_MPS = 15.0
 
 
+def distance_to_pickup_m(session: Session, positions: PositionStore, ride_id: str, rider_id: str) -> float | None:
+    """Distância em linha reta da moto (última posição conhecida) ao ponto de embarque; `None` sem dado."""
+    point = positions.get(rider_id)
+    if point is None:
+        return None
+    try:
+        pickup = repo.get_ride_details(session, ride_id).pickup
+    except LookupError:
+        return None
+    return haversine_m(point, pickup)
+
+
 class OfferGone(Exception):
     """A oferta não existe mais para este motoqueiro (venceu, foi para outro, ou a corrida mudou)."""
 
@@ -162,6 +174,8 @@ class DispatchService:
         fee = fee_for_ride(number, self.cfg.fees)
         accept(ride, rider_id, now, rider_busy=busy)
         ride.fee_cents = fee
+        if not busy:        # a moto começa a vir agora; na fila isso só acontece quando ela for promovida
+            ride.approach_start_m = distance_to_pickup_m(session, self.positions, ride_id, rider_id)
         repo.save_ride(session, ride)
         offer.status = "accepted"
         session.flush()

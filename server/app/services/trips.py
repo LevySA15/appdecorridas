@@ -11,21 +11,24 @@ from app.db import repositories as repo
 from app.db.config_store import AppConfig
 from app.db.models import RatingRow, RiderProfileRow
 from app.domain.fees import count_completed_ride, offer_block_reason
+from app.infra.redis_store import PositionStore
 from app.domain.payments import PaymentProviderError
 from app.domain.rides import (
-    CancelResult,
     InvalidTransition,
     Ride,
     RideState,
+    approach_progress,
     complete,
     confirm_helmet,
+    late_cancel_fee_cents,
     mark_arrived,
     promote_from_queue,
     start_ride,
 )
 from app.domain.types import PaymentMethod
 from app.services.events import EventCollector
-from app.services.payments import PaymentService
+from app.services.dispatch import distance_to_pickup_m
+from app.services.payments import CancelOutcome, PaymentService
 
 
 class NotYourRide(Exception):
@@ -44,12 +47,18 @@ class Dispatcher(Protocol):
 
 class TripService:
     def __init__(
-        self, payments: PaymentService, dispatcher: Dispatcher, events: EventCollector, cfg: AppConfig | None = None
+        self,
+        payments: PaymentService,
+        dispatcher: Dispatcher,
+        events: EventCollector,
+        cfg: AppConfig | None = None,
+        positions: PositionStore | None = None,
     ) -> None:
         self.payments = payments
         self.dispatcher = dispatcher
         self.events = events
         self.cfg = cfg or AppConfig.defaults()
+        self.positions = positions
 
     def _rider_ride(self, session: Session, rider_id: str, ride_id: str) -> Ride:
         ride = repo.get_ride(session, ride_id, for_update=True)
@@ -146,6 +155,8 @@ class TripService:
             self.dispatcher.offer_next(session, queued_id, now)
             return
         promote_from_queue(queued, now)
+        if self.positions is not None:      # a moto começa a vir agora: guarda de onde
+            queued.approach_start_m = distance_to_pickup_m(session, self.positions, queued_id, rider_id)
         repo.save_ride(session, queued)
         repo.log_ride_event(session, queued_id, "promoted", {}, now)
         self.events.add(queued.passenger_id, "rider_on_the_way", {"ride_id": queued_id})
@@ -153,14 +164,31 @@ class TripService:
 
     # --- cancelamento ---------------------------------------------------------------------------
 
-    def cancel_by_passenger(self, session: Session, passenger_id: str, ride_id: str, now: float) -> CancelResult:
+    def _progress(self, session: Session, ride: Ride) -> float | None:
+        """Quanto a moto já andou até o ponto de embarque; `None` se não há posição conhecida."""
+        if self.positions is None or ride.rider_id is None:
+            return None
+        return approach_progress(
+            ride.approach_start_m, distance_to_pickup_m(session, self.positions, ride.ride_id, ride.rider_id)
+        )
+
+    def cancel_fee_preview(self, session: Session, ride_id: str, now: float) -> int:
+        """A taxa que o passageiro pagaria se cancelasse agora (0 dentro da janela grátis ou fora de "a caminho")."""
+        ride = repo.get_ride(session, ride_id)
+        if ride.state not in (RideState.ACCEPTED, RideState.ARRIVED) or ride.en_route_since is None:
+            return 0
+        if now - ride.en_route_since <= self.cfg.rides.free_cancel_after_accept_s:
+            return 0
+        return late_cancel_fee_cents(1.0 if ride.state is RideState.ARRIVED else self._progress(session, ride), self.cfg.rides)
+
+    def cancel_by_passenger(self, session: Session, passenger_id: str, ride_id: str, now: float) -> CancelOutcome:
         ride = repo.get_ride(session, ride_id, for_update=True)
         if ride.passenger_id != passenger_id:
             raise NotYourRide("Essa corrida não é sua.")
         state_before, rider_id = ride.state, ride.rider_id
         if rider_id is not None and state_before in (RideState.ACCEPTED, RideState.ARRIVED):
             self.lock_queued_ride(session, rider_id)
-        result = self.payments.cancel_ride(session, ride_id, now)
+        result = self.payments.cancel_ride(session, ride_id, now, progress=self._progress(session, ride))
         repo.log_ride_event(
             session, ride_id, "cancelled",
             {"by": "passenger", "fee_cents": result.fee_cents, "refund": result.refund_needed},
@@ -169,7 +197,9 @@ class TripService:
         if state_before in (RideState.REQUESTED, RideState.SEARCHING):
             self.dispatcher.withdraw_offer(session, ride_id)
         if rider_id is not None:
-            self.events.add(rider_id, "ride_cancelled", {"ride_id": ride_id, "by": "passenger"})
+            self.events.add(
+                rider_id, "ride_cancelled", {"ride_id": ride_id, "by": "passenger", "fee_cents": result.fee_cents}
+            )
             if state_before in (RideState.ACCEPTED, RideState.ARRIVED):
                 self.after_ride_ends(session, rider_id, now)
         return result

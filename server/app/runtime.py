@@ -127,7 +127,7 @@ class Runtime:
         events = EventCollector()
         payments = PaymentService(self.provider, cfg.fees, cfg.rides, events)
         dispatch = DispatchService(self.positions, self.reservations, self.maps, payments, events, cfg)
-        trips = TripService(payments, dispatch, events, cfg)
+        trips = TripService(payments, dispatch, events, cfg, self.positions)
         return Unit(
             session=session, now=self.clock(), cfg=cfg, events=events, positions=self.positions,
             auth=AuthService(self.otp_sender, cfg.auth),

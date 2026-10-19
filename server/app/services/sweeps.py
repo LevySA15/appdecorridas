@@ -122,9 +122,15 @@ class SweepService:
                  "fee_cents": result.fee_cents, "refund": result.refund_needed},
                 now,
             )
-            self.events.add(ride.passenger_id, "ride_cancelled", {"ride_id": ride_id, "reason": "arrival_wait"})
+            self.events.add(
+                ride.passenger_id, "ride_cancelled",
+                {"ride_id": ride_id, "reason": "arrival_wait", "fee_cents": result.fee_cents},
+            )
             if ride.rider_id is not None:
-                self.events.add(ride.rider_id, "ride_cancelled", {"ride_id": ride_id, "reason": "arrival_wait"})
+                self.events.add(
+                    ride.rider_id, "ride_cancelled",
+                    {"ride_id": ride_id, "reason": "arrival_wait", "fee_cents": result.fee_cents},
+                )
                 self.trips.after_ride_ends(session, ride.rider_id, now)
             return True
 

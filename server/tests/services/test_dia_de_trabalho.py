@@ -2,9 +2,9 @@ from app.adapters.fake_payments import FakePaymentProvider
 from app.db import repositories as repo
 from app.db.pg_ledger import PgLedger
 from app.domain.fees import register_completed_ride
-from app.domain.rides import CancelResult
 from app.domain.types import PaymentMethod
 from app.services.payments import PaymentService
+from tests.helpers import par
 from tests.helpers_db import add_accepted_ride, add_passenger, add_rider
 
 FEE = 100
@@ -38,7 +38,7 @@ def test_dia_de_trabalho_com_dinheiro_pix_e_estorno_fecha_as_contas(session):
     add_accepted_ride(session, ride_id="ride-3", passenger_id="p3", price=600)
     charge3 = service.start_pix_charge(session, "ride-3", FEE)
     service.on_provider_event(session, provider.mark_paid(charge3.charge_id))
-    assert service.cancel_ride(session, "ride-3", now=20) == CancelResult(0, True)
+    assert par(service.cancel_ride(session, "ride-3", now=20)) == (0, True)
 
     # fechamento: o livro bate com o extrato do provedor e tudo soma zero
     ledger = PgLedger(session)

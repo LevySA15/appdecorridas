@@ -8,11 +8,13 @@ Ordem de travas no banco: corrida, depois motoqueiro, depois cobrança.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from sqlalchemy.orm import Session
 
 from app.db import repositories as repo
 from app.db.pg_ledger import PgLedger
-from app.domain.balance import credit
+from app.domain.balance import CancelFee, FeePlan, credit, plan_fee_collection, spend_up_to
 from app.domain.config import FeeConfig, RideConfig
 from app.domain.fees import RiderAccount, add_cash_fee_debt, mark_entry_paid
 from app.domain.payments import (
@@ -45,6 +47,18 @@ from app.domain.rides import (
 )
 from app.domain.types import PaymentMethod
 from app.services.events import EventCollector
+
+
+@dataclass(frozen=True)
+class CancelOutcome:
+    """O que aconteceu num cancelamento: a taxa (se tardio), de onde ela saiu e para onde foi a devolução."""
+
+    fee_cents: int
+    refund_needed: bool
+    refund_to: str | None = None        # "pix" | "balance" | None
+    from_balance_cents: int = 0
+    retained_cents: int = 0
+    pending_cents: int = 0
 
 
 class PaymentService:
@@ -224,35 +238,84 @@ class PaymentService:
         acc: RiderAccount | None,
         charge: PixCharge | None,
         result: CancelResult,
-    ) -> None:
-        """Grava um cancelamento: devolve o Pix pago (e a dívida) ou solta a dívida reservada."""
+        now: float,
+        reason: str,
+        progress: float | None,
+    ) -> CancelOutcome:
+        """Grava um cancelamento: cobra a taxa (saldo, retenção do Pix, pendência), devolve o Pix pago
+        (e a dívida) ou solta a dívida reservada."""
         if result.refund_needed and (charge is None or acc is None):
             raise RuntimeError(f"corrida {ride.ride_id} tem Pix pago, mas nenhuma cobrança registrada")
+        plan = FeePlan(0, 0, 0)
+        if result.fee_cents > 0 and ride.rider_id is not None:
+            plan = self._charge_fee(session, ride, result, charge, now, reason, progress)
+        refund_to = None
         if charge is not None and acc is not None:
             if result.refund_needed:
-                self._refund(session, ride.passenger_id, charge, acc, PgLedger(session))
+                refund_to = self._refund(
+                    session, ride.passenger_id, charge, acc, PgLedger(session), keep_cents=plan.retained
+                )
             else:
                 self._release_if_reserved(charge, acc)
             repo.save_charge(session, charge)
         if acc is not None:
             repo.save_rider_account(session, acc)
         repo.save_ride(session, ride)
+        if result.fee_cents > 0 and ride.rider_id is not None:
+            self._emit(
+                ride.passenger_id, "cancel_fee",
+                {
+                    "ride_id": ride.ride_id, "fee_cents": result.fee_cents, "from_balance_cents": plan.from_balance,
+                    "retained_cents": plan.retained, "pending_cents": plan.pending,
+                    "balance_cents": repo.get_passenger_account(session, ride.passenger_id).balance_cents,
+                },
+            )
+        return CancelOutcome(
+            result.fee_cents, result.refund_needed, refund_to, plan.from_balance, plan.retained, plan.pending
+        )
 
-    def cancel_ride(self, session: Session, ride_id: str, now: float) -> CancelResult:
-        """Cancelamento pelo passageiro: devolve o Pix se já estava pago e solta a dívida reservada."""
+    def _charge_fee(
+        self, session: Session, ride: Ride, result: CancelResult, charge: PixCharge | None, now: float,
+        reason: str, progress: float | None,
+    ) -> FeePlan:
+        """Cobra a taxa do cancelamento tardio: primeiro o saldo, depois o que o Pix pago puder cobrir (a
+        devolução é feita por quem chama, com `keep_cents`); o resto vira pendência e bloqueia novos pedidos."""
+        passenger = repo.get_passenger_account(session, ride.passenger_id, for_update=True)
+        held = charge.amount_cents if result.refund_needed and charge is not None else 0
+        plan = plan_fee_collection(result.fee_cents, passenger.balance_cents, held)
+        if plan.from_balance:
+            spend_up_to(passenger, plan.from_balance)
+            PgLedger(session).post_spend_balance(
+                f"fee:{ride.ride_id}:cancel", ride.passenger_id, ride.rider_id, plan.from_balance
+            )
+        passenger.unpaid_cents += plan.pending
+        repo.save_passenger_account(session, passenger)
+        repo.add_cancel_fee(
+            session,
+            CancelFee(
+                ride_id=ride.ride_id, passenger_id=ride.passenger_id, rider_id=ride.rider_id,
+                fee_cents=result.fee_cents, reason=reason, created_at=now, progress=progress,
+                from_balance_cents=plan.from_balance, retained_cents=plan.retained, pending_cents=plan.pending,
+            ),
+        )
+        return plan
+
+    def cancel_ride(
+        self, session: Session, ride_id: str, now: float, progress: float | None = None
+    ) -> CancelOutcome:
+        """Cancelamento pelo passageiro: cobra a taxa se foi tardio, devolve o Pix se já estava pago e solta a
+        dívida reservada. `progress` é quanto a moto já andou até o ponto de embarque."""
         ride = repo.get_ride(session, ride_id, for_update=True)
         acc, charge = self._rider_and_charge(session, ride)
-        result = cancel(ride, now, self.ride_cfg)
-        self._settle_cancellation(session, ride, acc, charge, result)
-        return result
+        result = cancel(ride, now, self.ride_cfg, progress)
+        return self._settle_cancellation(session, ride, acc, charge, result, now, "passenger", progress)
 
-    def cancel_after_arrival_timeout(self, session: Session, ride_id: str, now: float) -> CancelResult:
-        """Passageiro não apareceu dentro do tempo de espera: cancela e devolve o Pix, se pago."""
+    def cancel_after_arrival_timeout(self, session: Session, ride_id: str, now: float) -> CancelOutcome:
+        """Passageiro não apareceu dentro do tempo de espera: cancela, cobra a taxa máxima e devolve o Pix, se pago."""
         ride = repo.get_ride(session, ride_id, for_update=True)
         acc, charge = self._rider_and_charge(session, ride)
         result = cancel_after_arrival_timeout(ride, now, self.ride_cfg)
-        self._settle_cancellation(session, ride, acc, charge, result)
-        return result
+        return self._settle_cancellation(session, ride, acc, charge, result, now, "arrival_timeout", 1.0)
 
     def release_queued_ride(self, session: Session, ride_id: str, now: float) -> bool:
         """Tira a corrida da fila e volta para a busca. Devolve se houve estorno de Pix pago."""
