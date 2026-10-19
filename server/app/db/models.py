@@ -187,7 +187,7 @@ class CancelFeeRow(Base):
     rider_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     fee_cents: Mapped[int] = mapped_column(Integer)
     reason: Mapped[str] = mapped_column(String(16))             # passenger | arrival_timeout
-    progress: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    traveled_m: Mapped[float | None] = mapped_column(Float(53), nullable=True)
     from_balance_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     retained_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     pending_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))

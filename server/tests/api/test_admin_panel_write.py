@@ -63,6 +63,7 @@ def test_gravar_parametro_vale_na_hora_e_aparece_na_proxima_leitura(client, admi
     "chave, mudar, status",
     [
         ("rides", {"cancel_fee_min_cents": 600, "cancel_fee_max_cents": 500}, 422),
+        ("rides", {"cancel_fee_free_m": 2000, "cancel_fee_full_m": 1500}, 422),
         ("fees", {"tiers": [{"from_ride": 1, "to_ride": None, "fee_cents": 10}]}, 422),
         ("rides", {"campo_que_nao_existe": 1}, 422),
         ("balance", {"topup_min_cents": 5000, "topup_max_cents": 1000}, 422),

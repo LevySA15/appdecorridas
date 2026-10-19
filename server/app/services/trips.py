@@ -17,7 +17,7 @@ from app.domain.rides import (
     InvalidTransition,
     Ride,
     RideState,
-    approach_progress,
+    approach_traveled_m,
     complete,
     confirm_helmet,
     late_cancel_fee_cents,
@@ -196,14 +196,14 @@ class TripService:
 
     # --- cancelamento ---------------------------------------------------------------------------
 
-    def _progress(self, session: Session, ride: Ride, now: float) -> float | None:
-        """Quanto a moto já andou até o ponto de embarque; `None` sem posição ou com posição velha demais."""
+    def _traveled_m(self, session: Session, ride: Ride, now: float) -> float | None:
+        """Quantos metros a moto já andou até o ponto de embarque; `None` sem posição ou com posição velha demais."""
         if self.positions is None or ride.rider_id is None:
             return None
         distance = distance_to_pickup_m(
             session, self.positions, ride.ride_id, ride.rider_id, now, self.cfg.dispatch.position_max_age_s
         )
-        return approach_progress(ride.approach_start_m, distance)
+        return approach_traveled_m(ride.approach_start_m, distance)
 
     def cancel_fee_preview(self, session: Session, ride_id: str, now: float) -> int:
         """A taxa que o passageiro pagaria se cancelasse agora (0 dentro da janela grátis ou fora de "a caminho")."""
@@ -213,7 +213,7 @@ class TripService:
         if now - ride.en_route_since <= self.cfg.rides.free_cancel_after_accept_s:
             return 0
         return late_cancel_fee_cents(
-            1.0 if ride.state is RideState.ARRIVED else self._progress(session, ride, now), self.cfg.rides
+            self._traveled_m(session, ride, now), self.cfg.rides, at_pickup=ride.state is RideState.ARRIVED
         )
 
     def cancel_by_passenger(self, session: Session, passenger_id: str, ride_id: str, now: float) -> CancelOutcome:
@@ -223,7 +223,7 @@ class TripService:
         state_before, rider_id = ride.state, ride.rider_id
         if rider_id is not None and state_before in (RideState.ACCEPTED, RideState.ARRIVED):
             self.lock_queued_ride(session, rider_id)
-        result = self.payments.cancel_ride(session, ride_id, now, progress=self._progress(session, ride, now))
+        result = self.payments.cancel_ride(session, ride_id, now, traveled_m=self._traveled_m(session, ride, now))
         repo.log_ride_event(
             session, ride_id, "cancelled",
             {"by": "passenger", "fee_cents": result.fee_cents, "refund": result.refund_needed},

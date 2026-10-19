@@ -376,7 +376,7 @@ def ride_event_time(session: Session, ride_id: str, kind: str) -> float | None:
 def _fee_to_domain(row: CancelFeeRow) -> CancelFee:
     return CancelFee(
         ride_id=row.ride_id, passenger_id=row.passenger_id, rider_id=row.rider_id, fee_cents=row.fee_cents,
-        reason=row.reason, created_at=row.created_at, progress=row.progress,
+        reason=row.reason, created_at=row.created_at, traveled_m=row.traveled_m,
         from_balance_cents=row.from_balance_cents, retained_cents=row.retained_cents,
         pending_cents=row.pending_cents, paid_later_cents=row.paid_later_cents, waived_cents=row.waived_cents,
         credited_back_cents=row.credited_back_cents, appeal_state=row.appeal_state, appeal_text=row.appeal_text,
@@ -391,7 +391,7 @@ def _apply_fee(row: CancelFeeRow, fee: CancelFee) -> None:
     row.fee_cents = fee.fee_cents
     row.reason = fee.reason
     row.created_at = fee.created_at
-    row.progress = fee.progress
+    row.traveled_m = fee.traveled_m
     row.from_balance_cents = fee.from_balance_cents
     row.retained_cents = fee.retained_cents
     row.pending_cents = fee.pending_cents

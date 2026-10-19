@@ -56,7 +56,7 @@ class CancelFee:
     fee_cents: int
     reason: str                 # "passenger" (cancelou) ou "arrival_timeout" (não apareceu)
     created_at: float
-    progress: float | None = None
+    traveled_m: float | None = None     # metros que a moto tinha andado até o ponto quando a corrida foi cancelada
     from_balance_cents: int = 0
     retained_cents: int = 0
     pending_cents: int = 0

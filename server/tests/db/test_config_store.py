@@ -113,6 +113,7 @@ def test_configuracao_antiga_de_corridas_com_a_compensacao_ainda_carrega(session
     carregada = load_config(session, "rides")
     assert carregada.pix_window_s == 90 and carregada.free_cancel_after_accept_s == 60
     assert carregada.cancel_fee_min_cents == 300 and carregada.cancel_fee_max_cents == 500
+    assert carregada.cancel_fee_free_m == 300 and carregada.cancel_fee_full_m == 1500
 
 
 @pytest.mark.parametrize(
@@ -121,6 +122,9 @@ def test_configuracao_antiga_de_corridas_com_a_compensacao_ainda_carrega(session
         {"cancel_fee_min_cents": 600, "cancel_fee_max_cents": 500},
         {"cancel_fee_min_cents": 0},
         {"cancel_fee_round_cents": 0},
+        {"cancel_fee_free_m": -1},
+        {"cancel_fee_free_m": 1500},
+        {"cancel_fee_full_m": 300},
         {"appeal_window_s": 0},
     ],
 )

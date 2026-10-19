@@ -51,9 +51,11 @@ pickup, destination, distance_m, rider` (`rider_id, name, plate, moto_model, rat
 `photo_url` é uma rota com login: `GET /v1/riders/{id}/documents/selfie`.
 
 **Cancelamento tardio (taxa de R$ 3,00 a R$ 5,00).** Cancelar é grátis até 5 minutos depois de a moto aceitar (e sempre que a
-corrida ainda não tem moto ou está na fila). Depois disso há uma taxa de R$ 3,00 a R$ 5,00, maior quanto mais a moto já
-andou (com a moto no ponto, R$ 5,00; sem posição da moto, R$ 3,00). Passageiro que não aparece depois de 5 minutos de espera na
-chegada paga R$ 5,00. A taxa vai inteira para o motoqueiro e é cobrada nesta ordem: do **saldo** do passageiro, depois da
+corrida ainda não tem moto ou está na fila). Depois disso a taxa depende de **quantos metros a moto já andou** em direção ao
+passageiro: menos de 300 m, **sem taxa**; a partir de 300 m, R$ 3,00, subindo em linha reta até R$ 5,00 com 1,5 km andados
+(passos de R$ 0,10); com a moto no ponto, R$ 5,00; sem posição recente da moto, R$ 3,00. Os 300 m, os 1,5 km e os valores são
+parâmetros (`rides`: `cancel_fee_free_m`, `cancel_fee_full_m`, `cancel_fee_min_cents`, `cancel_fee_max_cents`). Passageiro que
+não aparece depois de 5 minutos de espera na chegada paga R$ 5,00. A taxa vai inteira para o motoqueiro e é cobrada nesta ordem: do **saldo** do passageiro, depois da
 **devolução do Pix** já pago (a moto fica com a taxa e só o resto volta), e o que sobrar vira **pendência**: o passageiro não pede outra
 corrida até pagar (`blocked_reason`). Resposta do cancelamento: `fee_cents` (0 se foi de graça), `fee`
 (`{"from_balance_cents","retained_cents","pending_cents"}` ou `null`), `refund` (havia Pix pago), `refund_to`

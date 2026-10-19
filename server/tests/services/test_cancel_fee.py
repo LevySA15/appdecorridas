@@ -1,4 +1,4 @@
-"""Taxa do cancelamento tardio: valor pela distância andada e cobrança (saldo, devolução do Pix, pendência)."""
+"""Taxa do cancelamento tardio: valor pelos metros andados e cobrança (saldo, devolução do Pix, pendência)."""
 from types import SimpleNamespace
 
 import pytest
@@ -99,7 +99,7 @@ def test_cancelar_dentro_da_janela_nao_cobra_nada(session, positions, w, events)
 def test_taxa_sai_do_saldo(session, positions, w, events):
     moto_a(session, positions, w, method=PaymentMethod.CASH)
     saldo(session, 1000)
-    positions.update("r1", pt(500, 0), AGORA + 300)                      # andou 75% do caminho
+    positions.update("r1", pt(800, 0), AGORA + 300)                      # andou 1200 m dos 2000
     resultado = w.trips.cancel_by_passenger(session, "p1", "ride-1", FORA_DA_JANELA)
     assert (resultado.fee_cents, resultado.from_balance_cents, resultado.pending_cents) == (450, 450, 0)
     assert resultado.refund_to is None
@@ -110,7 +110,7 @@ def test_taxa_sai_do_saldo(session, positions, w, events):
     assert ledger.is_balanced() is True
     taxa = repo.get_cancel_fee(session, "ride-1")
     assert (taxa.fee_cents, taxa.from_balance_cents, taxa.pending_cents, taxa.reason) == (450, 450, 0, "passenger")
-    assert taxa.progress == pytest.approx(0.75, abs=0.01)
+    assert taxa.traveled_m == pytest.approx(1200, abs=10)
     assert eventos(events, "p1", "cancel_fee") == [
         {"ride_id": "ride-1", "fee_cents": 450, "from_balance_cents": 450, "retained_cents": 0,
          "pending_cents": 0, "balance_cents": 550}
@@ -121,7 +121,7 @@ def test_taxa_sai_do_saldo(session, positions, w, events):
 def test_saldo_curto_deixa_pendencia_e_bloqueia(session, positions, w):
     moto_a(session, positions, w, method=PaymentMethod.CASH)
     saldo(session, 100)
-    resultado = w.trips.cancel_by_passenger(session, "p1", "ride-1", FORA_DA_JANELA)     # moto não saiu do lugar
+    resultado = w.trips.cancel_by_passenger(session, "p1", "ride-1", FORA_DA_JANELA)     # sem posição recente da moto
     assert (resultado.fee_cents, resultado.from_balance_cents, resultado.pending_cents) == (300, 100, 200)
     conta = repo.get_passenger_account(session, "p1")
     assert (conta.balance_cents, conta.unpaid_cents) == (0, 200)
@@ -131,8 +131,8 @@ def test_saldo_curto_deixa_pendencia_e_bloqueia(session, positions, w):
     assert PgLedger(session).balance("rider:r1") == 100 and PgLedger(session).is_balanced() is True
 
 
-def _pix_pago(session, positions, w, provider, metros_andados=1000, debt=60):
-    """Pix de R$ 7,00 pago com a moto a 1000 m do ponto (progresso 0,5 = taxa de R$ 4,00)."""
+def _pix_pago(session, positions, w, provider, metros_andados=900, debt=60):
+    """Pix de R$ 7,00 pago com a moto que andou 900 m dos 2000 até o ponto (taxa de R$ 4,00)."""
     add_passenger(session)
     make_online_rider(session, positions, 1, pt(2000, 0), now=AGORA)
     acc = repo.get_rider_account(session, "r1")
@@ -191,7 +191,7 @@ def test_taxa_igual_ao_preco_nao_chama_o_provedor_e_o_livro_fecha(session, posit
     w.dispatch.offer_next(session, "ride-1", AGORA)
     w.dispatch.accept_offer(session, "r1", "ride-1", AGORA + 4)
     pagar(session, w)
-    positions.update("r1", pt(0, 0), AGORA + 300)                                       # a moto continua mandando posição
+    w.trips.arrive(session, "r1", "ride-1", AGORA + 100)
     resultado = w.trips.cancel_by_passenger(session, "p1", "ride-1", FORA_DA_JANELA)    # moto no ponto: R$ 5,00
     assert (resultado.fee_cents, resultado.retained_cents, resultado.refund_to) == (500, 500, "pix")
     charge_id = repo.get_current_charge_id(session, "ride-1")
@@ -226,7 +226,7 @@ def test_cancelar_duas_vezes_nao_cobra_duas_vezes(session, positions, w, events)
 
 def test_previa_da_taxa_acompanha_o_que_seria_cobrado(session, positions, w):
     moto_a(session, positions, w, method=PaymentMethod.CASH)
-    positions.update("r1", pt(500, 0), AGORA + 300)
+    positions.update("r1", pt(800, 0), AGORA + 300)
     assert w.trips.cancel_fee_preview(session, "ride-1", ACEITE + 300) == 0          # ainda na janela grátis
     previa = w.trips.cancel_fee_preview(session, "ride-1", FORA_DA_JANELA)
     assert previa == 450
@@ -248,7 +248,7 @@ def test_pix_que_chega_depois_do_cancelamento_tardio_paga_a_taxa_pendente_e_devo
     add_passenger(session)
     make_online_rider(session, positions, 1, pt(2000, 0), now=AGORA)
     aceitar(session, positions, w)
-    positions.update("r1", pt(1000, 0), AGORA + 300)                         # progresso 0,5: taxa de R$ 4,00
+    positions.update("r1", pt(1100, 0), AGORA + 300)                         # andou 900 m: taxa de R$ 4,00
     resultado = w.trips.cancel_by_passenger(session, "p1", "ride-1", FORA_DA_JANELA)
     assert (resultado.fee_cents, resultado.pending_cents, resultado.refund_needed) == (400, 400, False)
     assert repo.get_passenger_account(session, "p1").unpaid_cents == 400
@@ -283,14 +283,42 @@ def test_pix_atrasado_de_corrida_cancelada_de_graca_continua_sendo_devolvido_int
 
 def test_posicao_velha_da_moto_cobra_o_minimo(session, positions, w):
     moto_a(session, positions, w, method=PaymentMethod.CASH)
-    positions.update("r1", pt(500, 0), AGORA + 10)       # andou 75%, mas a última posição é de 295 s atrás
+    positions.update("r1", pt(800, 0), AGORA + 10)       # andou 1200 m, mas a última posição é de 295 s atrás
     assert w.trips.cancel_fee_preview(session, "ride-1", FORA_DA_JANELA) == 300
     assert w.trips.cancel_by_passenger(session, "p1", "ride-1", FORA_DA_JANELA).fee_cents == 300
 
 
 def test_posicao_recente_continua_valendo_no_limite_de_30_segundos(session, positions, w):
     moto_a(session, positions, w, method=PaymentMethod.CASH)
-    positions.update("r1", pt(500, 0), FORA_DA_JANELA - 30)
+    positions.update("r1", pt(800, 0), FORA_DA_JANELA - 30)
     assert w.trips.cancel_fee_preview(session, "ride-1", FORA_DA_JANELA) == 450
-    positions.update("r1", pt(500, 0), FORA_DA_JANELA - 31)
+    positions.update("r1", pt(800, 0), FORA_DA_JANELA - 31)
     assert w.trips.cancel_fee_preview(session, "ride-1", FORA_DA_JANELA) == 300
+
+
+def test_moto_que_nao_saiu_do_lugar_nao_gera_taxa(session, positions, w, events):
+    moto_a(session, positions, w, method=PaymentMethod.CASH)
+    positions.update("r1", pt(2000, 0), AGORA + 300)                     # continua parada, mandando posição
+    assert w.trips.cancel_fee_preview(session, "ride-1", FORA_DA_JANELA) == 0
+    resultado = w.trips.cancel_by_passenger(session, "p1", "ride-1", FORA_DA_JANELA)
+    assert (resultado.fee_cents, resultado.pending_cents, resultado.refund_needed) == (0, 0, False)
+    with pytest.raises(LookupError):
+        repo.get_cancel_fee(session, "ride-1")
+    assert repo.get_passenger_account(session, "p1").unpaid_cents == 0
+    assert passenger_block_reason(session, "p1") is None
+    assert eventos(events, "p1", "cancel_fee") == []
+    assert eventos(events, "r1", "ride_cancelled")[-1]["fee_cents"] == 0
+    assert PgLedger(session).balance("rider:r1") == 0
+
+
+def test_moto_que_andou_pouco_nao_gera_taxa_e_o_pix_volta_inteiro(session, positions, w, provider):
+    add_passenger(session)
+    make_online_rider(session, positions, 1, pt(2000, 0), now=AGORA)
+    aceitar(session, positions, w)
+    pagar(session, w)
+    positions.update("r1", pt(1800, 0), AGORA + 300)                     # andou 200 m
+    resultado = w.trips.cancel_by_passenger(session, "p1", "ride-1", FORA_DA_JANELA)
+    assert (resultado.fee_cents, resultado.retained_cents, resultado.refund_to) == (0, 0, "pix")
+    charge_id = repo.get_current_charge_id(session, "ride-1")
+    assert provider.charges[charge_id].refunded_cents == 700
+    assert PgLedger(session).balance("rider:r1") == 0 and PgLedger(session).is_balanced() is True

@@ -42,9 +42,11 @@ class FeeConfig:
 class RideConfig:
     pix_window_s: int = 120
     free_cancel_after_accept_s: int = 300   # janela grátis de cancelamento, contada do aceite da moto
-    cancel_fee_min_cents: int = 300         # taxa de cancelamento tardio: R$ 3,00 com a moto saindo...
-    cancel_fee_max_cents: int = 500         # ...a R$ 5,00 com a moto no ponto de embarque
+    cancel_fee_min_cents: int = 300         # taxa de cancelamento tardio: R$ 3,00 com a moto já tendo andado o corte...
+    cancel_fee_max_cents: int = 500         # ...a R$ 5,00 com a moto no ponto de embarque (ou já andou o trecho cheio)
     cancel_fee_round_cents: int = 10        # a taxa é arredondada a R$ 0,10
+    cancel_fee_free_m: int = 300            # moto que andou menos que isso em direção ao passageiro: sem taxa
+    cancel_fee_full_m: int = 1500           # com tantos metros andados a taxa chega ao máximo
     appeal_window_s: int = 7 * 86_400       # prazo para o passageiro pedir revisão da taxa
     max_wait_at_arrival_s: int = 300
     queue_max_wait_s: int = 480
@@ -109,6 +111,8 @@ def validate_ride_config(cfg: RideConfig) -> None:
         raise ValueError("a taxa de cancelamento precisa ser positiva e o mínimo não pode passar do máximo")
     if cfg.cancel_fee_round_cents <= 0:
         raise ValueError("o arredondamento da taxa de cancelamento precisa ser positivo")
+    if cfg.cancel_fee_free_m < 0 or cfg.cancel_fee_full_m <= cfg.cancel_fee_free_m:
+        raise ValueError("na taxa de cancelamento, os metros sem taxa não podem ser negativos nem passar dos metros da taxa cheia")
     if cfg.appeal_window_s <= 0:
         raise ValueError("o prazo do recurso precisa ser positivo")
     _need(cfg.free_cancel_after_accept_s >= 0, "a janela grátis de cancelamento não pode ser negativa")

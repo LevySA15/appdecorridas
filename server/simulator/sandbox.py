@@ -47,6 +47,7 @@ def seed_database(session: Session, *, fast: bool) -> None:
             dataclasses.replace(
                 RideConfig(), pix_window_s=40, max_wait_at_arrival_s=75, queue_max_wait_s=120, search_give_up_s=45,
                 cash_pay_wait_s=45, free_cancel_after_accept_s=15,
+                cancel_fee_free_m=10, cancel_fee_full_m=40,        # a cidade da simulação rápida é minúscula (cerca de 40 m)
             ),
         )
         save_config(session, "dispatch", dataclasses.replace(DispatchConfig(), offer_timeout_s=8))

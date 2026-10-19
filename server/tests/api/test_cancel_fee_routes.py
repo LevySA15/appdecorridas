@@ -62,6 +62,18 @@ def test_visao_da_corrida_mostra_o_fim_da_janela_e_a_taxa_de_agora(client, pax, 
     assert estado(client, pax)["ride"]["cancel"] == {"free_until": aceitou_em + 300, "fee_cents_now": 300}
 
 
+def test_cancelar_tarde_com_a_moto_parada_no_lugar_nao_cobra_nada(client, pax, rider, clock, session):
+    ride_id = aceita(client, pax, rider)
+    clock.advance(301)
+    ponto = pt(300, 0)                     # onde a moto estava ao aceitar: ela não saiu de lá
+    assert client.post("/v1/rider/position", json={"lat": ponto.lat, "lng": ponto.lng}, headers=rider.headers).status_code == 204
+    assert estado(client, pax)["ride"]["cancel"]["fee_cents_now"] == 0
+    resposta = client.post(f"/v1/passenger/rides/{ride_id}/cancel", headers=pax.headers)
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.json() == {"refund": False, "fee_cents": 0, "fee": None, "refund_to": None, "balance_cents": 0}
+    assert estado(client, pax).get("blocked_reason") is None
+
+
 def test_corrida_ainda_sem_moto_nao_tem_janela(client, pax, session, runtime, clock):
     online_rider(session, runtime, clock, 1)
     quote = client.post("/v1/passenger/quotes", json=QUOTE, headers=pax.headers).json()

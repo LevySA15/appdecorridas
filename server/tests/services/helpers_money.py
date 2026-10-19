@@ -43,12 +43,12 @@ def com_pendencia(session, positions, w, balance_cents=0):
 
 
 def pix_pago_e_cancelado(session, positions, w, balance_cents=0):
-    """Pix de R$ 7,00 pago, moto a 1000 m andados de 2000 (taxa de R$ 4,00), cancelado fora da janela."""
+    """Pix de R$ 7,00 pago, moto com 900 m andados de 2000 (taxa de R$ 4,00), cancelado fora da janela."""
     add_passenger(session)
     make_online_rider(session, positions, 1, pt(2000, 0), now=AGORA)
     aceitar(session, positions, w)
     pagar(session, w)
-    positions.update("r1", pt(1000, 0), AGORA + 300)
+    positions.update("r1", pt(1100, 0), AGORA + 300)
     if balance_cents:
         recarregar(session, w, balance_cents)
     return w.trips.cancel_by_passenger(session, "p1", "ride-1", FORA_DA_JANELA)

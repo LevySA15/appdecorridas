@@ -61,27 +61,28 @@ class CancelResult:
     refund_needed: bool
 
 
-def approach_progress(start_m: float | None, now_m: float | None) -> float | None:
-    """Quanto do caminho até o ponto de embarque a moto já andou (0 a 1); `None` se faltar algum dado.
-
-    Moto que já começou a menos de 50 m do ponto conta como chegada (1,0).
-    """
+def approach_traveled_m(start_m: float | None, now_m: float | None) -> float | None:
+    """Quantos metros a moto já andou em direção ao ponto de embarque (0 se ficou parada ou se afastou);
+    `None` se faltar algum dado."""
     if start_m is None or now_m is None:
         return None
-    if start_m <= 50:
-        return 1.0
-    return min(1.0, max(0.0, 1 - now_m / start_m))
+    return max(0.0, start_m - now_m)
 
 
-def late_cancel_fee_cents(progress: float | None, cfg: RideConfig = _DEFAULT) -> int:
-    """Taxa do cancelamento tardio, de R$ 3 (moto saindo) a R$ 5 (moto no ponto), em passos de R$ 0,10.
+def late_cancel_fee_cents(traveled_m: float | None, cfg: RideConfig = _DEFAULT, at_pickup: bool = False) -> int:
+    """Taxa do cancelamento tardio (pesquisa de 19/10/2026, como Uber e 99: só cobra se a moto andou).
 
-    REGRA PROVISÓRIA: o Levy vai trocar por um algoritmo de distância; é só esta função que muda.
-    Sem posição da moto (`None`) cobra o mínimo: na dúvida, a favor do passageiro.
+    Moto que andou menos de `cancel_fee_free_m` (300 m): sem taxa. Dali em diante R$ 3 subindo em linha reta até R$ 5
+    com `cancel_fee_full_m` (1,5 km) andados, em passos de R$ 0,10. Moto no ponto de embarque (`at_pickup`): R$ 5.
+    Sem posição recente da moto (`None`) cobra o mínimo: ela já vinha há mais de 5 minutos.
     """
-    if progress is None:
+    if at_pickup:
+        return cfg.cancel_fee_max_cents
+    if traveled_m is None:
         return cfg.cancel_fee_min_cents
-    share = min(1.0, max(0.0, progress))
+    if traveled_m < cfg.cancel_fee_free_m:
+        return 0
+    share = min(1.0, (traveled_m - cfg.cancel_fee_free_m) / (cfg.cancel_fee_full_m - cfg.cancel_fee_free_m))
     raw = cfg.cancel_fee_min_cents + (cfg.cancel_fee_max_cents - cfg.cancel_fee_min_cents) * share
     step = cfg.cancel_fee_round_cents
     fee = int(raw / step + 0.5) * step
@@ -211,10 +212,10 @@ def complete(ride: Ride, now: float | None = None) -> None:
     ride.completed_at = now
 
 
-def cancel(ride: Ride, now: float, cfg: RideConfig = _DEFAULT, progress: float | None = None) -> CancelResult:
-    """Cancelamento pelo passageiro: taxa ao motoqueiro (se tardio) e aviso se há Pix para devolver.
+def cancel(ride: Ride, now: float, cfg: RideConfig = _DEFAULT, traveled_m: float | None = None) -> CancelResult:
+    """Cancelamento pelo passageiro: taxa ao motoqueiro (se tardio e se a moto andou) e aviso se há Pix para devolver.
 
-    `progress` é o quanto a moto já andou até o ponto de embarque (ver `approach_progress`).
+    `traveled_m` é quantos metros a moto já andou até o ponto de embarque (ver `approach_traveled_m`).
     Com a moto já no ponto (`ARRIVED`) a taxa é sempre a máxima.
     """
     _require(
@@ -228,7 +229,7 @@ def cancel(ride: Ride, now: float, cfg: RideConfig = _DEFAULT, progress: float |
     fee = 0
     if ride.state in (RideState.ACCEPTED, RideState.ARRIVED):
         if ride.en_route_since is not None and now - ride.en_route_since > cfg.free_cancel_after_accept_s:
-            fee = late_cancel_fee_cents(1.0 if ride.state is RideState.ARRIVED else progress, cfg)
+            fee = late_cancel_fee_cents(traveled_m, cfg, at_pickup=ride.state is RideState.ARRIVED)
     refund_needed = ride.pix_paid
     ride.state = RideState.CANCELLED
     return CancelResult(fee, refund_needed)
@@ -247,7 +248,7 @@ def cancel_after_arrival_timeout(
         raise InvalidTransition("o tempo de espera na chegada ainda não acabou")
     refund_needed = ride.pix_paid
     ride.state = RideState.CANCELLED
-    return CancelResult(late_cancel_fee_cents(1.0, cfg), refund_needed)
+    return CancelResult(late_cancel_fee_cents(None, cfg, at_pickup=True), refund_needed)
 
 
 def mark_no_rider(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> None:

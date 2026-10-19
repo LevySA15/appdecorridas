@@ -18,11 +18,13 @@ O que os dois grandes fazem:
 
 inDrive: não achei regra publicada. Moto (Uber Moto e 99Moto): não achei taxa de cancelamento própria.
 
-**O que o nosso app faz hoje** (plano 4B): janela de 5 minutos do aceite da moto (mais generosa que as deles); depois dela, R$ 3 a R$ 5 conforme a fração do caminho até o ponto que a moto já andou; moto no ponto = R$ 5; avisa o valor antes de confirmar (igual à Uber).
+**O que o nosso app fazia antes** (plano 4B): janela de 5 minutos do aceite da moto (mais generosa que as deles); depois dela, R$ 3 a R$ 5 conforme a fração do caminho até o ponto que a moto já andou; moto no ponto = R$ 5; avisa o valor antes de confirmar (igual à Uber).
 
 **A diferença que importa:** Uber e 99 **não cobram se o motorista não se mexeu**. Hoje o nosso app cobra R$ 3 mesmo com a moto parada, e cobra R$ 5 de uma moto que só andou 400 m (porque conta a fração do caminho, não os metros).
 
-### Proposta para a conta (A)
+### Conta da taxa (A): aprovada e feita em 19/10/2026
+
+O Levy aprovou a proposta abaixo ("1") e ela já está no servidor: o código antigo cobrava pela fração do caminho e R$ 3 mesmo com a moto parada.
 
 1. Janela grátis de 5 minutos do aceite (decisão do Levy, vira parâmetro).
 2. Depois dela, a taxa depende dos **metros que a moto andou** em direção ao passageiro:
@@ -30,7 +32,7 @@ inDrive: não achei regra publicada. Moto (Uber Moto e 99Moto): não achei taxa 
    - a partir de 300 m: **R$ 3,00**, subindo em linha reta até **R$ 5,00** com **1,5 km** andados, em passos de R$ 0,10;
    - moto no ponto de embarque, ou passageiro que não aparece em 5 minutos: **R$ 5,00**.
 3. Sem posição recente da moto: R$ 3,00 (a favor do motoqueiro, que já estava vindo há mais de 5 minutos; hoje já é assim).
-4. Os números 300 m, 1,5 km e R$ 3 a R$ 5 viram parâmetros no painel.
+4. Os números 300 m, 1,5 km e R$ 3 a R$ 5 são parâmetros do grupo `rides` (`cancel_fee_free_m`, `cancel_fee_full_m`, `cancel_fee_min_cents`, `cancel_fee_max_cents`), editáveis no painel.
 
 Efeito: passageiro não paga por moto parada; moto que andou pouco paga o mínimo; quem andou o caminho todo recebe o máximo.
 

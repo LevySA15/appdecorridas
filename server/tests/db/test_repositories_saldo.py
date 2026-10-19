@@ -11,7 +11,7 @@ from tests.helpers_db import add_accepted_ride, add_passenger, add_rider
 def _taxa(ride_id="ride-1", **extra) -> CancelFee:
     dados = dict(
         ride_id=ride_id, passenger_id="p1", rider_id="r1", fee_cents=400, reason="passenger", created_at=1000.0,
-        progress=0.5, from_balance_cents=100, pending_cents=300,
+        traveled_m=1200.0, from_balance_cents=100, pending_cents=300,
     ) | extra
     return CancelFee(**dados)
 
