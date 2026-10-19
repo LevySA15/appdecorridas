@@ -56,6 +56,16 @@ def _end_payment(unit: Unit, ride: Ride) -> dict | None:
     }
 
 
+def _cancel_view(unit: Unit, ride: Ride) -> dict | None:
+    """Até quando o passageiro cancela de graça e quanto custaria cancelar agora (só com a moto a caminho)."""
+    if ride.state not in (RideState.ACCEPTED, RideState.ARRIVED) or ride.en_route_since is None:
+        return None
+    return {
+        "free_until": ride.en_route_since + unit.cfg.rides.free_cancel_after_accept_s,
+        "fee_cents_now": unit.trips.cancel_fee_preview(unit.session, ride.ride_id, unit.now),
+    }
+
+
 def passenger_ride_view(unit: Unit, ride_id: str) -> dict:
     ride = repo.get_ride(unit.session, ride_id)
     details = repo.get_ride_details(unit.session, ride_id)
@@ -76,6 +86,16 @@ def passenger_ride_view(unit: Unit, ride_id: str) -> dict:
         "queue": queries.queue_info(unit.session, ride.ride_id, ride.rider_id) if ride.state is RideState.QUEUED else None,
         "safety_alert": queries.open_safety_alert(unit.session, ride.ride_id),
         "pay": _pix_to_pay(unit, ride), "end_payment": _end_payment(unit, ride),
+        "cancel": _cancel_view(unit, ride),
+    }
+
+
+def _appeal_view(fee) -> dict | None:
+    if fee.appeal_state == "none":
+        return None
+    return {
+        "state": fee.appeal_state, "text": fee.appeal_text, "appealed_at": fee.appealed_at,
+        "decided_at": fee.decided_at, "note": fee.decision_note,
     }
 
 
@@ -91,11 +111,34 @@ def passenger_state(unit: Unit, passenger_id: str, payment_methods: list[str]) -
             "charge_id": repo.get_current_charge_id(session, unpaid_id), "blocked": unpaid.non_payment_reported,
         }
     contact = repo.get_emergency_contact(session, passenger_id)
+    account = repo.get_passenger_account(session, passenger_id)
+    fee = repo.pending_cancel_fee(session, passenger_id)
+    pending_fee = None
+    if fee is not None:
+        charge = repo.find_open_charge(session, fee.ride_id, "fee")
+        pending_fee = {
+            "ride_id": fee.ride_id, "amount_cents": fee.pending_cents,
+            "charge_id": None if charge is None else charge.charge_id, "appeal": _appeal_view(fee),
+        }
+    window = unit.cfg.rides.appeal_window_s
+    recent = repo.recent_cancel_fees(session, passenger_id, since=unit.now - window)[:5]
     return {
         "ride": passenger_ride_view(unit, open_id) if open_id else None,
         "pending_payment": pending,
         "blocked_reason": None if open_id else passenger_block_reason(session, passenger_id),
-        "unpaid_cents": repo.get_passenger_account(session, passenger_id).unpaid_cents,
+        "unpaid_cents": account.unpaid_cents,
+        "balance_cents": account.balance_cents,
+        "topup_enabled": unit.cfg.balance.topup_enabled,
+        "pending_fee": pending_fee,
+        "recent_fees": [
+            {
+                "ride_id": f.ride_id, "fee_cents": f.fee_cents, "created_at": f.created_at,
+                "from_balance_cents": f.from_balance_cents, "retained_cents": f.retained_cents,
+                "pending_cents": f.pending_cents, "appeal_state": f.appeal_state,
+                "can_appeal": f.appeal_state == "none" and unit.now - f.created_at <= window,
+            }
+            for f in recent
+        ],
         "emergency_contact": None if contact is None else {"name": contact.name, "phone": contact.phone},
         "payment_methods": payment_methods,
     }

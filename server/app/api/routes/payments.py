@@ -37,6 +37,8 @@ def get_charge(charge_id: str, request: Request, user: AuthUser = Depends(curren
     def work(unit):
         charge = repo.get_charge(unit.session, charge_id)
         allowed = user.role == "admin" or user.user_id == charge.rider_id
+        if charge.purpose == "topup":
+            allowed = allowed or user.user_id == charge.passenger_id
         if not allowed and charge.purpose != "entry" and charge.ride_id:
             allowed = repo.get_ride(unit.session, charge.ride_id).passenger_id == user.user_id
         if not allowed:

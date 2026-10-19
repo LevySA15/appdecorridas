@@ -27,6 +27,14 @@ class RideIn(BaseModel):
     method: Literal["pix", "cash"]
 
 
+class AppealIn(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+
+
+class TopupIn(BaseModel):
+    amount_cents: int
+
+
 class ContactIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     phone: str = Field(min_length=1, max_length=30)
@@ -62,11 +70,49 @@ def request_ride(body: RideIn, request: Request, user: AuthUser = Depends(passen
 
 @router.post("/rides/{ride_id}/cancel")
 def cancel_ride(ride_id: str, request: Request, user: AuthUser = Depends(passenger_user)) -> dict:
-    result = get_runtime(request).run(
-        lambda unit: unit.trips.cancel_by_passenger(unit.session, user.user_id, ride_id, unit.now)
-    )
-    # A compensação do cancelamento tardio ainda não é cobrada (política em aberto): não é prometida ao app.
-    return {"refund": result.refund_needed}
+    def work(unit):
+        outcome = unit.trips.cancel_by_passenger(unit.session, user.user_id, ride_id, unit.now)
+        return {
+            "refund": outcome.refund_needed, "fee_cents": outcome.fee_cents,
+            "fee": None if outcome.fee_cents == 0 else {
+                "from_balance_cents": outcome.from_balance_cents, "retained_cents": outcome.retained_cents,
+                "pending_cents": outcome.pending_cents,
+            },
+            "refund_to": outcome.refund_to,
+            "balance_cents": repo.get_passenger_account(unit.session, user.user_id).balance_cents,
+        }
+
+    return get_runtime(request).run(work)
+
+
+@router.post("/fees/pay")
+def pay_pending_fee(request: Request, user: AuthUser = Depends(passenger_user)) -> dict:
+    """Paga a taxa de cancelamento pendente: com o saldo, se ele cobre tudo; senão devolve a cobrança Pix."""
+
+    def work(unit):
+        charge = unit.money.pay_pending(unit.session, user.user_id, unit.now)
+        if charge is None:
+            return {"paid": True}
+        return {"paid": False, "charge_id": charge.charge_id, "amount_cents": charge.amount_cents, "br_code": charge.br_code}
+
+    return get_runtime(request).run(work)
+
+
+@router.post("/rides/{ride_id}/fee/appeal", status_code=204)
+def appeal_fee(ride_id: str, body: AppealIn, request: Request, user: AuthUser = Depends(passenger_user)) -> Response:
+    get_runtime(request).run(lambda unit: unit.money.file_appeal(unit.session, user.user_id, ride_id, body.text, unit.now))
+    return Response(status_code=204)
+
+
+@router.post("/balance/topup")
+def topup_balance(body: TopupIn, request: Request, user: AuthUser = Depends(passenger_user)) -> dict:
+    """Cobrança Pix para recarregar o saldo. Desligada por padrão (erro `topup_disabled`)."""
+
+    def work(unit):
+        charge = unit.money.topup(unit.session, user.user_id, body.amount_cents, unit.now)
+        return {"charge_id": charge.charge_id, "amount_cents": charge.amount_cents, "br_code": charge.br_code}
+
+    return get_runtime(request).run(work)
 
 
 @router.get("/state")

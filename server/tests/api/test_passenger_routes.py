@@ -121,7 +121,8 @@ def test_cancelar_retira_a_oferta_do_motoqueiro_e_libera_o_passageiro(client, pa
     avisos = listen(rider_id)
     corrida = pedir(client, pax, cotar(client, pax)["quote_id"]).json()
     resposta = client.post(f"/v1/passenger/rides/{corrida['ride_id']}/cancel", headers=pax.headers)
-    assert resposta.status_code == 200 and resposta.json() == {"refund": False}
+    assert resposta.status_code == 200
+    assert resposta.json() == {"refund": False, "fee_cents": 0, "fee": None, "refund_to": None, "balance_cents": 0}
     assert avisos.types == ["offer", "offer_expired"]
     assert client.get("/v1/passenger/state", headers=pax.headers).json()["ride"] is None
     assert pedir(client, pax, cotar(client, pax)["quote_id"]).status_code == 201
@@ -143,6 +144,7 @@ def test_estado_do_passageiro_sem_corrida(client, pax):
     assert estado == {
         "ride": None, "pending_payment": None, "blocked_reason": None, "unpaid_cents": 0,
         "emergency_contact": None, "payment_methods": ["pix", "cash"],
+        "balance_cents": 0, "topup_enabled": False, "pending_fee": None, "recent_fees": [],
     }
 
 

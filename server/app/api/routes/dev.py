@@ -42,9 +42,9 @@ def audit(request: Request) -> dict:
     def work(unit):
         ledger = PgLedger(unit.session)
         extract = {
-            (f"entry:{c.rider_id}" if c.purpose == "entry" else f"charge:{c.charge_id}"): c.amount_cents
+            (f"entry:{c.rider_id}" if c.purpose == "entry" else f"charge:{c.charge_id}"): c.amount_cents - c.refunded_cents
             for c in runtime.provider.charges.values()
-            if c.paid and not c.refunded
+            if c.paid and c.amount_cents - c.refunded_cents > 0     # devolução parcial deixa o resto com o provedor
         }
         return {
             "ledger_balanced": ledger.is_balanced(),
@@ -52,6 +52,9 @@ def audit(request: Request) -> dict:
             "rides_by_state": queries.count_rides_by_state(unit.session),
             "open_rides": queries.open_rides(unit.session),
             "double_booked_riders": queries.riders_with_two_active_rides(unit.session),
+            "balance_matches_ledger": queries.passenger_balances_total(unit.session)
+            == queries.ledger_balances_total(unit.session),
+            "inconsistent_fees": queries.inconsistent_fee_ids(unit.session),
         }
 
     return runtime.run(work)
