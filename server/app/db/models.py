@@ -176,7 +176,7 @@ class WithdrawalRow(Base):
     amount_cents: Mapped[int] = mapped_column(Integer)
     key_kind: Mapped[str] = mapped_column(String(10))
     key_masked: Mapped[str] = mapped_column(String(40))         # só o final: a chave inteira nunca é guardada
-    provider_ref: Mapped[str] = mapped_column(String(60))
+    provider_ref: Mapped[str] = mapped_column(String(60))       # a referência enviada ao provedor (o id do saque)
     created_at: Mapped[float] = mapped_column(Float(53), index=True)
 
 

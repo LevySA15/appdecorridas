@@ -1,7 +1,7 @@
 """Provedor de pagamento falso, para testes e para o simulador. Não fala com ninguém."""
 from __future__ import annotations
 
-from app.domain.payments import PaymentProviderError, PixCharge, RefundUndeliverable, Split
+from app.domain.payments import PayoutFailed, PixCharge, RefundUndeliverable, Split
 
 
 class FakePaymentProvider:
@@ -49,7 +49,7 @@ class FakePaymentProvider:
         if amount_cents <= 0:
             raise ValueError("o valor do saque precisa ser positivo")
         if self.fail_payouts:
-            raise PaymentProviderError("o provedor não conseguiu pagar o saque")
+            raise PayoutFailed("o provedor não conseguiu pagar o saque")
         self.payouts.setdefault(withdrawal_id, (pix_key, amount_cents))
         return f"fake-payout-{withdrawal_id}"
 

@@ -38,7 +38,8 @@
 4. **Saque de R$ 5,00 a R$ 500,00 por vez,** desligado até o advogado; recusado enquanto o passageiro tem taxa pendente; a chave é mascarada no banco.
 5. **O provedor falso paga na hora.** Um provedor real avisa depois que o Pix falhou: tratar essa falha é do plano 7 (devolver o valor ao saldo).
 6. **Crédito dado pela empresa (promoção) não existe ainda:** o saldo é um número só, sem parte "não sacável". Quando o Levy quiser promoção, é preciso separar o saldo em dois (migração).
-7. **Fora deste plano:** tela do painel para saques (o painel ganha só a rota `GET /v1/admin/withdrawals`), validade do saldo, limite diário de saque, saque de motoqueiro.
+7. **Corrida paga com saldo: a parte do motoqueiro entra no livro e ele é avisado, mas o dinheiro só chega a ele no plano 7** (não há divisão pelo provedor; a empresa guarda o valor). Mesma lacuna da taxa de cancelamento paga do saldo. Ver "Itens que sobraram do plano 4E" no roteiro.
+8. **Fora deste plano:** tela do painel para saques (o painel ganha só a rota `GET /v1/admin/withdrawals`), validade do saldo, limite diário de saque, saque de motoqueiro.
 
 ## File Structure
 

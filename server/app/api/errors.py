@@ -13,7 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.domain.payments import PaymentProviderError
+from app.domain.payments import PaymentProviderError, PayoutFailed
 from app.infra.documents import UploadError
 from app.domain.rides import InvalidTransition, WrongPin
 from app.services.auth import TooManyRequests
@@ -95,6 +95,11 @@ async def _payment_unavailable(request: Request, exc: PaymentProviderError) -> J
     return error_response(503, "payment_unavailable", "O Pix está instável agora. Tente de novo em instantes.")
 
 
+async def _payout_unavailable(request: Request, exc: PayoutFailed) -> JSONResponse:
+    # Um saque que falha não derruba o Pix das corridas: não mexe na saúde do Pix.
+    return error_response(503, "withdraw_unavailable", "Não conseguimos fazer o Pix do saque agora. Tente de novo em instantes.")
+
+
 async def _upload_error(request: Request, exc: UploadError) -> JSONResponse:
     return error_response(exc.status, exc.code, exc.message)
 
@@ -136,6 +141,7 @@ def install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(CannotGoOnline, _cannot_go_online)
     app.add_exception_handler(UploadError, _upload_error)
     app.add_exception_handler(PaymentProviderError, _payment_unavailable)
+    app.add_exception_handler(PayoutFailed, _payout_unavailable)
     app.add_exception_handler(DuplicateRegistration, _duplicate_registration)
     app.add_exception_handler(LookupError, _not_found)
     app.add_exception_handler(RequestValidationError, _validation)

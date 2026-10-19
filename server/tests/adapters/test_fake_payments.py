@@ -1,7 +1,7 @@
 import pytest
 
 from app.adapters.fake_payments import FakePaymentProvider
-from app.domain.payments import PaymentProviderError, RefundUndeliverable, Split, compute_split
+from app.domain.payments import PayoutFailed, PaymentProviderError, RefundUndeliverable, Split, compute_split
 
 
 def test_cada_cobranca_falsa_tem_codigo_proprio_com_o_valor():
@@ -89,8 +89,9 @@ def test_payout_repetido_nao_paga_duas_vezes():
 def test_payout_com_provedor_fora_do_ar_levanta_erro_de_pagamento_e_nao_registra():
     provider = FakePaymentProvider()
     provider.fail_payouts = True
-    with pytest.raises(PaymentProviderError):
+    with pytest.raises(PayoutFailed) as erro:
         provider.payout("w1", "52998224725", 1500)
+    assert isinstance(erro.value, PaymentProviderError)         # continua sendo um erro do provedor
     assert provider.payouts == {}
 
 

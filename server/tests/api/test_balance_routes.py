@@ -231,7 +231,8 @@ def test_saque_com_provedor_fora_do_ar_responde_503_e_nao_debita(client, pax, se
     ligar(session, runtime, withdraw_enabled=True)
     runtime.provider.fail_payouts = True
     resposta = client.post("/v1/passenger/balance/withdraw", json={"amount_cents": 1500, "pix_key": CPF}, headers=pax.headers)
-    assert resposta.status_code == 503 and resposta.json()["error"]["code"] == "payment_unavailable"
+    assert resposta.status_code == 503 and resposta.json()["error"]["code"] == "withdraw_unavailable"
     assert client.get("/v1/passenger/state", headers=pax.headers).json()["balance_cents"] == 2000
+    assert "pix" in _cotar(client, pax)["payment_methods"]        # o Pix do app não foi dado como fora do ar
     auditoria = client.get("/v1/dev/audit").json()
     assert auditoria["reconcile_diff"] == {} and auditoria["balance_matches_ledger"] is True

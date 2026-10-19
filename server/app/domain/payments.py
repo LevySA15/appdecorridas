@@ -136,6 +136,10 @@ class PaymentProviderError(Exception):
     reais traduzem seus erros de rede para este; os serviços só tratam este."""
 
 
+class PayoutFailed(PaymentProviderError):
+    """O provedor não conseguiu pagar o Pix de um saque. Não é sinal de que o Pix das corridas está fora do ar."""
+
+
 class RefundUndeliverable(Exception):
     """A devolução não consegue chegar à chave Pix cadastrada do passageiro. O valor vira saldo dele no app."""
 
@@ -151,6 +155,6 @@ class PaymentProvider(Protocol):
         ...
 
     def payout(self, withdrawal_id: str, pix_key: str, amount_cents: int) -> str:
-        """Paga por Pix o saque do saldo e devolve a referência do provedor. Levanta `PaymentProviderError` se não
+        """Paga por Pix o saque do saldo e devolve a referência do provedor. Levanta `PayoutFailed` se não
         conseguir; repetir o mesmo `withdrawal_id` nunca paga duas vezes."""
         ...

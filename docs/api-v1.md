@@ -29,13 +29,13 @@ A sessão dura 180 dias. `role: "admin"` só entra se o número já foi criado c
 
 | Rota | Corpo | Resposta |
 |---|---|---|
-| `POST /v1/passenger/quotes` | `{"pickup": {lat,lng,text}, "destination": {lat,lng,text}}` | preço: `quote_id, price_cents, reason, distance_m, duration_s, expires_at, pickup, destination, eta_seconds` (estimativa, `null` sem moto livre), `nearby_riders`, `payment_methods` (`["pix","cash"]`, ou só `["cash"]` com o Pix fora do ar) |
+| `POST /v1/passenger/quotes` | `{"pickup": {lat,lng,text}, "destination": {lat,lng,text}}` | preço: `quote_id, price_cents, reason, distance_m, duration_s, expires_at, pickup, destination, eta_seconds` (estimativa, `null` sem moto livre), `nearby_riders`, `payment_methods` (`["pix","cash"]`, ou só `["cash"]` com o Pix fora do ar; `"balance"` entra no fim quando o saldo cobre o preço inteiro) |
 | `POST /v1/passenger/rides` | `{"quote_id","method": "pix"\|"cash"\|"balance"}` | 201 com a corrida (abaixo). `balance` é uma corrida Pix paga com o saldo (veja "Saldo"); 403 `not_allowed` se o saldo não cobre o preço da cotação ou o recurso está desligado |
 | `POST /v1/passenger/rides/{id}/cancel` | | `{"refund", "fee_cents", "fee", "refund_to", "balance_cents"}` (veja "Cancelamento tardio" abaixo) |
 | `POST /v1/passenger/fees/pay` | | paga a taxa de cancelamento pendente: `{"paid": true}` se o saldo cobriu tudo, senão `{"paid": false, "charge_id","amount_cents","br_code"}` (Pix do valor inteiro). 409 `nothing_to_pay` |
 | `POST /v1/passenger/rides/{id}/fee/appeal` | `{"text"}` (3 a 500 letras) | 204. 404 sem taxa; 403 `not_your_ride`; 409 `appeal_not_allowed` (já pedido ou passou de 7 dias) |
 | `POST /v1/passenger/balance/topup` | `{"amount_cents"}` | `{"charge_id","amount_cents","br_code"}`. 403 `topup_disabled` (desligada por padrão); 422 fora de R$ 10,00 a R$ 200,00 |
-| `POST /v1/passenger/balance/withdraw` | `{"amount_cents","pix_key"}` | 201 `{"withdrawal_id","amount_cents","balance_cents","key"}` (`key` é só o final da chave, ex. `"final 4725"`). 403 `withdraw_disabled` (desligado por padrão), 403 `not_allowed` (saldo menor que o valor, ou taxa/pagamento pendente), 422 fora de R$ 5,00 a R$ 500,00 ou chave Pix inválida (CPF, CNPJ, telefone com `+55`, e-mail ou chave aleatória). 503 `payment_unavailable` se o provedor não conseguiu fazer o Pix do saque: nada é debitado |
+| `POST /v1/passenger/balance/withdraw` | `{"amount_cents","pix_key"}` | 201 `{"withdrawal_id","amount_cents","balance_cents","key"}` (`key` é só o final da chave, ex. `"final 4725"`). 403 `withdraw_disabled` (desligado por padrão), 403 `not_allowed` (saldo menor que o valor, ou taxa/pagamento pendente), 422 fora de R$ 5,00 a R$ 500,00 ou chave Pix inválida (CPF, CNPJ, telefone com `+55`, e-mail ou chave aleatória). 503 `withdraw_unavailable` se o provedor não conseguiu fazer o Pix do saque: nada é debitado (e o Pix das corridas não é dado como fora do ar) |
 | `GET /v1/passenger/state` | | `{"ride", "pending_payment", "blocked_reason", "unpaid_cents", "balance_cents", "topup_enabled", "pay_with_balance_enabled", "withdraw_enabled", "withdraw_min_cents", "withdraw_max_cents", "pending_fee", "recent_fees", "emergency_contact", "payment_methods"}` |
 | `PUT /v1/passenger/emergency-contact` | `{"name","phone"}` | 204. Não pode ser o número do próprio passageiro. |
 | `POST /v1/rides/{id}/rating` | `{"stars": 1..5}` | 204 (vale para os dois lados, depois que a corrida acabou) |
@@ -220,7 +220,7 @@ Nos dois casos, reconecte e peça o estado. O app pode mandar texto qualquer (`"
 
 ## Códigos de erro
 
-`appeal_not_allowed` 409 · `debt_pending` 409 · `nothing_to_pay` 409 · `topup_disabled` 403 · `withdraw_disabled` 403 · `unauthorized` 401 · `wrong_role` 403 · `forbidden` 403 · `not_found` 404 · `invalid` 422 (`fields` lista os campos) ·
+`appeal_not_allowed` 409 · `debt_pending` 409 · `nothing_to_pay` 409 · `topup_disabled` 403 · `withdraw_disabled` 403 · `withdraw_unavailable` 503 · `unauthorized` 401 · `wrong_role` 403 · `forbidden` 403 · `not_found` 404 · `invalid` 422 (`fields` lista os campos) ·
 `not_allowed` 403 · `quote_expired` 409 · `offer_gone` 409 · `not_your_ride` 403 · `already_rated` 409 ·
 `invalid_state` 409 · `alert_closed` 409 · `duplicate_registration` 409 (`field`) · `not_approved`, `blocked`,
 `documents_expired`, `entry_pending` 409 · `wrong_pin` 422 · `code_invalid` 401 · `too_many_requests` 429 ·

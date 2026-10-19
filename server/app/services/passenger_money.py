@@ -103,8 +103,9 @@ class PassengerMoneyService:
     def withdraw(self, session: Session, passenger_id: str, amount_cents: int, pix_key: str, now: float) -> Withdrawal:
         """Saca parte do saldo por Pix. Desligado por padrão (ver `BalanceConfig`).
 
-        Primeiro tudo o que pode recusar, depois o débito e o livro, e o Pix por último: se o provedor falhar, a
-        unidade de trabalho inteira é desfeita por quem chama e nada fica gravado.
+        Primeiro tudo o que pode recusar, depois o débito, o livro e o registro do saque, e o Pix por último: só o
+        `commit` de quem chama vem depois dele. Se o provedor falhar, a unidade de trabalho inteira é desfeita e nada
+        fica gravado. A referência guardada é o próprio `withdrawal_id`, a chave de repetição enviada ao provedor.
         """
         limits = self.cfg.balance
         if not limits.withdraw_enabled:
@@ -121,9 +122,9 @@ class PassengerMoneyService:
         spend_up_to(passenger, amount_cents)
         PgLedger(session).post_withdrawal(withdrawal_id, passenger_id, amount_cents)
         repo.save_passenger_account(session, passenger)
-        provider_ref = self.payments.provider.payout(withdrawal_id, key.value, amount_cents)
-        withdrawal = Withdrawal(withdrawal_id, passenger_id, amount_cents, key.kind, key.masked, provider_ref, now)
+        withdrawal = Withdrawal(withdrawal_id, passenger_id, amount_cents, key.kind, key.masked, withdrawal_id, now)
         repo.add_withdrawal(session, withdrawal)
+        self.payments.provider.payout(withdrawal_id, key.value, amount_cents)
         self.events.add(passenger_id, "balance_changed", {"balance_cents": passenger.balance_cents})
         self.events.add(
             passenger_id, "withdrawal_done",

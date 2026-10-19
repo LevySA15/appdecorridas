@@ -9,7 +9,7 @@ from app.db import repositories as repo
 from app.db.models import WithdrawalRow
 from app.db.pg_ledger import PgLedger
 from app.domain.config import BalanceConfig
-from app.domain.payments import PaymentProviderError
+from app.domain.payments import PayoutFailed
 from app.domain.rides import PassengerAccount
 from app.infra.redis_store import InMemoryPositionStore
 from app.services.events import EventCollector
@@ -136,7 +136,7 @@ def test_provedor_fora_do_ar_nao_deixa_rastro(session, w, money, provider, event
     com_saldo(session, w)
     provider.fail_payouts = True
     events.drain()
-    with pytest.raises(PaymentProviderError):
+    with pytest.raises(PayoutFailed):
         with session.begin_nested():            # o que o `Runtime.run` faz: a unidade de trabalho inteira é desfeita
             money.withdraw(session, "p1", 1500, CPF, AGORA)
     nada_mudou(session, provider)
@@ -158,3 +158,18 @@ def test_chave_inteira_nao_fica_no_banco(session, w, money):
     linha = session.get(WithdrawalRow, saque.withdrawal_id)
     guardado = " ".join(str(v) for v in (linha.key_kind, linha.key_masked, linha.provider_ref, linha.passenger_id))
     assert "52998224725" not in guardado and "529" not in guardado
+
+
+def test_o_saque_fica_gravado_antes_de_o_pix_sair(session, w, money, provider, monkeypatch):
+    # Só o commit pode vir depois do Pix: se gravar o saque falhar, o Pix nem pode ter saído (senão o dinheiro
+    # sai e o saldo continua inteiro, e o passageiro saca de novo).
+    com_saldo(session, w)
+
+    def falha(*args, **kwargs):
+        raise RuntimeError("banco caiu")
+
+    monkeypatch.setattr(repo, "add_withdrawal", falha)
+    with pytest.raises(RuntimeError):
+        with session.begin_nested():
+            money.withdraw(session, "p1", 1500, CPF, AGORA)
+    assert provider.payouts == {}
