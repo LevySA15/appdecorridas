@@ -2,5 +2,7 @@
 library;
 
 export 'src/api_client.dart';
+export 'src/auth_api.dart';
 export 'src/errors.dart';
 export 'src/money.dart';
+export 'src/session.dart';
