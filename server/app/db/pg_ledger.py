@@ -67,6 +67,18 @@ class PgLedger:
         ledger.post_topup(charge_id, passenger_id, amount_cents)
         self._store_new(ledger, before)
 
+    def post_debt_payment(self, charge_id: str, amount_cents: int) -> None:
+        ledger = self._load(f"charge:{charge_id}")
+        before = len(ledger.entries)
+        ledger.post_debt_payment(charge_id, amount_cents)
+        self._store_new(ledger, before)
+
+    def post_debt_refund(self, charge_id: str, amount_cents: int) -> None:
+        ledger = self._load(f"charge:{charge_id}")
+        before = len(ledger.entries)
+        ledger.post_debt_refund(charge_id, amount_cents)
+        self._store_new(ledger, before)
+
     def post_credit_from_company(self, ref: str, passenger_id: str, amount_cents: int) -> None:
         ledger = self._load(ref)
         before = len(ledger.entries)

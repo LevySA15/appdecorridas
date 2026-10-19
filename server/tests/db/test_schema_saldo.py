@@ -113,3 +113,11 @@ def test_cobranca_que_nao_e_recarga_exige_motoqueiro(session):
 def test_proposito_desconhecido_de_cobranca_e_recusado(session):
     _corrida(session)
     _recusa(session, _cobranca(purpose="doacao"))
+
+
+def test_cobranca_de_divida_do_motoqueiro_nao_precisa_de_corrida_mas_precisa_do_motoqueiro(session):
+    _corrida(session)
+    divida = dict(charge_id="ch-d1", ride_id=None, purpose="debt", amount_cents=100, rider_cents=0, company_cents=100)
+    session.add(_cobranca(**divida))
+    session.flush()
+    _recusa(session, _cobranca(**(divida | {"charge_id": "ch-d2", "rider_id": None})))

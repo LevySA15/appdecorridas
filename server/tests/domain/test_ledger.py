@@ -235,3 +235,38 @@ def test_lancamentos_do_saldo_recusam_valor_zero_ou_negativo(valor):
         ledger.post_topup("ch-1", "p1", valor)
     with pytest.raises(ValueError, match="positivo"):
         ledger.post_credit_from_company("fee:x:appeal", "p1", valor)
+
+
+def test_pagamento_da_divida_do_motoqueiro_vira_receita_da_empresa_e_fecha():
+    ledger = Ledger()
+    ledger.post_debt_payment("ch-5", 100)
+    assert ledger.balance(Ledger.COMPANY) == 100 and ledger.balance(Ledger.PROVIDER) == -100
+    assert ledger.is_balanced() is True
+    with pytest.raises(ValueError, match="já lançado"):
+        ledger.post_debt_payment("ch-5", 100)
+
+
+def test_devolucao_do_excesso_da_divida_fecha_e_so_vale_uma_vez():
+    ledger = Ledger()
+    ledger.post_debt_payment("ch-5", 100)
+    ledger.post_debt_refund("ch-5", 40)
+    assert ledger.balance(Ledger.COMPANY) == 60 and ledger.balance(Ledger.PROVIDER) == -60
+    assert ledger.is_balanced() is True
+    with pytest.raises(ValueError, match="já devolvido"):
+        ledger.post_debt_refund("ch-5", 10)
+
+
+@pytest.mark.parametrize("valor", [0, -5])
+def test_lancamentos_da_divida_recusam_valor_zero_ou_negativo(valor):
+    ledger = Ledger()
+    with pytest.raises(ValueError, match="positivo"):
+        ledger.post_debt_payment("ch-5", valor)
+
+
+def test_devolver_excesso_de_divida_sem_pagamento_ou_maior_que_o_pago_e_recusado():
+    ledger = Ledger()
+    with pytest.raises(ValueError, match="não encontrado"):
+        ledger.post_debt_refund("ch-5", 10)
+    ledger.post_debt_payment("ch-5", 100)
+    with pytest.raises(ValueError, match="maior que o pago"):
+        ledger.post_debt_refund("ch-5", 101)

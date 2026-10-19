@@ -463,6 +463,19 @@ def find_open_charge(session: Session, ride_id: str, purpose: str) -> PixCharge 
     return None if row is None else _charge_to_domain(row)
 
 
+def find_open_debt_charge(session: Session, rider_id: str) -> PixCharge | None:
+    row = session.execute(
+        select(PixChargeRow)
+        .where(
+            PixChargeRow.rider_id == rider_id, PixChargeRow.purpose == "debt",
+            PixChargeRow.paid.is_(False), PixChargeRow.refunded.is_(False),
+        )
+        .order_by(PixChargeRow.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    return None if row is None else _charge_to_domain(row)
+
+
 def find_open_topup_charge(session: Session, passenger_id: str) -> PixCharge | None:
     row = session.execute(
         select(PixChargeRow)

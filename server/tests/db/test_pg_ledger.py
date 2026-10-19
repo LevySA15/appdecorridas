@@ -137,3 +137,13 @@ def test_gasto_recarga_e_credito_do_saldo_pelo_banco_fecham(session):
     assert ledger.balance("rider:rider-1") == 450
     assert ledger.balance(PgLedger.COMPANY) == -450
     assert ledger.is_balanced() is True
+
+
+def test_pagamento_e_devolucao_do_excesso_da_divida_pelo_banco(session):
+    ledger = PgLedger(session)
+    ledger.post_debt_payment("ch-5", 100)
+    ledger.post_debt_refund("ch-5", 40)
+    assert ledger.balance(PgLedger.COMPANY) == 60 and ledger.balance(PgLedger.PROVIDER) == -60
+    assert ledger.is_balanced() is True
+    with pytest.raises(ValueError):
+        ledger.post_debt_payment("ch-5", 100)

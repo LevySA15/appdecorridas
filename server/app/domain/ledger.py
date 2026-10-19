@@ -21,6 +21,7 @@ class EntryKind(str, Enum):
     BALANCE_CREDIT = "balance_credit"   # dinheiro que fica como saldo do passageiro (devolução que não chegou, recurso)
     BALANCE_SPEND = "balance_spend"     # saldo do passageiro paga a taxa ao motoqueiro
     TOPUP = "topup"                     # recarga do saldo por Pix
+    DEBT_PAYMENT = "debt_payment"       # o motoqueiro pagou por Pix a dívida da taxa das corridas em dinheiro
 
 
 @dataclass(frozen=True)
@@ -119,6 +120,31 @@ class Ledger:
             raise ValueError(f"recarga da cobrança {charge_id} já lançada")
         self._append(ref, self.PROVIDER, -amount_cents, EntryKind.TOPUP)
         self._append(ref, self.balance_account(passenger_id), amount_cents, EntryKind.TOPUP)
+
+    def post_debt_payment(self, charge_id: str, amount_cents: int) -> None:
+        """O motoqueiro pagou a dívida da taxa por Pix: dinheiro do provedor para a empresa."""
+        if amount_cents <= 0:
+            raise ValueError("o valor da dívida paga precisa ser positivo")
+        ref = f"charge:{charge_id}"
+        if self._has(ref, EntryKind.DEBT_PAYMENT):
+            raise ValueError(f"pagamento de dívida da cobrança {charge_id} já lançado")
+        self._append(ref, self.PROVIDER, -amount_cents, EntryKind.DEBT_PAYMENT)
+        self._append(ref, self.COMPANY, amount_cents, EntryKind.DEBT_PAYMENT)
+
+    def post_debt_refund(self, charge_id: str, amount_cents: int) -> None:
+        """Devolve ao motoqueiro o que ele pagou a mais do que devia (a dívida diminuiu antes de o Pix chegar)."""
+        if amount_cents <= 0:
+            raise ValueError("o valor devolvido precisa ser positivo")
+        ref = f"charge:{charge_id}"
+        paid = sum(e.amount_cents for e in self._entries if e.ref == ref and e.kind is EntryKind.DEBT_PAYMENT and e.account == self.COMPANY)
+        if not paid:
+            raise ValueError(f"pagamento de dívida da cobrança {charge_id} não encontrado")
+        if self._has(ref, EntryKind.REFUND):
+            raise ValueError(f"excesso da cobrança {charge_id} já devolvido")
+        if amount_cents > paid:
+            raise ValueError("o excesso devolvido é maior que o pago")
+        self._append(ref, self.PROVIDER, amount_cents, EntryKind.REFUND)
+        self._append(ref, self.COMPANY, -amount_cents, EntryKind.REFUND)
 
     def post_credit_from_company(self, ref: str, passenger_id: str, amount_cents: int) -> None:
         """A empresa devolve ao passageiro, como saldo, uma taxa que o administrador aceitou rever."""

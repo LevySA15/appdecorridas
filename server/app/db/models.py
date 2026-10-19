@@ -139,8 +139,8 @@ class PixChargeRow(Base):
     __tablename__ = "pix_charges"
     __table_args__ = (
         CheckConstraint("rider_cents + company_cents = amount_cents", name="charge_split_closes"),
-        CheckConstraint("purpose IN ('ride','end','entry','fee','topup')", name="charge_purpose_valid"),
-        CheckConstraint("purpose IN ('entry','topup') OR ride_id IS NOT NULL", name="charge_ride_required"),
+        CheckConstraint("purpose IN ('ride','end','entry','fee','topup','debt')", name="charge_purpose_valid"),
+        CheckConstraint("purpose IN ('entry','topup','debt') OR ride_id IS NOT NULL", name="charge_ride_required"),
         CheckConstraint(
             "(purpose = 'topup' AND passenger_id IS NOT NULL AND rider_id IS NULL)"
             " OR (purpose <> 'topup' AND rider_id IS NOT NULL)",

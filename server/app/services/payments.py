@@ -25,7 +25,7 @@ from app.domain.balance import (
     spend_up_to,
 )
 from app.domain.config import FeeConfig, RideConfig
-from app.domain.fees import RiderAccount, add_cash_fee_debt, mark_entry_paid, offer_block_reason
+from app.domain.fees import RiderAccount, add_cash_fee_debt, debt_to_pay_cents, mark_entry_paid, offer_block_reason
 from app.domain.payments import (
     DebtState,
     PaymentProvider,
@@ -181,6 +181,8 @@ class PaymentService:
             return self._on_topup_paid(session, known)
         if known.purpose == "fee":
             return self._on_fee_paid(session, known)
+        if known.purpose == "debt":
+            return self._on_debt_paid(session, known)
         ride = repo.get_ride(session, known.ride_id, for_update=True)
         acc = repo.get_rider_account(session, known.rider_id, for_update=True)
         charge = repo.get_charge(session, known.charge_id, for_update=True)
@@ -271,6 +273,41 @@ class PaymentService:
         if was_blocked:
             self._emit(ride.passenger_id, "unblocked", {"ride_id": ride.ride_id})
         return False
+
+    def start_debt_charge(self, session: Session, rider_id: str) -> PixCharge:
+        """Cobrança Pix para o motoqueiro pagar a dívida da taxa (o valor que ele deve e não está reservado)."""
+        acc = repo.get_rider_account(session, rider_id, for_update=True)
+        amount = debt_to_pay_cents(acc)
+        if amount <= 0:
+            raise InvalidTransition("Você não tem taxa para pagar.")
+        open_charge = repo.find_open_debt_charge(session, rider_id)
+        if open_charge is not None and open_charge.amount_cents == amount:
+            return open_charge
+        charge = self.provider.create_pix_charge("", rider_id, amount, Split(0, amount, 0), purpose="debt")
+        repo.add_charge(session, charge)
+        return charge
+
+    def _on_debt_paid(self, session: Session, known: PixCharge) -> str:
+        """Pix da dívida pago: abate a dívida; se ela diminuiu no meio tempo, devolve o excesso."""
+        acc = repo.get_rider_account(session, known.rider_id, for_update=True)
+        charge = repo.get_charge(session, known.charge_id, for_update=True)
+        if charge.paid:
+            return "duplicate"
+        charge.paid = True
+        charge.debt_state = DebtState.APPLIED
+        ledger = PgLedger(session)
+        ledger.post_debt_payment(charge.charge_id, charge.amount_cents)
+        applied = min(charge.amount_cents, debt_to_pay_cents(acc))
+        acc.cash_debt_cents -= applied
+        excess = charge.amount_cents - applied
+        if excess > 0:
+            self.provider.refund(charge.charge_id, excess)
+            ledger.post_debt_refund(charge.charge_id, excess)
+            charge.refunded = excess == charge.amount_cents
+        repo.save_charge(session, charge)
+        repo.save_rider_account(session, acc)
+        self._emit(charge.rider_id, "debt_paid", {"cash_debt_cents": acc.cash_debt_cents, "amount_cents": applied})
+        return "applied" if applied > 0 else "refunded"
 
     def _on_topup_paid(self, session: Session, known: PixCharge) -> str:
         """Recarga do saldo do passageiro paga."""
