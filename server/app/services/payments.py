@@ -505,9 +505,9 @@ class PaymentService:
         acc, charge = self._rider_and_charge(session, ride)
         self._release_if_reserved(charge, acc)
         if acc is not None:
-            was_blocked = offer_block_reason(acc, self.fee_cfg) is not None
+            had_block = offer_block_reason(acc, self.fee_cfg) is not None
             add_cash_fee_debt(acc, ride.fee_cents or 0)
-            if not was_blocked and offer_block_reason(acc, self.fee_cfg) == "divida_pendente":
+            if not had_block and offer_block_reason(acc, self.fee_cfg) == "divida_pendente":
                 self._block_for_debt(session, acc)
             repo.save_rider_account(session, acc)
         if charge is not None:
