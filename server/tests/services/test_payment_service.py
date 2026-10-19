@@ -20,7 +20,7 @@ FEE = 100
 
 
 class RefundFalha(FakePaymentProvider):
-    def refund(self, charge_id: str) -> None:
+    def refund(self, charge_id: str, amount_cents: int | None = None) -> None:
         raise RuntimeError("provedor fora do ar")
 
 
@@ -300,5 +300,5 @@ def test_pix_pago_depois_do_cancelamento_avisa_que_o_dinheiro_volta(session, pro
     service.cancel_ride(session, "ride-1", now=20)
     assert service.on_provider_event(session, provider.mark_paid(charge.charge_id)) == "refunded"
     assert [(e.user_id, e.type, e.payload) for e in avisos.events] == [
-        ("p1", "payment_refunded", {"ride_id": "ride-1", "amount_cents": 700}),
+        ("p1", "payment_refunded", {"ride_id": "ride-1", "amount_cents": 700, "to": "pix"}),
     ]

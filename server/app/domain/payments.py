@@ -135,9 +135,16 @@ class PaymentProviderError(Exception):
     reais traduzem seus erros de rede para este; os serviços só tratam este."""
 
 
+class RefundUndeliverable(Exception):
+    """A devolução não consegue chegar à chave Pix cadastrada do passageiro. O valor vira saldo dele no app."""
+
+
 class PaymentProvider(Protocol):
     def create_pix_charge(
-        self, ride_id: str, rider_id: str, amount_cents: int, split: Split, purpose: str = "ride"
+        self, ride_id: str, rider_id: str, amount_cents: int, split: Split, purpose: str = "ride",
+        passenger_id: str = "",
     ) -> PixCharge: ...
 
-    def refund(self, charge_id: str) -> None: ...
+    def refund(self, charge_id: str, amount_cents: int | None = None) -> None:
+        """Devolve o Pix pago (tudo, ou `amount_cents`). Levanta `RefundUndeliverable` se não chega ao passageiro."""
+        ...

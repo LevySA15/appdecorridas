@@ -12,12 +12,14 @@ from sqlalchemy.orm import Session
 
 from app.db import repositories as repo
 from app.db.pg_ledger import PgLedger
+from app.domain.balance import credit
 from app.domain.config import FeeConfig, RideConfig
 from app.domain.fees import RiderAccount, add_cash_fee_debt, mark_entry_paid
 from app.domain.payments import (
     DebtState,
     PaymentProvider,
     PixCharge,
+    RefundUndeliverable,
     Split,
     confirm_charge_debt,
     release_charge_debt,
@@ -74,15 +76,33 @@ class PaymentService:
         charge = repo.get_charge(session, charge_id, for_update=True) if charge_id else None
         return acc, charge
 
-    def _refund(self, charge: PixCharge, acc: RiderAccount, ledger: PgLedger) -> None:
-        """Devolve um Pix pago: provedor, livro-caixa e dívida (a reservada é solta, a abatida volta)."""
-        self.provider.refund(charge.charge_id)
-        ledger.post_refund(charge.charge_id)
+    def _refund(
+        self, session: Session, passenger_id: str, charge: PixCharge, acc: RiderAccount, ledger: PgLedger,
+        *, keep_cents: int = 0,
+    ) -> str:
+        """Devolve um Pix pago: provedor, livro-caixa e dívida (a reservada é solta, a abatida volta).
+
+        `keep_cents` fica com o motoqueiro (taxa de cancelamento retida) e só o resto volta. Se a devolução
+        não chega à chave Pix do passageiro, o resto vira saldo dele no app. Devolve `"pix"` ou `"balance"`.
+        """
+        send = charge.amount_cents - keep_cents
+        destination = "pix"
+        try:
+            if send > 0:
+                self.provider.refund(charge.charge_id, send)
+            ledger.post_refund(charge.charge_id, keep_cents=keep_cents)
+        except RefundUndeliverable:
+            ledger.post_refund_to_balance(charge.charge_id, passenger_id, keep_cents=keep_cents)
+            passenger = repo.get_passenger_account(session, passenger_id, for_update=True)
+            credit(passenger, send)
+            repo.save_passenger_account(session, passenger)
+            destination = "balance"
         charge.refunded = True
         if charge.debt_state is DebtState.APPLIED:
             restore_charge_debt(acc, charge)
         elif charge.debt_state is DebtState.RESERVED:
             release_charge_debt(acc, charge)
+        return destination
 
     def _release_if_reserved(self, charge: PixCharge | None, acc: RiderAccount | None) -> None:
         if charge is not None and acc is not None and charge.debt_state is DebtState.RESERVED:
@@ -135,8 +155,11 @@ class PaymentService:
                 self._emit(ride.passenger_id, "pix_confirmed", {"ride_id": ride.ride_id, "amount_cents": charge.amount_cents})
                 self._emit(ride.rider_id, "payment_received", {"ride_id": ride.ride_id, "late": False})
         if refund_needed:
-            self._refund(charge, acc, ledger)
-            self._emit(ride.passenger_id, "payment_refunded", {"ride_id": ride.ride_id, "amount_cents": charge.amount_cents})
+            destination = self._refund(session, ride.passenger_id, charge, acc, ledger)
+            refunded = {"ride_id": ride.ride_id, "amount_cents": charge.amount_cents, "to": destination}
+            if destination == "balance":
+                refunded["balance_cents"] = repo.get_passenger_account(session, ride.passenger_id).balance_cents
+            self._emit(ride.passenger_id, "payment_refunded", refunded)
             outcome = "refunded"
         else:
             outcome = "applied"
@@ -207,7 +230,7 @@ class PaymentService:
             raise RuntimeError(f"corrida {ride.ride_id} tem Pix pago, mas nenhuma cobrança registrada")
         if charge is not None and acc is not None:
             if result.refund_needed:
-                self._refund(charge, acc, PgLedger(session))
+                self._refund(session, ride.passenger_id, charge, acc, PgLedger(session))
             else:
                 self._release_if_reserved(charge, acc)
             repo.save_charge(session, charge)
@@ -240,7 +263,7 @@ class PaymentService:
             raise RuntimeError(f"corrida {ride_id} tem Pix pago, mas nenhuma cobrança registrada")
         if charge is not None and acc is not None:
             if refund_needed:
-                self._refund(charge, acc, PgLedger(session))
+                self._refund(session, ride.passenger_id, charge, acc, PgLedger(session))
             else:
                 self._release_if_reserved(charge, acc)
             repo.save_charge(session, charge)
