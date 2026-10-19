@@ -5,7 +5,7 @@ from simulator.stats import RideRecord, Stats
 
 AUDIT_OK = {
     "ledger_balanced": True, "reconcile_diff": {}, "rides_by_state": {"completed": 1}, "open_rides": [],
-    "double_booked_riders": [],
+    "double_booked_riders": [], "balance_matches_ledger": True, "inconsistent_fees": [],
 }
 
 
@@ -85,3 +85,37 @@ def test_suspeita_de_localizacao_falsa_aparece_no_relatorio_sem_reprovar():
     relatorio = build_report(rodada([corrida()], stats=stats))
     assert relatorio.passed and "localização falsa" in relatorio.text and "avisou ao administrador: 2" in relatorio.text
     assert "localização falsa" not in build_report(rodada([corrida()])).text
+
+
+def test_taxas_de_cancelamento_aparecem_no_relatorio():
+    stats = Stats()
+    stats.fees.update({
+        "cobradas": 3, "centavos": 1100, "do_saldo": 400, "retidas": 300, "pendentes": 2, "pagas_depois": 1,
+        "recursos_pedidos": 2, "recursos_aceitos": 1, "recursos_recusados": 1, "recargas": 4,
+    })
+    texto = build_report(rodada([corrida()], stats=stats)).text
+    assert "## Taxas de cancelamento tardio" in texto
+    assert "Cobradas: 3 (R$ 11,00)" in texto and "do saldo: R$ 4,00" in texto and "retido do Pix: R$ 3,00" in texto
+    assert "ficaram pendentes: 2" in texto and "Pendências pagas depois: 1" in texto
+    assert "Recursos: pedidos 2, aceitos 1, recusados 1" in texto and "Recargas de saldo: 4" in texto
+
+
+def test_sem_taxas_o_relatorio_diz_que_nao_houve():
+    assert "- nenhuma taxa cobrada" in build_report(rodada([corrida()])).text
+
+
+def test_conferencia_acusa_saldo_diferente_do_livro_e_taxa_inconsistente():
+    audit = AUDIT_OK | {"balance_matches_ledger": False, "inconsistent_fees": ["ride-9"]}
+    texto = " ".join(find_problems(rodada([corrida()], audit=audit), []))
+    assert "saldos dos passageiros" in texto and "ride-9" in texto
+
+
+def test_servidor_antigo_sem_as_chaves_novas_nao_reprova():
+    antigo = {k: v for k, v in AUDIT_OK.items() if k not in ("balance_matches_ledger", "inconsistent_fees")}
+    assert find_problems(rodada([corrida()], audit=antigo), []) == []
+
+
+def test_erros_do_servidor_aparecem_com_a_pilha_no_relatorio():
+    texto = build_report(rodada([corrida()]), ["ERROR: x"], server_details=["ERROR:    Exception in ASGI application\nTraceback (most recent call last):\n  boom"]).text
+    assert "## Erros no registro do servidor" in texto and "Traceback (most recent call last):" in texto and "  boom" in texto
+    assert "## Erros no registro do servidor" not in build_report(rodada([corrida()])).text

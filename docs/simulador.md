@@ -51,11 +51,12 @@ Sai com código 0 se deu tudo certo, 1 se achou problema e 2 se nem conseguiu co
 - **Corridas:** quantas foram pedidas e como cada uma terminou (concluída, cancelada pelo passageiro, sem moto, Pix vencido...).
 - **Tempos:** da procura até alguém aceitar, do aceite até a moto chegar, e da saída até o fim.
 - **Dinheiro:** corridas e valores por forma de pagamento, e os preços mostrados (o preço sobe quando falta moto livre).
+- **Taxas de cancelamento tardio:** quantas taxas de R$ 3,00 a R$ 5,00 foram cobradas, de onde saiu o dinheiro (saldo do passageiro, retido da devolução do Pix ou pendência), quantas pendências foram pagas depois, quantos recursos foram pedidos e como o administrador de mentira decidiu, e quantas recargas de saldo houve. No servidor descartável a recarga fica ligada; no servidor de desenvolvimento ela fica desligada e essa linha só mostra as taxas.
 - **O que as pessoas fizeram:** a contagem dos comportamentos (oferta recusada, código errado, SOS, QR pago...).
 - **Suspeitas de localização falsa:** aparece só se o servidor avisou o administrador. O simulador não falsifica nada, então isso quase sempre quer dizer moto rápida demais para o intervalo entre as posições; não reprova a rodada.
 - **Chamadas à API:** por rota, quantas vezes, quantos erros e o tempo (mediana, 90% e máximo). "Erros" aqui inclui erros normais, como uma oferta que venceu antes do toque.
 - **Respostas inesperadas do servidor:** o que **não** devia ter acontecido (erro 500, falta de resposta, erro que o simulador não esperava). Se tiver qualquer linha aqui, a rodada reprova.
-- **Conferência final do servidor:** o livro-caixa fecha e bate com o extrato do provedor falso, ninguém ficou com duas corridas ao mesmo tempo e nenhuma corrida ficou aberta.
+- **Conferência final do servidor:** o livro-caixa fecha e bate com o extrato do provedor falso (que já desconta devoluções parciais), a soma dos saldos dos passageiros é igual à das contas de saldo do livro-caixa, nenhuma taxa de cancelamento tem partes que não somam o valor, ninguém ficou com duas corridas ao mesmo tempo e nenhuma corrida ficou aberta.
 - **Veredito:** "Tudo certo" ou a lista numerada de problemas.
 
 ## O que o simulador não faz
@@ -64,7 +65,9 @@ Sai com código 0 se deu tudo certo, 1 se achou problema e 2 se nem conseguiu co
 - O mapa é falso: a moto anda em linha reta, e a rua é 30% mais longa que a reta só para o preço.
 - Pix, WhatsApp e o contato de emergência são falsos até o plano 7.
 - Não derruba o banco nem o Redis no meio da rodada, e não testa mais de um processo do servidor.
-- O aviso de "muito tempo sem sinal" ainda não existe no servidor (item aberto do plano 2C), então não há o que simular.
+- O aviso de "muito tempo sem sinal" ainda não existe no servidor (plano 4C), então não há o que simular.
+- Não simula devolução de Pix que "não chega" ao passageiro (vira saldo); isso é coberto pelos testes do servidor, não pela simulação.
+- Passageiros e motoqueiros bloqueados por dívida (plano 4D) ainda não existem.
 
 ## Medidas de referência (18/10/2026)
 

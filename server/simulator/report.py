@@ -63,6 +63,10 @@ def find_problems(outcome: Outcome, server_problems: list[str]) -> list[str]:
             problems.append(f"O livro-caixa não bate com o extrato do provedor: {audit['reconcile_diff']}")
         if audit.get("double_booked_riders"):
             problems.append(f"Motoqueiro com duas corridas ativas ao mesmo tempo: {audit['double_booked_riders']}")
+        if not audit.get("balance_matches_ledger", True):
+            problems.append("A soma dos saldos dos passageiros NÃO bate com o livro-caixa.")
+        if audit.get("inconsistent_fees"):
+            problems.append(f"Taxas de cancelamento com partes que não somam o valor: {audit['inconsistent_fees']}")
         mine = [r for r in audit.get("open_rides", []) if r["ride_id"] in stats.rides]
         if mine:
             problems.append(f"{len(mine)} corrida(s) ficaram abertas depois da espera final: {[r['state'] for r in mine]}")
@@ -76,7 +80,26 @@ def find_problems(outcome: Outcome, server_problems: list[str]) -> list[str]:
     return problems
 
 
-def build_report(outcome: Outcome, server_problems: list[str] | None = None, retries: int = 0) -> Report:
+def _fees_section(stats) -> list[str]:
+    fees = stats.fees
+    lines = ["", "## Taxas de cancelamento tardio", ""]
+    if not fees["cobradas"] and not fees["recargas"]:
+        return lines + ["- nenhuma taxa cobrada"]
+    if fees["cobradas"]:
+        lines += [
+            f"- Cobradas: {fees['cobradas']} ({brl(fees['centavos'])}) · do saldo: {brl(fees['do_saldo'])} · "
+            f"retido do Pix: {brl(fees['retidas'])} · ficaram pendentes: {fees['pendentes']}",
+            f"- Pendências pagas depois: {fees['pagas_depois']}",
+            f"- Recursos: pedidos {fees['recursos_pedidos']}, aceitos {fees['recursos_aceitos']}, "
+            f"recusados {fees['recursos_recusados']}",
+        ]
+    lines.append(f"- Recargas de saldo: {fees['recargas']}")
+    return lines
+
+
+def build_report(
+    outcome: Outcome, server_problems: list[str] | None = None, retries: int = 0, server_details: list[str] | None = None
+) -> Report:
     cfg, stats, audit = outcome.config, outcome.stats, outcome.audit
     server_problems = server_problems or []
     rides = list(stats.rides.values())
@@ -103,6 +126,7 @@ def build_report(outcome: Outcome, server_problems: list[str] | None = None, ret
         lines.append(f"- {name}: {len(mine)} corridas, {brl(sum(r.price_cents for r in mine))}")
     if stats.price_reasons:
         lines.append("- Preços mostrados: " + ", ".join(f"{k} ({v})" for k, v in stats.price_reasons.most_common()))
+    lines += _fees_section(stats)
     lines += ["", "## O que as pessoas fizeram", ""]
     lines += [f"- {key}: {count}" for key, count in sorted(stats.notes.items())] or ["- nada de especial"]
     lines += ["", "## Avisos em tempo real recebidos (de todos, somados)", ""]
@@ -132,12 +156,17 @@ def build_report(outcome: Outcome, server_problems: list[str] | None = None, ret
     lines += [f"- {text}" for text in stats.unexpected] or ["- nenhuma"]
     if stats.unexpected_total > len(stats.unexpected):
         lines.append(f"- … e mais {stats.unexpected_total - len(stats.unexpected)}")
+    if server_details:
+        lines += ["", "## Erros no registro do servidor (os primeiros, com a pilha)", ""]
+        for block in server_details:
+            lines += ["```", block, "```", ""]
     lines += ["", "## Conferência final do servidor", ""]
     if audit:
         lines += [
             f"- Livro-caixa fecha: {'sim' if audit.get('ledger_balanced') else 'NÃO'}",
             f"- Bate com o extrato do provedor: {'sim' if not audit.get('reconcile_diff') else 'NÃO'}",
             f"- Corridas por estado no banco: {audit.get('rides_by_state')}",
+            f"- Saldos dos passageiros batem com o livro-caixa: {'sim' if audit.get('balance_matches_ledger', True) else 'NÃO'}",
         ]
     else:
         lines.append("- sem resposta")

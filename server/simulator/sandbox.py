@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.cli import create_admin
 from app.db.config_store import save_config
-from app.domain.config import AuthConfig, DispatchConfig, RideConfig, SafetyConfig
+from app.domain.config import AuthConfig, BalanceConfig, DispatchConfig, RideConfig, SafetyConfig
 from app.settings import load_settings
 
 SERVER_DIR = Path(__file__).resolve().parents[1]
@@ -40,6 +40,7 @@ def seed_database(session: Session, *, fast: bool) -> None:
     Com `fast`, encurta os prazos do servidor (Pix, espera, procura, aviso de parada) para a simulação mostrar tudo em minutos.
     """
     save_config(session, "auth", AuthConfig(otp_requests_per_hour=1000, otp_requests_per_ip_hour=1_000_000))
+    save_config(session, "balance", BalanceConfig(topup_enabled=True))      # no servidor descartável a recarga vale
     if fast:
         save_config(
             session, "rides",
@@ -54,6 +55,26 @@ def seed_database(session: Session, *, fast: bool) -> None:
         )
     create_admin(session, ADMIN_PHONE, "Levy (sim)")
     session.commit()
+
+
+def extract_error_blocks(log: str, max_blocks: int = 3, tail_lines: int = 30) -> list[str]:
+    """Os primeiros erros do registro do servidor, cada um com a pilha (o fim dela, que é onde está a causa)."""
+    lines = log.splitlines()
+    blocks: list[str] = []
+    i = 0
+    while i < len(lines) and len(blocks) < max_blocks:
+        if lines[i].startswith("ERROR"):
+            j = i + 1
+            while j < len(lines) and not lines[j].startswith(("INFO", "WARNING", "ERROR")):
+                j += 1
+            block = lines[i:j]
+            if len(block) > tail_lines + 1:
+                block = [block[0], f"... ({len(block) - tail_lines - 1} linhas da pilha omitidas)"] + block[-tail_lines:]
+            blocks.append("\n".join(block))
+            i = j
+        else:
+            i += 1
+    return blocks
 
 
 def _free_port() -> int:
@@ -131,6 +152,10 @@ class Sandbox:
             line for line in self.log_text().splitlines()
             if "Traceback" in line or " ERROR " in line or line.startswith("ERROR")
         ]
+
+    def error_details(self) -> list[str]:
+        """Os primeiros erros do servidor com a pilha inteira (o relatório mostra, para dar para achar a causa)."""
+        return extract_error_blocks(self.log_text())
 
     def retries(self) -> int:
         """Quantas vezes o servidor repetiu uma operação porque o banco derrubou a transação por impasse."""

@@ -57,10 +57,22 @@ class PassengerActor:
         s = self.state
         if self._requesting or self.current is not None or (s is not None and s["ride"] is not None):
             return False
+        if s is not None:
+            fee = s.get("pending_fee")
+            if fee is not None and not self._decided(("fee", fee["ride_id"])):
+                return False                        # ainda vai pagar a taxa pendente
+            for fee in s.get("recent_fees") or ():
+                if fee["appeal_state"] == "open":
+                    return False                    # recurso esperando a decisão do administrador
+                if fee["can_appeal"] and not self._decided(("appeal", fee["ride_id"])):
+                    return False                    # ainda vai decidir se recorre
         unpaid = s["pending_payment"] if s is not None else None
         if unpaid is None:
             return True
-        key = ("qr", unpaid["ride_id"])
+        return self._decided(("qr", unpaid["ride_id"]))
+
+    def _decided(self, key: tuple) -> bool:
+        """Já escolheu o que fazer com isto (pagar ou não): o plano existe e é "não" ou já foi feito."""
         return key in self._plans and (self._plans[key] is None or key in self._done)
 
     async def refresh(self) -> None:
@@ -75,6 +87,7 @@ class PassengerActor:
         feed_task = asyncio.create_task(self.feed.run())
         try:
             await self.refresh()
+            await self._top_up()
             self._next_request_at = self.w.now() + self.ch.rng.uniform(0, self.p.mean_gap_s) * self.p.pace
             last = self.w.now()
             while not self.w.stopped:
@@ -106,7 +119,11 @@ class PassengerActor:
             return await self._ride(ride, now)
         if self.current is not None:
             return self._finish(now)
+        if s.get("pending_fee") and await self._pay_fee(s["pending_fee"], now):
+            return True
         if s["pending_payment"] and await self._pay_unpaid(s["pending_payment"], now):
+            return True
+        if await self._appeal(s.get("recent_fees") or (), now):
             return True
         if await self._rate(now):
             return True
@@ -191,7 +208,7 @@ class PassengerActor:
                 return False
             self._when(
                 ("cancel-accepted", ride_id),
-                lambda: now + self.ch.think(5, 30) if self.ch.chance(self.p.cancel_after_accept) else None,
+                lambda: now + self.ch.think(*self.p.cancel_accept_s) if self.ch.chance(self.p.cancel_after_accept) else None,
             )
             return await self._cancel_if_due(("cancel-accepted", ride_id), now)
         if state == "in_progress":
@@ -294,6 +311,14 @@ class PassengerActor:
             outcome = "completed" if record.started_at is not None else "unknown"
             if not reconnected:
                 record.missing_events.append("aviso final")
+        fee = self.feed.latest.get((record.ride_id, "cancel_fee"))
+        if fee:                                                 # taxa de cancelamento tardio (o passageiro cancelou ou não apareceu)
+            fees = self.w.stats.fees
+            fees["cobradas"] += 1
+            fees["centavos"] += fee["fee_cents"]
+            fees["do_saldo"] += fee["from_balance_cents"]
+            fees["retidas"] += fee["retained_cents"]
+            fees["pendentes"] += 1 if fee["pending_cents"] else 0
         record.outcome = outcome
         record.ended_at = now
         if not reconnected:
@@ -324,6 +349,61 @@ class PassengerActor:
         await self.w.pay_pix(pending["charge_id"])
         self.note("QR do fim da corrida pago")
         return True
+
+    async def _top_up(self) -> None:
+        """Ao começar, às vezes recarrega o saldo (só se o servidor deixa; o de desenvolvimento deixa desligado)."""
+        if not (self.state and self.state.get("topup_enabled")):
+            return
+        own = self.w.choices("topup", self.identity.index)      # sorteio à parte: não muda o resto do que a pessoa faz
+        if not own.chance(self.p.topup):
+            return
+        amount = own.rng.choice([1000, 1500, 2000])
+        reply = await self.call("POST", "/v1/passenger/balance/topup", json={"amount_cents": amount}, ok=("topup_disabled",))
+        if reply.ok:
+            await self.w.pay_pix(reply.body["charge_id"])
+            self.w.stats.fees["recargas"] += 1
+            self.note("saldo recarregado")
+
+    async def _pay_fee(self, fee: dict, now: float) -> bool:
+        """Paga a taxa de cancelamento pendente (com o saldo ou pelo Pix) ou escolhe ficar bloqueado."""
+        key = ("fee", fee["ride_id"])
+        at = self._when(key, lambda: now + self.ch.think(15, 90) if self.ch.chance(self.p.pay_fee) else None)
+        if at is None:
+            if ("fee-skip", fee["ride_id"]) not in self._done:
+                self._done.add(("fee-skip", fee["ride_id"]))
+                self.note("taxa pendente não paga (por escolha)")
+            return False
+        if now < at or key in self._done:
+            return False
+        self._done.add(key)
+        reply = await self.call("POST", "/v1/passenger/fees/pay", ok=("nothing_to_pay",))
+        if not reply.ok:
+            return True
+        if not reply.body["paid"]:
+            await self.w.pay_pix(reply.body["charge_id"])
+        self.w.stats.fees["pagas_depois"] += 1
+        self.note("taxa de cancelamento paga")
+        return True
+
+    async def _appeal(self, fees, now: float) -> bool:
+        """Às vezes pede revisão de uma taxa recente."""
+        for fee in fees:
+            key = ("appeal", fee["ride_id"])
+            if not fee["can_appeal"]:
+                continue
+            at = self._when(key, lambda: now + self.ch.think(20, 120) if self.ch.chance(self.p.appeal_fee) else None)
+            if at is None or now < at or key in self._done:
+                continue
+            self._done.add(key)
+            reply = await self.call(
+                "POST", "/v1/passenger/rides/{ride_id}/fee/appeal", params={"ride_id": fee["ride_id"]},
+                json={"text": "Cancelei porque a moto estava demorando (simulação)."}, ok=("appeal_not_allowed",),
+            )
+            if reply.ok:
+                self.w.stats.fees["recursos_pedidos"] += 1
+                self.note("recurso da taxa pedido")
+                return True
+        return False
 
     async def _rate(self, now: float) -> bool:
         for index, (at, ride_id) in enumerate(self._rate_queue):

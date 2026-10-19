@@ -44,6 +44,9 @@ class Stats:
         self.notes: Counter[str] = Counter()           # coisas que as pessoas fizeram (ou que aconteceram com elas)
         self.rides: dict[str, RideRecord] = {}
         self.price_reasons: Counter[str] = Counter()
+        # taxa de cancelamento tardio: cobradas, centavos, do_saldo, retidas, pendentes, pagas_depois,
+        # recursos_pedidos, recursos_aceitos, recursos_recusados, recargas
+        self.fees: Counter[str] = Counter()
 
     def record_call(self, method: str, template: str, status: int, seconds: float) -> None:
         self.calls[(method, template, status)] += 1

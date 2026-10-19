@@ -73,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
                 config = make_config(args, box.url, ADMIN_PHONE, fast=args.fast)
                 config.state_dir = None            # servidor novo, ninguém para reencontrar
                 outcome = asyncio.run(simulate(config))
-                report = build_report(outcome, box.problems(), box.retries())
+                report = build_report(outcome, box.problems(), box.retries(), box.error_details())
         else:
             outcome = asyncio.run(simulate(make_config(args, args.url, args.admin_phone, fast=False)))
             report = build_report(outcome)

@@ -69,3 +69,19 @@ def test_moto_a_4x_nunca_passa_do_limite_de_cruzeiro_com_folga_para_o_servidor()
     velocidades = [Choices(random.Random(i), Profile(speed_mps=8.0, speedup=4.0)).rider_speed() for i in range(300)]
     assert max(velocidades) <= CRUISE_LIMIT_MPS < MAX_SPEED_MPS
     assert max(velocidades) > 25                      # e ainda assim anda depressa
+
+
+def test_perfis_novos_tem_probabilidades_validas():
+    for nome in ("calmo", "normal", "bagunca"):
+        perfil = preset(nome)
+        perfil.check()
+        assert 0 <= perfil.pay_fee <= 1 and 0 <= perfil.appeal_fee <= 1 and 0 <= perfil.topup <= 1
+    calmo, normal, bagunca = preset("calmo"), preset("normal"), preset("bagunca")
+    assert (calmo.pay_fee, calmo.appeal_fee, calmo.topup) == (1.0, 0.0, 0.0)       # o calmo não faz bagunça
+    assert bagunca.pay_fee < normal.pay_fee < 1.0 and bagunca.appeal_fee > normal.appeal_fee > 0
+
+
+@pytest.mark.parametrize("campo", ["pay_fee", "appeal_fee", "topup"])
+def test_probabilidade_fora_de_zero_a_um_e_recusada(campo):
+    with pytest.raises(ValueError, match=campo):
+        Profile(**{campo: 1.5}).check()

@@ -78,3 +78,59 @@ def test_tapas_duplos_codigo_errado_e_sos_terminam_bem(box):
     assert outcome.stats.events["sos"] == 1                    # o administrador de mentira também recebeu o aviso
     assert notas["alerta de segurança resolvido pelo administrador (sos)"] == 1
     assert outcome.audit["rides_by_state"] == {"completed": 1}
+
+
+def perfil_de_taxa(**mudancas) -> Profile:
+    """O passageiro cancela 16 s depois de a moto aceitar (a janela grátis do servidor rápido é de 15 s), com a moto
+    ainda longe: taxa de cancelamento tardio de R$ 3,00."""
+    return dataclasses.replace(
+        perfil_rapido(0.0), speed_mps=1.0, speedup=1.0, cancel_after_accept=1.0, cancel_accept_s=(160.0, 165.0),
+        **mudancas,
+    )
+
+
+def rodar_taxa(box, perfil, seed=11):
+    cfg = SimConfig(
+        url=box.url, admin_phone=ADMIN_PHONE, riders=1, passengers=1, minutes=3, seed=seed, profile=perfil,
+        max_rides=1, drain_s=120,
+    )
+    outcome = asyncio.run(simulate(cfg))
+    return outcome, build_report(outcome, box.problems(), box.retries())
+
+
+def test_rodada_com_cancelamento_tardio_cobra_a_taxa_e_o_livro_fecha(box):
+    outcome, relatorio = rodar_taxa(box, perfil_de_taxa(pay_fee=1.0, appeal_fee=0.0, topup=0.0))
+    assert relatorio.passed, relatorio.text
+    fees = outcome.stats.fees
+    assert fees["cobradas"] == 1 and fees["pendentes"] == 1 and fees["pagas_depois"] == 1
+    assert 300 <= fees["centavos"] <= 500
+    assert outcome.audit["balance_matches_ledger"] is True and outcome.audit["inconsistent_fees"] == []
+    assert outcome.stats.events["fee_paid"] == 1
+    assert "Cobradas: 1" in relatorio.text
+
+
+@pytest.mark.slow
+def test_passageiro_que_escolhe_nao_pagar_a_taxa_fica_bloqueado_e_a_rodada_termina(box):
+    outcome, relatorio = rodar_taxa(box, perfil_de_taxa(pay_fee=0.0, appeal_fee=0.0, topup=0.0))
+    assert relatorio.passed, relatorio.text
+    assert outcome.stats.fees["cobradas"] == 1 and outcome.stats.fees["pagas_depois"] == 0
+    assert outcome.stats.notes["taxa pendente não paga (por escolha)"] == 1
+
+
+@pytest.mark.slow
+def test_recurso_da_taxa_e_decidido_pelo_administrador_de_mentira(box):
+    outcome, relatorio = rodar_taxa(box, perfil_de_taxa(pay_fee=0.0, appeal_fee=1.0, topup=0.0))
+    assert relatorio.passed, relatorio.text
+    fees = outcome.stats.fees
+    assert fees["recursos_pedidos"] == 1 and fees["recursos_aceitos"] + fees["recursos_recusados"] == 1
+    assert outcome.audit["balance_matches_ledger"] is True
+
+
+@pytest.mark.slow
+def test_recarga_de_saldo_paga_a_taxa_sem_pendencia(box):
+    perfil = perfil_de_taxa(pay_fee=1.0, appeal_fee=0.0, topup=1.0)
+    outcome, relatorio = rodar_taxa(box, perfil)
+    assert relatorio.passed, relatorio.text
+    fees = outcome.stats.fees
+    assert fees["recargas"] == 1 and fees["cobradas"] == 1 and fees["do_saldo"] >= 300 and fees["pendentes"] == 0, relatorio.text
+    assert outcome.audit["balance_matches_ledger"] is True

@@ -12,6 +12,7 @@ class AdminActor:
         self.w = world
         self.me = me
         self.feed = Feed(world.ws_url, me.token, world.stats)
+        self.ch = world.choices("admin", 0)
         self._last = -1e9
 
     async def run(self) -> None:
@@ -37,5 +38,22 @@ class AdminActor:
                         )
                         if reply.ok:
                             self.w.stats.note(f"alerta de segurança resolvido pelo administrador ({status})")
+                await self._decide_appeals()
         finally:
             await self.feed.stop(feed_task)
+
+    async def _decide_appeals(self) -> None:
+        """Decide os recursos da taxa de cancelamento que estão abertos: aceita ou recusa na sorte (metade e metade)."""
+        appeals = await self.w.api.call(
+            "GET", "/v1/admin/appeals", token=self.me.token, query={"status": "open", "limit": 50}
+        )
+        for appeal in appeals.body if appeals.ok else []:
+            accept = self.ch.chance(0.5)
+            reply = await self.w.api.call(
+                "POST", "/v1/admin/appeals/{ride_id}/decide", token=self.me.token, params={"ride_id": appeal["ride_id"]},
+                json={"decision": "accept" if accept else "reject", "note": "Decidido pelo simulador."},
+                ok=("appeal_not_allowed",),
+            )
+            if reply.ok:
+                self.w.stats.fees["recursos_aceitos" if accept else "recursos_recusados"] += 1
+                self.w.stats.note("recurso da taxa decidido pelo administrador")

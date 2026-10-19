@@ -52,3 +52,29 @@ def test_erro_dentro_do_bloco_tambem_apaga_o_esquema(settings):
         restou = conn.execute(text("select count(*) from information_schema.schemata where schema_name = :s"), {"s": schema}).scalar()
     engine.dispose()
     assert restou == 0
+
+
+def test_blocos_de_erro_do_registro_trazem_a_pilha_e_param_no_proximo_registro():
+    from simulator.sandbox import extract_error_blocks
+
+    log = "\n".join([
+        "INFO:     iniciou", "ERROR:    Exception in ASGI application", "Traceback (most recent call last):",
+        "  File \"x.py\", line 1", "ValueError: boom", "INFO:     seguiu", "ERROR:    outro", "  detalhe",
+    ])
+    blocos = extract_error_blocks(log)
+    assert blocos == [
+        "ERROR:    Exception in ASGI application\nTraceback (most recent call last):\n  File \"x.py\", line 1\nValueError: boom",
+        "ERROR:    outro\n  detalhe",
+    ]
+    assert extract_error_blocks(log, max_blocks=1) == blocos[:1]
+    assert extract_error_blocks("tudo bem\nsem erro") == []
+
+
+def test_pilha_comprida_mostra_o_comeco_e_o_fim_que_tem_a_causa():
+    from simulator.sandbox import extract_error_blocks
+
+    log = "\n".join(["ERROR:    Exception in ASGI application"] + [f"  frame {n}" for n in range(100)] + ["ValueError: a causa"])
+    [bloco] = extract_error_blocks(log, tail_lines=5)
+    assert bloco.splitlines()[0] == "ERROR:    Exception in ASGI application"
+    assert "linhas da pilha omitidas" in bloco and bloco.splitlines()[-1] == "ValueError: a causa"
+    assert len(bloco.splitlines()) == 7
