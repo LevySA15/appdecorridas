@@ -21,9 +21,7 @@ Ferramentas que ainda precisam ser instaladas no computador do Levy (não existe
 
 ## Itens que sobraram do plano 2C
 
-Do Levy decidir (o servidor segue o padrão atual):
-- Compensação do cancelamento tardio: hoje só fica registrada no histórico da corrida, sem movimento de dinheiro, e a API não a promete ao app. Decidir a política (valor em aberto na spec) e como cobrar.
-- Se a corrida com bloqueio por falta de pagamento conta para as 10 corridas de teste (hoje conta).
+Do Levy decidir: respondido em 18/10/2026, ver "Decisões já tomadas" (cancelamento tardio, corrida bloqueada por falta de pagamento, calote). Falta transformar a decisão em código (hoje a compensação do cancelamento tardio só fica registrada no histórico da corrida, sem movimento de dinheiro, e a API não a promete ao app).
 
 Plano 3 (simulador): feito; ver "Itens que sobraram do plano 3" abaixo.
 
@@ -54,7 +52,12 @@ Da revisão final do plano 3 (adiados, todos pequenos): Ctrl+C no `run` diz "ser
 
 ## Decisões já tomadas
 
-- Corrida em dinheiro sem pagamento: bloqueio automático após 5 minutos, sem taxa para o motoqueiro, repasse quando o passageiro pagar (feito no 2B). Em aberto, com o Levy: se o passageiro nunca pagar, quem arca com o prejuízo (por enquanto, o motoqueiro).
+- Corrida em dinheiro sem pagamento: bloqueio automático após 5 minutos, sem taxa para o motoqueiro, repasse quando o passageiro pagar (feito no 2B). Se o passageiro nunca pagar, quem arca com o prejuízo (por enquanto, o motoqueiro): o Levy considera o caso raro e não pede decisão agora (ver o item "Calote" abaixo).
+
+- Cancelamento pelo passageiro (Levy, 18/10/2026): janela grátis de **5 minutos**, contada a partir do aviso da taxa; depois dela, taxa de **R$ 3 a R$ 5**; o passageiro pode **contestar depois** (recurso). Hoje o servidor usa 60 s depois do aceite e R$ 2 (`free_cancel_after_accept_s`, `cancel_compensation_cents`), só registrados. A confirmar com o Levy: (a) a janela conta do aceite da moto, que é quando a tela mostra o aviso; (b) o que decide R$ 3 ou R$ 5; (c) como cobrar (Pix já pago: reter da devolução; dinheiro: vira pendência do passageiro, que fica sem pedir até pagar); (d) o recurso vira uma fila no painel (plano 4), a taxa fica cobrada até o Levy decidir e, se aceito, é devolvida.
+- Calote (Levy, 18/10/2026): ele considera o risco muito pequeno pelas travas. Pix: pago antes. Cartão (plano 8): tenta na hora; se negar, mostra o motivo e cancela a corrida; se por erro a corrida for validada com o cartão recusado, ou o dinheiro não chegar, o passageiro fica sem poder pedir até pagar. Dinheiro: o motoqueiro confirma que recebeu e a taxa sai do saldo dele no app; sem saldo, ele não pode aceitar corrida até pagar, mas ainda faz uma corrida antes do bloqueio. Quem arca com o prejuízo no caso que sobrar fica como está (o motoqueiro) e não pede decisão agora. A corrida bloqueada por falta de pagamento continua contando para as corridas de teste (o Levy não pediu mudança). A confirmar: o "saldo no app" do motoqueiro hoje é uma dívida descontada da próxima corrida Pix (limite R$ 10, bloqueia só corridas em dinheiro); o jeito do Levy parece ser dívida com limite de uma taxa, e bloquear também as corridas em Pix impediria o motoqueiro de quitar pelo próprio repasse.
+- Teste e entrada do motoqueiro (Levy, 18/10/2026, ainda **não decidido**, "vou ver"): as corridas de teste **têm** taxa (confirmado, não são de graça); ele pensa em tirar a entrada de R$ 50 ou manter só uma vez, e subir o teste de 10 para 20 corridas. São parâmetros (`trial_rides`, `entry_fee_cents`); tirar a entrada pede um pequeno ajuste em `fees.py`, que hoje bloqueia depois do teste enquanto a entrada não for paga. Sem a entrada, a spec (seção 7.4) mostra que a taxa por corrida passa a ser a única receita, e com R$ 1,00 sobram só cerca de R$ 0,31 por corrida.
+- "Muito tempo sem sinal" (Levy, 18/10/2026): resposta "5 minutos" ambígua, pode ser só a janela do cancelamento; falta confirmar o tempo e **quem é avisado**.
 
 - SOS: o servidor aceita durante toda a corrida (a caminho, na chegada e andando); mostrar o botão sempre ou só dentro do aviso automático é decisão do Levy nas telas do app (spec, seção 9, itens 4 e 5).
 
