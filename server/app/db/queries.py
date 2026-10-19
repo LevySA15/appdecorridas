@@ -565,3 +565,168 @@ def in_progress_rides_for_signal(session: Session) -> list[SignalRide]:
         .order_by(RideRow.id)
     ).all()
     return [SignalRide(ride_id, rider_id, passenger_id, distance_m or 0, at) for ride_id, rider_id, passenger_id, distance_m, at in rows]
+
+
+# --- painel do dono ------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RideListItem:
+    ride_id: str
+    state: str
+    method: str
+    price_cents: int
+    fee_cents: int | None
+    passenger_name: str
+    rider_name: str | None
+    created_at: float
+    pickup_text: str
+    dest_text: str
+
+
+def list_rides(session: Session, state: str | None, limit: int, offset: int) -> list[RideListItem]:
+    """Corridas, as mais novas primeiro, com os nomes das pessoas."""
+    passenger, rider = aliased(UserRow), aliased(UserRow)
+    stmt = (
+        select(RideRow, passenger.name, rider.name)
+        .join(passenger, passenger.id == RideRow.passenger_id)
+        .outerjoin(rider, rider.id == RideRow.rider_id)
+        .order_by(RideRow.created_at.desc(), RideRow.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    if state is not None:
+        stmt = stmt.where(RideRow.state == state)
+    return [
+        RideListItem(
+            r.id, r.state, r.payment_method, r.price_cents, r.fee_cents, passenger_name, rider_name,
+            r.created_at.timestamp(), r.pickup_text or "", r.dest_text or "",
+        )
+        for r, passenger_name, rider_name in session.execute(stmt).all()
+    ]
+
+
+def ride_detail(session: Session, ride_id: str) -> dict | None:
+    """Uma corrida com o histórico de eventos e a taxa de cancelamento (se houve). Sem o código de 4 dígitos."""
+    found = [item for item in _one_ride(session, ride_id)]
+    if not found:
+        return None
+    item = found[0]
+    row = session.get(RideRow, ride_id)
+    events = session.execute(
+        select(RideEventRow).where(RideEventRow.ride_id == ride_id).order_by(RideEventRow.id)
+    ).scalars()
+    fee = session.get(CancelFeeRow, ride_id)
+    return {
+        "ride_id": item.ride_id, "state": item.state, "method": item.method, "price_cents": item.price_cents,
+        "fee_cents": item.fee_cents, "passenger_name": item.passenger_name, "rider_name": item.rider_name,
+        "created_at": item.created_at, "pickup_text": item.pickup_text, "dest_text": item.dest_text,
+        "distance_m": row.distance_m, "price_reason": row.price_reason,
+        "events": [{"kind": e.kind, "data": e.data, "at": e.created_at} for e in events],
+        "cancel_fee": None if fee is None else {
+            "fee_cents": fee.fee_cents, "from_balance_cents": fee.from_balance_cents,
+            "retained_cents": fee.retained_cents, "pending_cents": fee.pending_cents,
+            "paid_later_cents": fee.paid_later_cents, "appeal_state": fee.appeal_state,
+        },
+    }
+
+
+def _one_ride(session: Session, ride_id: str) -> list[RideListItem]:
+    passenger, rider = aliased(UserRow), aliased(UserRow)
+    rows = session.execute(
+        select(RideRow, passenger.name, rider.name)
+        .join(passenger, passenger.id == RideRow.passenger_id)
+        .outerjoin(rider, rider.id == RideRow.rider_id)
+        .where(RideRow.id == ride_id)
+    ).all()
+    return [
+        RideListItem(
+            r.id, r.state, r.payment_method, r.price_cents, r.fee_cents, passenger_name, rider_name,
+            r.created_at.timestamp(), r.pickup_text or "", r.dest_text or "",
+        )
+        for r, passenger_name, rider_name in rows
+    ]
+
+
+def list_passengers(session: Session, q: str | None, limit: int, offset: int) -> list[dict]:
+    stmt = (
+        select(UserRow, PassengerProfileRow)
+        .join(PassengerProfileRow, PassengerProfileRow.user_id == UserRow.id)
+        .order_by(UserRow.created_at.desc(), UserRow.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    if q:
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(UserRow.name.ilike(like) | UserRow.phone.like(like))
+    return [
+        {
+            "user_id": u.id, "name": u.name, "phone": u.phone, "is_blocked": u.is_blocked,
+            "unpaid_cents": p.unpaid_cents, "balance_cents": p.balance_cents, "created_at": u.created_at.timestamp(),
+        }
+        for u, p in session.execute(stmt).all()
+    ]
+
+
+def list_debtors(session: Session) -> dict:
+    """Quem deve algo: motoqueiros com dívida de taxa e passageiros com pendência (corrida ou taxa de cancelamento)."""
+    riders = session.execute(
+        select(RiderProfileRow, UserRow)
+        .join(UserRow, UserRow.id == RiderProfileRow.user_id)
+        .where(RiderProfileRow.cash_debt_cents > 0)
+        .order_by(RiderProfileRow.cash_debt_cents.desc(), UserRow.id)
+    ).all()
+    pending = (
+        select(CancelFeeRow.passenger_id.label("pid"), func.sum(CancelFeeRow.pending_cents).label("cents"))
+        .group_by(CancelFeeRow.passenger_id)
+        .subquery()
+    )
+    passengers = session.execute(
+        select(UserRow, PassengerProfileRow, func.coalesce(pending.c.cents, 0))
+        .join(PassengerProfileRow, PassengerProfileRow.user_id == UserRow.id)
+        .outerjoin(pending, pending.c.pid == UserRow.id)
+        .where(PassengerProfileRow.unpaid_cents > 0)
+        .order_by(PassengerProfileRow.unpaid_cents.desc(), UserRow.id)
+    ).all()
+    return {
+        "riders": [
+            {
+                "rider_id": u.id, "name": u.name, "phone": u.phone, "cash_debt_cents": p.cash_debt_cents,
+                "debt_reserved_cents": p.debt_reserved_cents,
+            }
+            for p, u in riders
+        ],
+        "passengers": [
+            {
+                "user_id": u.id, "name": u.name, "phone": u.phone, "unpaid_cents": p.unpaid_cents,
+                "pending_fee_cents": int(cents),
+            }
+            for u, p, cents in passengers
+        ],
+    }
+
+
+def money_summary(session: Session) -> dict:
+    """Totais do dinheiro, direto do livro-caixa e das contas (nenhuma conta paralela)."""
+    def ledger(account_filter) -> int:
+        return int(session.execute(
+            select(func.coalesce(func.sum(LedgerRow.amount_cents), 0)).where(account_filter)
+        ).scalar_one())
+
+    def total(column) -> int:
+        return int(session.execute(select(func.coalesce(func.sum(column), 0))).scalar_one())
+
+    balanced = session.execute(
+        select(LedgerRow.ref).group_by(LedgerRow.ref).having(func.sum(LedgerRow.amount_cents) != 0)
+    ).first() is None
+    return {
+        "company_cents": ledger(LedgerRow.account == "company"),
+        "provider_cents": ledger(LedgerRow.account == "provider"),
+        "riders_cents": ledger(LedgerRow.account.like("rider:%")),
+        "passenger_balances_cents": passenger_balances_total(session),
+        "rider_debts_cents": total(RiderProfileRow.cash_debt_cents),
+        "passenger_unpaid_cents": total(PassengerProfileRow.unpaid_cents),
+        "pending_fees_cents": total(CancelFeeRow.pending_cents),
+        "rides_by_state": count_rides_by_state(session),
+        "ledger_balanced": balanced,
+    }

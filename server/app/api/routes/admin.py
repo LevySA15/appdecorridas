@@ -131,3 +131,49 @@ def decide_appeal(ride_id: str, body: DecisionIn, request: Request, admin: AuthU
         )
     )
     return Response(status_code=204)
+
+
+# --- leituras do painel -------------------------------------------------------------------------------------
+
+RideState = Literal["requested", "searching", "queued", "accepted", "arrived", "in_progress", "completed", "cancelled", "no_rider"]
+
+
+@router.get("/rides")
+def list_rides(
+    request: Request,
+    state: RideState | None = None,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: AuthUser = Depends(admin_user),
+) -> list[dict]:
+    items = get_runtime(request).run(lambda unit: queries.list_rides(unit.session, state, limit, offset))
+    return [i.__dict__ for i in items]
+
+
+@router.get("/rides/{ride_id}")
+def ride_detail(ride_id: str, request: Request, admin: AuthUser = Depends(admin_user)) -> dict:
+    found = get_runtime(request).run(lambda unit: queries.ride_detail(unit.session, ride_id))
+    if found is None:
+        raise LookupError(f"corrida {ride_id} não encontrada")
+    return found
+
+
+@router.get("/passengers")
+def list_passengers(
+    request: Request,
+    q: str | None = Query(None, max_length=60),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: AuthUser = Depends(admin_user),
+) -> list[dict]:
+    return get_runtime(request).run(lambda unit: queries.list_passengers(unit.session, q, limit, offset))
+
+
+@router.get("/debtors")
+def debtors(request: Request, admin: AuthUser = Depends(admin_user)) -> dict:
+    return get_runtime(request).run(lambda unit: queries.list_debtors(unit.session))
+
+
+@router.get("/money")
+def money(request: Request, admin: AuthUser = Depends(admin_user)) -> dict:
+    return get_runtime(request).run(lambda unit: queries.money_summary(unit.session))
