@@ -21,7 +21,9 @@ class ApiException implements Exception {
 
 /// Não deu para falar com o servidor (sem internet, tempo esgotado) ou a resposta não era a esperada.
 class NetworkException implements Exception {
-  NetworkException([this.message = 'Sem conexão com o servidor. Tente de novo.']);
+  NetworkException([
+    this.message = 'Sem conexão com o servidor. Tente de novo.',
+  ]);
 
   final String message;
 

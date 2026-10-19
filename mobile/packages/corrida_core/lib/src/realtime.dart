@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'models/common.dart';
@@ -28,6 +29,10 @@ typedef WebSocketConnector = WebSocketChannel Function(Uri uri);
 
 /// Conexão em tempo real (`/v1/ws`) com reconexão. A primeira mensagem é o token (nunca vai na URL). A cada `ready`
 /// (inclusive depois de reconectar) [resync] avisa para reler o estado.
+///
+/// A conexão padrão usa `IOWebSocketChannel` com [pingEvery] como intervalo de ping do protocolo: um celular que troca
+/// de rede deixa a conexão "meio aberta", e só o ping do protocolo percebe (sem resposta, o socket é fechado e o laço
+/// reconecta). O texto `"ping"` também é enviado, mas o servidor não responde a ele.
 class RealtimeClient {
   RealtimeClient({
     required this.baseUrl,
@@ -42,23 +47,37 @@ class RealtimeClient {
       Duration(seconds: 8),
       Duration(seconds: 15),
     ],
-    Future<void> Function(Duration)? delay,
-  })  : _connector = connector ?? ((uri) => WebSocketChannel.connect(uri)),
-        _delay = delay ?? Future<void>.delayed;
+    this.delay,
+  }) : _connector =
+           connector ??
+           ((uri) => IOWebSocketChannel.connect(
+             uri,
+             pingInterval: pingEvery,
+             connectTimeout: connectTimeout,
+           )) {
+    if (backoff.isEmpty)
+      throw ArgumentError.value(
+        backoff,
+        'backoff',
+        'precisa de pelo menos um tempo',
+      );
+  }
 
   final Uri baseUrl;
+
+  /// Chamado a cada tentativa: o token pode ter mudado entre uma e outra.
+  final String Function() tokenProvider;
   final Duration pingEvery;
   final Duration connectTimeout;
   final List<Duration> backoff;
-  /// Chamado a cada tentativa: o token pode ter mudado entre uma e outra.
-  final String Function() tokenProvider;
   final WebSocketConnector _connector;
-  final Future<void> Function(Duration) _delay;
+
+  /// Só para teste: troca a espera entre tentativas. Sem isto a espera é um `Timer` que o `close` cancela.
+  final Future<void> Function(Duration)? delay;
 
   final _events = StreamController<ServerEvent>.broadcast();
   final _status = StreamController<RealtimeStatus>.broadcast();
   final _resync = StreamController<void>.broadcast();
-  final _closedSignal = Completer<void>();
 
   var _started = false;
   var _closed = false;
@@ -66,6 +85,11 @@ class RealtimeClient {
   WebSocketChannel? _channel;
   StreamSubscription<Object?>? _subscription;
   Timer? _pingTimer;
+  Timer? _retryTimer;
+  Completer<void>?
+  _sessionDone; // acorda a sessão atual quando o cliente é fechado
+  Completer<void>?
+  _retryDone; // acorda a espera entre tentativas quando o cliente é fechado
 
   Stream<ServerEvent> get events => _events.stream;
 
@@ -77,7 +101,9 @@ class RealtimeClient {
   RealtimeStatus get currentStatus => _current;
 
   Uri get _wsUri {
-    final base = baseUrl.path.endsWith('/') ? baseUrl.path.substring(0, baseUrl.path.length - 1) : baseUrl.path;
+    final base = baseUrl.path.endsWith('/')
+        ? baseUrl.path.substring(0, baseUrl.path.length - 1)
+        : baseUrl.path;
     return Uri(
       scheme: baseUrl.scheme == 'https' ? 'wss' : 'ws',
       host: baseUrl.host,
@@ -96,21 +122,29 @@ class RealtimeClient {
     if (_closed) return;
     _closed = true;
     _setStatus(RealtimeStatus.closed);
-    if (!_closedSignal.isCompleted) _closedSignal.complete();
     _pingTimer?.cancel();
+    _retryTimer?.cancel();
+    _wake(_sessionDone);
+    _wake(_retryDone);
     await _subscription?.cancel();
     final channel = _channel;
     _channel = null;
-    if (channel != null) {
-      try {
-        await channel.sink.close(1000).timeout(const Duration(seconds: 2));
-      } on Exception {
-        // fechar com o servidor fora do ar não precisa de cerimônia
-      }
-    }
+    if (channel != null) await _closeChannel(channel);
     await _events.close();
     await _status.close();
     await _resync.close();
+  }
+
+  void _wake(Completer<void>? completer) {
+    if (completer != null && !completer.isCompleted) completer.complete();
+  }
+
+  Future<void> _closeChannel(WebSocketChannel channel) async {
+    try {
+      await channel.sink.close(1000).timeout(const Duration(seconds: 2));
+    } on Object {
+      // fechar com o servidor fora do ar não precisa de cerimônia
+    }
   }
 
   void _setStatus(RealtimeStatus status, {bool force = false}) {
@@ -123,7 +157,10 @@ class RealtimeClient {
     var attempt = 0;
     var first = true;
     while (!_closed) {
-      _setStatus(first ? RealtimeStatus.connecting : RealtimeStatus.reconnecting, force: first);
+      _setStatus(
+        first ? RealtimeStatus.connecting : RealtimeStatus.reconnecting,
+        force: first,
+      );
       first = false;
       final outcome = await _session();
       if (_closed) return;
@@ -132,10 +169,20 @@ class RealtimeClient {
         return;
       }
       if (outcome.wasReady) attempt = 0;
-      final wait = backoff[attempt < backoff.length ? attempt : backoff.length - 1];
+      final wait =
+          backoff[attempt < backoff.length ? attempt : backoff.length - 1];
       attempt++;
-      await Future.any<void>([_delay(wait), _closedSignal.future]);
+      await _pause(wait);
     }
+  }
+
+  /// Espera entre tentativas; fechar o cliente acorda e cancela.
+  Future<void> _pause(Duration wait) {
+    final done = _retryDone = Completer<void>();
+    final custom = delay;
+    if (custom != null) return Future.any<void>([custom(wait), done.future]);
+    _retryTimer = Timer(wait, () => _wake(done));
+    return done.future;
   }
 
   /// Uma conexão, do começo ao fim. Devolve por que acabou e se chegou a ficar pronta.
@@ -144,11 +191,18 @@ class RealtimeClient {
     final WebSocketChannel channel;
     try {
       channel = _connector(_wsUri);
-      _channel = channel;
+    } on Object {
+      return (closeCode: null, wasReady: false);
+    }
+    _channel = channel;
+    try {
       await channel.ready.timeout(connectTimeout);
       if (_closed) return (closeCode: null, wasReady: false);
       channel.sink.add(jsonEncode({'token': tokenProvider()}));
     } on Object {
+      // não conectou (ou não a tempo): fecha o que ficou pendurado para não vazar um socket a cada tentativa
+      _channel = null;
+      unawaited(_closeChannel(channel));
       return (closeCode: null, wasReady: false);
     }
     _pingTimer = Timer.periodic(pingEvery, (_) {
@@ -158,7 +212,7 @@ class RealtimeClient {
         // a conexão está caindo; o laço principal trata
       }
     });
-    final finished = Completer<void>();
+    final finished = _sessionDone = Completer<void>();
     _subscription = channel.stream.listen(
       (message) {
         if (_closed) return;
@@ -172,15 +226,11 @@ class RealtimeClient {
         }
         if (!_events.isClosed) _events.add(event);
       },
-      onError: (Object _) {
-        if (!finished.isCompleted) finished.complete();
-      },
-      onDone: () {
-        if (!finished.isCompleted) finished.complete();
-      },
+      onError: (Object _) => _wake(finished),
+      onDone: () => _wake(finished),
       cancelOnError: true,
     );
-    await Future.any<void>([finished.future, _closedSignal.future]);
+    await finished.future;
     _pingTimer?.cancel();
     final code = channel.closeCode;
     await _subscription?.cancel();
@@ -200,6 +250,10 @@ class RealtimeClient {
     final map = asMap(decoded);
     final type = asStringOrNull(map?['type']);
     if (map == null || type == null) return null;
-    return ServerEvent(type: type, data: asMap(map['data']) ?? const {}, at: asDouble(map['at']));
+    return ServerEvent(
+      type: type,
+      data: asMap(map['data']) ?? const {},
+      at: asDouble(map['at']),
+    );
   }
 }

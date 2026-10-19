@@ -5,8 +5,11 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
-http.Response json(Object? body, [int status = 200]) =>
-    http.Response.bytes(utf8.encode(jsonEncode(body)), status, headers: {'content-type': 'application/json'});
+http.Response json(Object? body, [int status = 200]) => http.Response.bytes(
+  utf8.encode(jsonEncode(body)),
+  status,
+  headers: {'content-type': 'application/json'},
+);
 
 class Chamada {
   Chamada(this.method, this.path, this.body, this.bytes, this.contentType);
@@ -18,27 +21,49 @@ class Chamada {
   final String? contentType;
 }
 
-({RiderApi api, List<Chamada> chamadas}) mundo(http.Response Function(http.Request) responde) {
+({RiderApi api, List<Chamada> chamadas}) mundo(
+  http.Response Function(http.Request) responde,
+) {
   final chamadas = <Chamada>[];
   final client = ApiClient(
     baseUrl: Uri.parse('http://s.teste'),
     httpClient: MockClient((r) async {
-      final eJson = r.headers['content-type']?.startsWith('application/json') ?? false;
-      chamadas.add(Chamada(r.method, r.url.path, eJson && r.body.isNotEmpty ? jsonDecode(r.body) : null, r.bodyBytes, r.headers['content-type']));
+      final eJson =
+          r.headers['content-type']?.startsWith('application/json') ?? false;
+      chamadas.add(
+        Chamada(
+          r.method,
+          r.url.path,
+          eJson && r.body.isNotEmpty ? jsonDecode(r.body) : null,
+          r.bodyBytes,
+          r.headers['content-type'],
+        ),
+      );
       return responde(r);
     }),
   )..token = 't';
   return (api: RiderApi(client), chamadas: chamadas);
 }
 
-const corrida = {'ride_id': 'ride-1', 'state': 'accepted', 'passenger': {'name': 'Ana'}};
+const corrida = {
+  'ride_id': 'ride-1',
+  'state': 'accepted',
+  'passenger': {'name': 'Ana'},
+};
 
 void main() {
   test('state', () async {
-    final m = mundo((r) => json({'registration': {'status': 'approved', 'online': false}}));
+    final m = mundo(
+      (r) => json({
+        'registration': {'status': 'approved', 'online': false},
+      }),
+    );
     final estado = await m.api.state();
     expect(estado.registration.status, RegistrationStatus.approved);
-    expect((m.chamadas.single.method, m.chamadas.single.path), ('GET', '/v1/rider/state'));
+    expect(
+      (m.chamadas.single.method, m.chamadas.single.path),
+      ('GET', '/v1/rider/state'),
+    );
   });
 
   test('ficar disponível, parar e mandar a posição', () async {
@@ -55,18 +80,38 @@ void main() {
   });
 
   test('ficar disponível recusado traz o motivo no código', () async {
-    for (final codigo in ['not_approved', 'blocked', 'documents_expired', 'entry_pending', 'debt_pending']) {
-      final m = mundo((r) => json({'error': {'code': codigo, 'message': 'frase'}}, 409));
-      await expectLater(m.api.goOnline(), throwsA(isA<ApiException>().having((e) => e.code, 'code', codigo)));
+    for (final codigo in [
+      'not_approved',
+      'blocked',
+      'documents_expired',
+      'entry_pending',
+      'debt_pending',
+    ]) {
+      final m = mundo(
+        (r) => json({
+          'error': {'code': codigo, 'message': 'frase'},
+        }, 409),
+      );
+      await expectLater(
+        m.api.goOnline(),
+        throwsA(isA<ApiException>().having((e) => e.code, 'code', codigo)),
+      );
     }
   });
 
   test('aceitar e recusar a oferta', () async {
-    final m = mundo((r) => r.url.path.endsWith('decline') ? http.Response('', 204) : json(corrida));
+    final m = mundo(
+      (r) => r.url.path.endsWith('decline')
+          ? http.Response('', 204)
+          : json(corrida),
+    );
     final aceita = await m.api.accept('ride-1');
     await m.api.decline('ride-2');
     expect(aceita.rideId, 'ride-1');
-    expect(m.chamadas.map((c) => c.path).toList(), ['/v1/rider/offers/ride-1/accept', '/v1/rider/offers/ride-2/decline']);
+    expect(m.chamadas.map((c) => c.path).toList(), [
+      '/v1/rider/offers/ride-1/accept',
+      '/v1/rider/offers/ride-2/decline',
+    ]);
   });
 
   test('chegar, capacete, iniciar com o código e terminar', () async {
@@ -85,8 +130,15 @@ void main() {
   });
 
   test('código errado chega como wrong_pin', () async {
-    final m = mundo((r) => json({'error': {'code': 'wrong_pin', 'message': 'Código errado.'}}, 422));
-    await expectLater(m.api.start('ride-1', '0000'), throwsA(isA<ApiException>().having((e) => e.code, 'code', 'wrong_pin')));
+    final m = mundo(
+      (r) => json({
+        'error': {'code': 'wrong_pin', 'message': 'Código errado.'},
+      }, 422),
+    );
+    await expectLater(
+      m.api.start('ride-1', '0000'),
+      throwsA(isA<ApiException>().having((e) => e.code, 'code', 'wrong_pin')),
+    );
   });
 
   test('recebi o dinheiro na mão', () async {
@@ -96,20 +148,33 @@ void main() {
   });
 
   test('cobranças da entrada e da dívida', () async {
-    final m = mundo((r) => json({'charge_id': 'c1', 'amount_cents': 5000, 'br_code': 'x'}, 201));
+    final m = mundo(
+      (r) =>
+          json({'charge_id': 'c1', 'amount_cents': 5000, 'br_code': 'x'}, 201),
+    );
     final entrada = await m.api.entryCharge();
     final divida = await m.api.debtCharge();
     expect((entrada.chargeId, entrada.amountCents), ('c1', 5000));
     expect(divida.brCode, 'x');
-    expect(m.chamadas.map((c) => c.path).toList(), ['/v1/rider/entry-charge', '/v1/rider/debt-charge']);
+    expect(m.chamadas.map((c) => c.path).toList(), [
+      '/v1/rider/entry-charge',
+      '/v1/rider/debt-charge',
+    ]);
   });
 
   test('foto do documento vai como bytes crus com o tipo', () async {
     final m = mundo((r) => json({'key': 'k1', 'bytes': 3}, 201));
-    final enviado = await m.api.uploadDocument(DocKind.selfie, [1, 2, 3], contentType: 'image/jpeg');
+    final enviado = await m.api.uploadDocument(DocKind.selfie, [
+      1,
+      2,
+      3,
+    ], contentType: 'image/jpeg');
     expect((enviado.key, enviado.bytes), ('k1', 3));
     final chamada = m.chamadas.single;
-    expect((chamada.method, chamada.path, chamada.contentType), ('PUT', '/v1/rider/documents/selfie', 'image/jpeg'));
+    expect(
+      (chamada.method, chamada.path, chamada.contentType),
+      ('PUT', '/v1/rider/documents/selfie', 'image/jpeg'),
+    );
     expect(chamada.bytes, [1, 2, 3]);
   });
 
@@ -117,14 +182,28 @@ void main() {
     final m = mundo((r) => json({'key': 'k', 'bytes': 1}, 201));
     await m.api.uploadDocument(DocKind.cnh, [1], contentType: 'image/png');
     await m.api.uploadDocument(DocKind.crlv, [1], contentType: 'image/webp');
-    expect(m.chamadas.map((c) => c.path).toList(), ['/v1/rider/documents/cnh', '/v1/rider/documents/crlv']);
+    expect(m.chamadas.map((c) => c.path).toList(), [
+      '/v1/rider/documents/cnh',
+      '/v1/rider/documents/crlv',
+    ]);
   });
 
   test('foto grande demais chega como file_too_large', () async {
-    final m = mundo((r) => json({'error': {'code': 'file_too_large', 'message': 'A foto é grande demais (máximo 8 MB).'}}, 413));
+    final m = mundo(
+      (r) => json({
+        'error': {
+          'code': 'file_too_large',
+          'message': 'A foto é grande demais (máximo 8 MB).',
+        },
+      }, 413),
+    );
     await expectLater(
       m.api.uploadDocument(DocKind.selfie, [1], contentType: 'image/jpeg'),
-      throwsA(isA<ApiException>().having((e) => e.code, 'code', 'file_too_large').having((e) => e.status, 'status', 413)),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.code, 'code', 'file_too_large')
+            .having((e) => e.status, 'status', 413),
+      ),
     );
   });
 
@@ -143,23 +222,43 @@ void main() {
       crlvExpiresOn: DateTime(2027, 12, 31),
     );
     await m.api.register(formulario);
-    expect((m.chamadas.single.method, m.chamadas.single.path), ('POST', '/v1/rider/register'));
+    expect(
+      (m.chamadas.single.method, m.chamadas.single.path),
+      ('POST', '/v1/rider/register'),
+    );
     expect(m.chamadas.single.body, formulario.toJson());
   });
 
   test('renovar documentos manda só as fotos que mudaram', () async {
     final m = mundo((r) => http.Response('', 204));
-    await m.api.renewDocuments(cnhExpiresOn: DateTime(2030, 1, 2), crlvExpiresOn: DateTime(2029, 3, 4));
-    await m.api.renewDocuments(cnhExpiresOn: DateTime(2030, 1, 2), crlvExpiresOn: DateTime(2029, 3, 4), cnhPhotoKey: 'nova');
+    await m.api.renewDocuments(
+      cnhExpiresOn: DateTime(2030, 1, 2),
+      crlvExpiresOn: DateTime(2029, 3, 4),
+    );
+    await m.api.renewDocuments(
+      cnhExpiresOn: DateTime(2030, 1, 2),
+      crlvExpiresOn: DateTime(2029, 3, 4),
+      cnhPhotoKey: 'nova',
+    );
     expect(m.chamadas[0].path, '/v1/rider/documents/renew');
-    expect(m.chamadas[0].body, {'cnh_expires_on': '2030-01-02', 'crlv_expires_on': '2029-03-04'});
-    expect(m.chamadas[1].body, {'cnh_expires_on': '2030-01-02', 'crlv_expires_on': '2029-03-04', 'cnh_photo_key': 'nova'});
+    expect(m.chamadas[0].body, {
+      'cnh_expires_on': '2030-01-02',
+      'crlv_expires_on': '2029-03-04',
+    });
+    expect(m.chamadas[1].body, {
+      'cnh_expires_on': '2030-01-02',
+      'crlv_expires_on': '2029-03-04',
+      'cnh_photo_key': 'nova',
+    });
   });
 
   test('o motoqueiro também avalia a corrida', () async {
     final m = mundo((r) => http.Response('', 204));
     await m.api.rate('ride-1', 4);
-    expect((m.chamadas.single.method, m.chamadas.single.path), ('POST', '/v1/rides/ride-1/rating'));
+    expect(
+      (m.chamadas.single.method, m.chamadas.single.path),
+      ('POST', '/v1/rides/ride-1/rating'),
+    );
     expect(m.chamadas.single.body, {'stars': 4});
   });
 }

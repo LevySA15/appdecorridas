@@ -5,7 +5,12 @@ import 'errors.dart';
 import 'session.dart';
 
 class Me {
-  Me({required this.userId, required this.phone, required this.name, required this.role});
+  Me({
+    required this.userId,
+    required this.phone,
+    required this.name,
+    required this.role,
+  });
 
   final String userId;
   final String phone;
@@ -63,7 +68,10 @@ class AuthApi {
       name: map['name'] is String ? map['name'] as String : null,
     );
     client.token = token;
-    return VerifyResult(session: session, isNewUser: map['is_new_user'] == true);
+    return VerifyResult(
+      session: session,
+      isNewUser: map['is_new_user'] == true,
+    );
   }
 
   /// Sai no servidor; o token do cliente é limpo de qualquer jeito.
@@ -77,7 +85,8 @@ class AuthApi {
 
   Future<Me> me() async => Me.fromJson(await client.get('/v1/me'));
 
-  Future<Me> updateName(String name) async => Me.fromJson(await client.put('/v1/me', body: {'name': name}));
+  Future<Me> updateName(String name) async =>
+      Me.fromJson(await client.put('/v1/me', body: {'name': name}));
 }
 
 /// Guarda a sessão entre aberturas do app e reage à sessão vencida.
@@ -89,7 +98,8 @@ class SessionManager {
   final AuthApi _auth;
   final SessionStore _store;
   final ApiClient _client;
-  final StreamController<Session?> _changes = StreamController<Session?>.broadcast();
+  final StreamController<Session?> _changes =
+      StreamController<Session?>.broadcast();
   Session? _current;
 
   Session? get current => _current;
@@ -115,7 +125,12 @@ class SessionManager {
     required String role,
     String? device,
   }) async {
-    final result = await _auth.verify(phone: phone, code: code, role: role, device: device);
+    final result = await _auth.verify(
+      phone: phone,
+      code: code,
+      role: role,
+      device: device,
+    );
     await _store.save(result.session);
     _current = result.session;
     _changes.add(result.session);

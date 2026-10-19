@@ -10,7 +10,8 @@ apps vêm nos próximos planos.
 - `ApiClient`: HTTP com token, erros (`ApiException` com o `code` estável da API; `NetworkException` sem rede) e `brl()` para mostrar centavos.
 - `AuthApi` e `SessionManager`: entrar por código, guardar a sessão (`SessionStore`) e reagir à sessão vencida (401).
 - `PassengerApi` e `RiderApi` com os modelos de cada papel (`PassengerState`, `PassengerRide`, `Quote`, `RiderState`, `Offer`, ...). Leitura tolerante: campo novo é ignorado, campo que falta vira `null`, estado desconhecido vira `unknown`.
-- `RealtimeClient`: WebSocket (`/v1/ws`) com reconexão, `ready` e pedido de reler o estado (`resync`); fecha com 4401 e não reconecta (sessão recusada).
+- `RealtimeClient`: WebSocket (`/v1/ws`) com reconexão, `ready` e pedido de reler o estado (`resync`); fecha com 4401 e não reconecta (sessão recusada). A conexão padrão usa o ping do protocolo para perceber conexão meio aberta.
+- Fotos de documento: o envio tem tempo próprio de 120 s; os apps devem **comprimir a foto** antes de enviar. Depois de um `NetworkException` numa chamada que muda algo (pedir, cancelar, aceitar), releia o `state` antes de tentar de novo.
 
 O contrato com o servidor é `docs/api-v1.md`. Os avisos do tempo real são dicas: a fonte da verdade é `GET /v1/passenger/state` e `GET /v1/rider/state`.
 
@@ -28,8 +29,8 @@ Android, e isso é uma decisão sua: rode `flutter doctor --android-licenses` e 
 ## Testar
 
     cd mobile && dart pub get
-    cd packages/corrida_core && dart test && dart analyze        # servidor de mentira (rápido)
-    cd mobile && tool/contrato.sh                                # contra um servidor de verdade e descartável
+    (cd packages/corrida_core && dart test && dart analyze)      # servidor de mentira (rápido)
+    tool/contrato.sh                                             # contra um servidor de verdade e descartável
 
 `tool/contrato.sh` sobe o servidor do simulador (`server/scripts/sandbox_server.py`, num esquema e num banco do Redis só dele),
 roda uma sequência inteira (cadastro e aprovação do motoqueiro, corrida com Pix, com saldo, cancelada e em dinheiro, dívida,

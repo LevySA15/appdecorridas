@@ -3,13 +3,23 @@ import 'package:test/test.dart';
 
 void main() {
   test('sessão vai e volta em json', () {
-    final sessao = Session(token: 't1', userId: 'u1', role: 'passenger', name: 'Ana');
+    final sessao = Session(
+      token: 't1',
+      userId: 'u1',
+      role: 'passenger',
+      name: 'Ana',
+    );
     final deVolta = Session.fromJson(sessao.toJson());
-    expect((deVolta.token, deVolta.userId, deVolta.role, deVolta.name), ('t1', 'u1', 'passenger', 'Ana'));
+    expect(
+      (deVolta.token, deVolta.userId, deVolta.role, deVolta.name),
+      ('t1', 'u1', 'passenger', 'Ana'),
+    );
   });
 
   test('sessão sem nome volta sem nome', () {
-    final sessao = Session.fromJson(Session(token: 't', userId: 'u', role: 'rider').toJson());
+    final sessao = Session.fromJson(
+      Session(token: 't', userId: 'u', role: 'rider').toJson(),
+    );
     expect(sessao.name, isNull);
   });
 

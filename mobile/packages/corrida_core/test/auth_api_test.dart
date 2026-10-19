@@ -6,8 +6,11 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
-http.Response json(Object? body, [int status = 200]) =>
-    http.Response.bytes(utf8.encode(jsonEncode(body)), status, headers: {'content-type': 'application/json'});
+http.Response json(Object? body, [int status = 200]) => http.Response.bytes(
+  utf8.encode(jsonEncode(body)),
+  status,
+  headers: {'content-type': 'application/json'},
+);
 
 const verifyOk = {
   'token': 'tok-1',
@@ -19,7 +22,10 @@ const verifyOk = {
 
 class Mundo {
   Mundo(Future<http.Response> Function(http.Request) handler) {
-    api = ApiClient(baseUrl: Uri.parse('http://s.teste'), httpClient: MockClient(handler));
+    api = ApiClient(
+      baseUrl: Uri.parse('http://s.teste'),
+      httpClient: MockClient(handler),
+    );
     auth = AuthApi(api);
     store = MemorySessionStore();
     manager = SessionManager(auth, store, api);
@@ -50,10 +56,27 @@ void main() {
       visto = r;
       return json(verifyOk);
     });
-    final resultado = await m.auth.verify(phone: '75988510824', code: '123456', role: 'passenger', device: 'pixel');
-    expect(jsonDecode(visto.body), {'phone': '75988510824', 'code': '123456', 'role': 'passenger', 'device': 'pixel'});
+    final resultado = await m.auth.verify(
+      phone: '75988510824',
+      code: '123456',
+      role: 'passenger',
+      device: 'pixel',
+    );
+    expect(jsonDecode(visto.body), {
+      'phone': '75988510824',
+      'code': '123456',
+      'role': 'passenger',
+      'device': 'pixel',
+    });
     expect(resultado.isNewUser, isTrue);
-    expect((resultado.session.token, resultado.session.userId, resultado.session.role), ('tok-1', 'u1', 'passenger'));
+    expect(
+      (
+        resultado.session.token,
+        resultado.session.userId,
+        resultado.session.role,
+      ),
+      ('tok-1', 'u1', 'passenger'),
+    );
     expect(m.api.token, 'tok-1');
   });
 
@@ -64,33 +87,57 @@ void main() {
       return json(verifyOk);
     });
     await m.auth.verify(phone: '1', code: '2', role: 'rider');
-    expect(jsonDecode(visto.body), {'phone': '1', 'code': '2', 'role': 'rider'});
+    expect(jsonDecode(visto.body), {
+      'phone': '1',
+      'code': '2',
+      'role': 'rider',
+    });
   });
 
   test('código errado levanta code_invalid e não põe token', () async {
-    final m = Mundo((r) async => json({'error': {'code': 'code_invalid', 'message': 'Código errado.'}}, 401));
+    final m = Mundo(
+      (r) async => json({
+        'error': {'code': 'code_invalid', 'message': 'Código errado.'},
+      }, 401),
+    );
     await expectLater(
       m.auth.verify(phone: '1', code: '0', role: 'passenger'),
-      throwsA(isA<ApiException>().having((e) => e.code, 'code', 'code_invalid')),
+      throwsA(
+        isA<ApiException>().having((e) => e.code, 'code', 'code_invalid'),
+      ),
     );
     expect(m.api.token, isNull);
   });
 
-  test('resposta de verify sem token é erro de rede, não sessão vazia', () async {
-    final m = Mundo((r) async => json({'user_id': 'u1'}));
-    await expectLater(m.auth.verify(phone: '1', code: '2', role: 'passenger'), throwsA(isA<NetworkException>()));
-    expect(m.api.token, isNull);
-  });
+  test(
+    'resposta de verify sem token é erro de rede, não sessão vazia',
+    () async {
+      final m = Mundo((r) async => json({'user_id': 'u1'}));
+      await expectLater(
+        m.auth.verify(phone: '1', code: '2', role: 'passenger'),
+        throwsA(isA<NetworkException>()),
+      );
+      expect(m.api.token, isNull);
+    },
+  );
 
   test('me e updateName', () async {
     final pedidos = <String>[];
     final m = Mundo((r) async {
       pedidos.add('${r.method} ${r.url.path}');
       if (r.method == 'PUT') expect(jsonDecode(r.body), {'name': 'Ana Lima'});
-      return json({'user_id': 'u1', 'phone': '+5575988510824', 'name': 'Ana Lima', 'role': 'passenger'});
+      return json({
+        'user_id': 'u1',
+        'phone': '+5575988510824',
+        'name': 'Ana Lima',
+        'role': 'passenger',
+      });
     });
     final eu = await m.auth.me();
-    expect((eu.userId, eu.phone, eu.name, eu.role), ('u1', '+5575988510824', 'Ana Lima', 'passenger'));
+    expect(
+      (eu.userId, eu.phone, eu.name, eu.role),
+      ('u1', '+5575988510824', 'Ana Lima', 'passenger'),
+    );
     expect((await m.auth.updateName('Ana Lima')).name, 'Ana Lima');
     expect(pedidos, ['GET /v1/me', 'PUT /v1/me']);
   });
@@ -114,7 +161,11 @@ void main() {
     final m = Mundo((r) async => json(verifyOk));
     final avisos = <Session?>[];
     m.manager.changes.listen(avisos.add);
-    final resultado = await m.manager.signIn(phone: '1', code: '2', role: 'passenger');
+    final resultado = await m.manager.signIn(
+      phone: '1',
+      code: '2',
+      role: 'passenger',
+    );
     await pumpEventQueue();
     expect((await m.store.load())!.token, 'tok-1');
     expect(m.manager.current!.token, 'tok-1');
@@ -123,7 +174,11 @@ void main() {
   });
 
   test('signOut limpa tudo mesmo com a rede fora', () async {
-    final m = Mundo((r) async => r.url.path == '/v1/auth/verify' ? json(verifyOk) : throw http.ClientException('sem rede'));
+    final m = Mundo(
+      (r) async => r.url.path == '/v1/auth/verify'
+          ? json(verifyOk)
+          : throw http.ClientException('sem rede'),
+    );
     await m.manager.signIn(phone: '1', code: '2', role: 'passenger');
     final avisos = <Session?>[];
     m.manager.changes.listen(avisos.add);
@@ -139,7 +194,9 @@ void main() {
     final pedidos = <String>[];
     final m = Mundo((r) async {
       pedidos.add(r.url.path);
-      return r.url.path == '/v1/auth/verify' ? json(verifyOk) : http.Response('', 204);
+      return r.url.path == '/v1/auth/verify'
+          ? json(verifyOk)
+          : http.Response('', 204);
     });
     await m.manager.signIn(phone: '1', code: '2', role: 'passenger');
     await m.manager.signOut();
@@ -151,7 +208,9 @@ void main() {
     final m = Mundo((r) async {
       pedidos.add(r.url.path);
       if (r.url.path == '/v1/auth/verify') return json(verifyOk);
-      return json({'error': {'code': 'unauthorized', 'message': 'Entre de novo.'}}, 401);
+      return json({
+        'error': {'code': 'unauthorized', 'message': 'Entre de novo.'},
+      }, 401);
     });
     await m.manager.signIn(phone: '1', code: '2', role: 'passenger');
     final avisos = <Session?>[];

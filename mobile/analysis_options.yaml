@@ -7,6 +7,8 @@ analyzer:
 
 linter:
   rules:
-    - prefer_final_locals
-    - always_declare_return_types
-    - unawaited_futures
+    prefer_final_locals: true
+    always_declare_return_types: true
+    unawaited_futures: true
+    # o formatador novo do Dart deixa `if (x)` e a instrução em linhas separadas; chaves em tudo seria só ruído
+    curly_braces_in_flow_control_structures: false

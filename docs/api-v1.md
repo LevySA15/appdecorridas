@@ -179,7 +179,7 @@ partes que não somam o valor da taxa (sempre vazio). Em produção estas rotas 
 Conectar em `/v1/ws`. A **primeira mensagem** é `{"token": "..."}` (o token não vai na URL). Resposta:
 `{"type":"ready","data":{"user_id","role"},"at":...}`. Depois chegam avisos `{"type","data","at"}`. Token ruim ou
 ausente em 10 s: o servidor fecha com o código **4401**. Fila cheia (o app não está lendo): fecha com **4408**.
-Nos dois casos, reconecte e peça o estado. O app pode mandar texto qualquer (`"ping"`) para manter a conexão viva.
+Com **4408**, reconecte e peça o estado. Com **4401** o token não vale: entre de novo (reconectar com o mesmo token não adianta). O app pode mandar texto qualquer (`"ping"`) para manter a conexão viva, mas o servidor **não responde** a ele; para perceber uma conexão meio aberta (troca de rede no celular) use o ping do protocolo WebSocket, que o servidor responde (o `RealtimeClient` do `corrida_core` já faz isso).
 
 | Aviso | Para | `data` |
 |---|---|---|

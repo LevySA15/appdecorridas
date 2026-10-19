@@ -5,55 +5,88 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:corrida_core/corrida_core.dart';
+import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
+
+import 'key_audit.dart';
 
 final String? url = Platform.environment['CORRIDA_URL'];
 final String adminPhone = Platform.environment['CORRIDA_ADMIN_PHONE'] ?? '';
 
 /// Santo Antônio de Jesus, aproximado (o mesmo ponto que o servidor usa nos testes).
 const origem = Place(lat: -12.9644, lng: -39.2597, text: 'Rua A');
-const destino = Place(lat: -12.950911, lng: -39.2597, text: 'Feira livre'); // ~1,5 km ao norte
+const destino = Place(
+  lat: -12.950911,
+  lng: -39.2597,
+  text: 'Feira livre',
+); // ~1,5 km ao norte
 const motoPerto = (lat: -12.961702, lng: -39.2597); // ~300 m ao norte da origem
 const jpeg = [0xff, 0xd8, 0xff, 0xe0, 83, 73, 77, 85, 76, 65, 68, 79, 82];
 
 class Pessoa {
-  Pessoa(this.phone, this.role) : api = ApiClient(baseUrl: Uri.parse(url!)) {
+  Pessoa(this.phone, this.role) : gravador = RecordingClient(http.Client()) {
+    api = ApiClient(baseUrl: Uri.parse(url!), httpClient: gravador);
     auth = AuthApi(api);
   }
 
+  final RecordingClient gravador;
+
   final String phone;
   final String role;
-  final ApiClient api;
+  late final ApiClient api;
   late final AuthApi auth;
   late final VerifyResult entrada;
   RealtimeClient? tempoReal;
   final _pendentes = <ServerEvent>[];
+  final ofertas = <Object?>[]; // dados dos avisos "offer", para a auditoria de campos
 
   Future<void> entrar({String? nome}) async {
     await auth.requestCode(phone);
     final dev = (await api.get('/v1/dev/otp', query: {'phone': phone}))! as Map;
-    entrada = await auth.verify(phone: phone, code: '${dev['code']}', role: role, device: 'contrato-dart');
+    entrada = await auth.verify(
+      phone: phone,
+      code: '${dev['code']}',
+      role: role,
+      device: 'contrato-dart',
+    );
     if (nome != null) await auth.updateName(nome);
   }
 
   Future<void> abrirTempoReal() async {
-    final cliente = RealtimeClient(baseUrl: Uri.parse(url!), tokenProvider: () => api.token ?? '');
+    final cliente = RealtimeClient(
+      baseUrl: Uri.parse(url!),
+      tokenProvider: () => api.token ?? '',
+    );
     tempoReal = cliente;
-    cliente.events.listen(_pendentes.add);
-    final pronto = cliente.status.firstWhere((s) => s == RealtimeStatus.ready).timeout(const Duration(seconds: 10));
+    cliente.events.listen((e) {
+      _pendentes.add(e);
+      if (e.type == 'offer') ofertas.add(e.data);
+    });
+    final pronto = cliente.status
+        .firstWhere((s) => s == RealtimeStatus.ready)
+        .timeout(const Duration(seconds: 10));
     cliente.start();
     await pronto;
   }
 
   /// Espera um aviso do tipo dado (e, se pedido, daquela corrida) e o consome.
-  Future<ServerEvent> espera(String type, {String? rideId, Duration limite = const Duration(seconds: 10)}) async {
+  Future<ServerEvent> espera(
+    String type, {
+    String? rideId,
+    Duration limite = const Duration(seconds: 10),
+  }) async {
     final fim = DateTime.now().add(limite);
     while (DateTime.now().isBefore(fim)) {
-      final i = _pendentes.indexWhere((e) => e.type == type && (rideId == null || e.data['ride_id'] == rideId));
+      final i = _pendentes.indexWhere(
+        (e) =>
+            e.type == type && (rideId == null || e.data['ride_id'] == rideId),
+      );
       if (i >= 0) return _pendentes.removeAt(i);
       await Future<void>.delayed(const Duration(milliseconds: 40));
     }
-    throw TimeoutException('não chegou o aviso "$type" (chegaram: ${_pendentes.map((e) => e.type).toList()})');
+    throw TimeoutException(
+      'não chegou o aviso "$type" (chegaram: ${_pendentes.map((e) => e.type).toList()})',
+    );
   }
 
   Future<void> fechar() async {
@@ -69,7 +102,11 @@ Future<void> pagarNoDev(Pessoa quem, String chargeId) async {
 
 void main() {
   if (url == null) {
-    test('contrato com o servidor', () {}, skip: 'defina CORRIDA_URL (veja mobile/tool/contrato.sh)');
+    test(
+      'contrato com o servidor',
+      () {},
+      skip: 'defina CORRIDA_URL (veja mobile/tool/contrato.sh)',
+    );
     return;
   }
 
@@ -97,7 +134,10 @@ void main() {
   Future<String> pedirEAceitar(String method) async {
     await motoqueiro.sendPosition(motoPerto.lat, motoPerto.lng);
     final cotacao = await passageiro.quote(origem, destino);
-    final corrida = await passageiro.requestRide(quoteId: cotacao.quoteId, method: method);
+    final corrida = await passageiro.requestRide(
+      quoteId: cotacao.quoteId,
+      method: method,
+    );
     expect(corrida.state, RideState.searching);
     final oferta = await joao.espera('offer', rideId: corrida.rideId);
     expect(Offer.fromJson(oferta.data).priceCents, cotacao.priceCents);
@@ -118,7 +158,10 @@ void main() {
     await motoqueiro.confirmHelmet(rideId);
     final pin = (await passageiro.state()).ride!.pin;
     final errado = pin == '0000' ? '1111' : '0000';
-    await expectLater(motoqueiro.start(rideId, errado), throwsA(isA<ApiException>().having((e) => e.code, 'code', 'wrong_pin')));
+    await expectLater(
+      motoqueiro.start(rideId, errado),
+      throwsA(isA<ApiException>().having((e) => e.code, 'code', 'wrong_pin')),
+    );
     final andando = await motoqueiro.start(rideId, pin);
     expect(andando.state, RideState.inProgress);
     await ana.espera('trip_started', rideId: rideId);
@@ -138,8 +181,11 @@ void main() {
     final eu = await ana.auth.me();
     expect((eu.name, eu.role), ('Ana Contrato', 'passenger'));
     await expectLater(
-      AuthApi(ApiClient(baseUrl: Uri.parse(url!))).verify(phone: ana.phone, code: '000000', role: 'passenger'),
-      throwsA(isA<ApiException>().having((e) => e.code, 'code', 'code_invalid')),
+      AuthApi(ApiClient(baseUrl: Uri.parse(url!)))
+          .verify(phone: ana.phone, code: '000000', role: 'passenger'),
+      throwsA(
+        isA<ApiException>().having((e) => e.code, 'code', 'code_invalid'),
+      ),
     );
     await ana.abrirTempoReal();
     await joao.abrirTempoReal();
@@ -150,7 +196,10 @@ void main() {
     expect(estado.ride, isNull);
     expect(estado.balanceCents, 0);
     expect(estado.paymentMethods, containsAll(['pix', 'cash']));
-    expect(estado.withdrawEnabled, isTrue); // o servidor descartável liga o saque
+    expect(
+      estado.withdrawEnabled,
+      isTrue,
+    ); // o servidor descartável liga o saque
     await passageiro.setEmergencyContact(name: 'Maria', phone: '75 98851-0824');
     expect((await passageiro.state()).emergencyContact!.name, 'Maria');
     final moto = await motoqueiro.state();
@@ -161,24 +210,40 @@ void main() {
   test('3. cadastro do motoqueiro, aprovação pelo administrador e ficar disponível', () async {
     final chaves = <DocKind, String>{};
     for (final tipo in DocKind.values) {
-      chaves[tipo] = (await motoqueiro.uploadDocument(tipo, jpeg, contentType: 'image/jpeg')).key;
+      chaves[tipo] = (await motoqueiro.uploadDocument(
+        tipo,
+        jpeg,
+        contentType: 'image/jpeg',
+      )).key;
     }
-    await motoqueiro.register(RiderRegistrationForm(
-      name: 'João da Moto',
-      cpf: '529.982.247-25',
-      cnhNumber: '12345678900',
-      plate: 'ABC1D23',
-      motoModel: 'Honda CG 160',
-      selfieKey: chaves[DocKind.selfie]!,
-      cnhPhotoKey: chaves[DocKind.cnh]!,
-      crlvKey: chaves[DocKind.crlv]!,
-      cnhExpiresOn: DateTime(2031, 1, 1),
-      crlvExpiresOn: DateTime(2031, 6, 30),
-    ));
-    expect((await motoqueiro.state()).registration.status, RegistrationStatus.pending);
-    await expectLater(motoqueiro.goOnline(), throwsA(isA<ApiException>().having((e) => e.code, 'code', 'not_approved')));
+    await motoqueiro.register(
+      RiderRegistrationForm(
+        name: 'João da Moto',
+        cpf: '529.982.247-25',
+        cnhNumber: '12345678900',
+        plate: 'ABC1D23',
+        motoModel: 'Honda CG 160',
+        selfieKey: chaves[DocKind.selfie]!,
+        cnhPhotoKey: chaves[DocKind.cnh]!,
+        crlvKey: chaves[DocKind.crlv]!,
+        cnhExpiresOn: DateTime(2031, 1, 1),
+        crlvExpiresOn: DateTime(2031, 6, 30),
+      ),
+    );
+    expect(
+      (await motoqueiro.state()).registration.status,
+      RegistrationStatus.pending,
+    );
+    await expectLater(
+      motoqueiro.goOnline(),
+      throwsA(
+        isA<ApiException>().having((e) => e.code, 'code', 'not_approved'),
+      ),
+    );
 
-    final fila = (await admin.api.get('/v1/admin/riders', query: {'status': 'pending'}))! as List;
+    final fila =
+        (await admin.api.get('/v1/admin/riders', query: {'status': 'pending'}))!
+            as List;
     final riderId = (fila.single as Map)['rider_id'];
     await admin.api.post('/v1/admin/riders/$riderId/approve');
     await joao.espera('rider_approved');
@@ -198,18 +263,26 @@ void main() {
     expect(cotacao.paymentMethods, containsAll(['pix', 'cash']));
     expect(cotacao.canPayWithBalance, isFalse);
     await motoqueiro.sendPosition(motoPerto.lat, motoPerto.lng);
-    final corrida = await passageiro.requestRide(quoteId: cotacao.quoteId, method: 'pix');
+    final corrida = await passageiro.requestRide(
+      quoteId: cotacao.quoteId,
+      method: 'pix',
+    );
     await joao.espera('offer', rideId: corrida.rideId);
     await motoqueiro.accept(corrida.rideId);
     final aviso = await ana.espera('rider_accepted', rideId: corrida.rideId);
-    final pagar = PixToPay.fromJson((aviso.data['pay']! as Map).cast<String, Object?>());
+    final pagar = PixToPay.fromJson(
+      (aviso.data['pay']! as Map).cast<String, Object?>(),
+    );
     final noEstado = (await passageiro.state()).ride!;
     expect(noEstado.state, RideState.accepted);
     expect(noEstado.pay!.chargeId, pagar.chargeId);
     expect(noEstado.rider!.name, isNotEmpty);
     expect(noEstado.cancel!.feeCentsNow, 0);
     final cobranca = await passageiro.charge(pagar.chargeId);
-    expect((cobranca.purpose, cobranca.amountCents, cobranca.paid), ('ride', cotacao.priceCents, false));
+    expect(
+      (cobranca.purpose, cobranca.amountCents, cobranca.paid),
+      ('ride', cotacao.priceCents, false),
+    );
     expect(cobranca.brCode, isNotEmpty);
 
     await pagarNoDev(ana, pagar.chargeId);
@@ -221,95 +294,180 @@ void main() {
     expect((await passageiro.state()).ride, isNull);
     await passageiro.rate(corrida.rideId, 5);
     await motoqueiro.rate(corrida.rideId, 4);
-    await expectLater(passageiro.rate(corrida.rideId, 5), throwsA(isA<ApiException>().having((e) => e.code, 'code', 'already_rated')));
-  });
-
-  test('5. saldo: recarregar, pagar a corrida com ele e sacar o que sobrou', () async {
-    final recarga = await passageiro.topup(2000);
-    await pagarNoDev(ana, recarga.chargeId);
-    final mudou = await ana.espera('balance_changed');
-    expect(mudou.data['balance_cents'], 2000);
-    final cotacao = await passageiro.quote(origem, destino);
-    expect(cotacao.canPayWithBalance, isTrue);
-    await motoqueiro.sendPosition(motoPerto.lat, motoPerto.lng);
-    final corrida = await passageiro.requestRide(quoteId: cotacao.quoteId, method: 'balance');
-    expect(corrida.payWithBalance, isTrue);
-    await joao.espera('offer', rideId: corrida.rideId);
-    await motoqueiro.accept(corrida.rideId);
-    final pago = await ana.espera('balance_paid', rideId: corrida.rideId);
-    expect(pago.data['amount_cents'], cotacao.priceCents);
-    final noEstado = (await passageiro.state()).ride!;
-    expect((noEstado.payWithBalance, noEstado.pixPaid, noEstado.pay), (true, true, null));
-    await ana.espera('rider_accepted', rideId: corrida.rideId);
-
-    await viajar(corrida.rideId);
-    final restante = 2000 - cotacao.priceCents;
-    expect((await passageiro.state()).balanceCents, restante);
-
-    final saque = await passageiro.withdraw(amountCents: 1000, pixKey: '529.982.247-25');
-    expect((saque.amountCents, saque.balanceCents, saque.key), (1000, restante - 1000, 'final 4725'));
-    await ana.espera('withdrawal_done');
     await expectLater(
-      passageiro.withdraw(amountCents: 100, pixKey: '529.982.247-25'),
-      throwsA(isA<ApiException>().having((e) => e.code, 'code', 'invalid')),
-    );
-    await expectLater(
-      passageiro.withdraw(amountCents: 1000, pixKey: 'chave-que-nao-existe'),
-      throwsA(isA<ApiException>().having((e) => e.code, 'code', 'invalid')),
+      passageiro.rate(corrida.rideId, 5),
+      throwsA(
+        isA<ApiException>().having((e) => e.code, 'code', 'already_rated'),
+      ),
     );
   });
+
+  test(
+    '5. saldo: recarregar, pagar a corrida com ele e sacar o que sobrou',
+    () async {
+      final recarga = await passageiro.topup(2000);
+      await pagarNoDev(ana, recarga.chargeId);
+      final mudou = await ana.espera('balance_changed');
+      expect(mudou.data['balance_cents'], 2000);
+      final cotacao = await passageiro.quote(origem, destino);
+      expect(cotacao.canPayWithBalance, isTrue);
+      await motoqueiro.sendPosition(motoPerto.lat, motoPerto.lng);
+      final corrida = await passageiro.requestRide(
+        quoteId: cotacao.quoteId,
+        method: 'balance',
+      );
+      expect(corrida.payWithBalance, isTrue);
+      await joao.espera('offer', rideId: corrida.rideId);
+      await motoqueiro.accept(corrida.rideId);
+      final pago = await ana.espera('balance_paid', rideId: corrida.rideId);
+      expect(pago.data['amount_cents'], cotacao.priceCents);
+      final noEstado = (await passageiro.state()).ride!;
+      expect(
+        (noEstado.payWithBalance, noEstado.pixPaid, noEstado.pay),
+        (true, true, null),
+      );
+      await ana.espera('rider_accepted', rideId: corrida.rideId);
+
+      await viajar(corrida.rideId);
+      final restante = 2000 - cotacao.priceCents;
+      expect((await passageiro.state()).balanceCents, restante);
+
+      final saque = await passageiro.withdraw(
+        amountCents: 1000,
+        pixKey: '529.982.247-25',
+      );
+      expect(
+        (saque.amountCents, saque.balanceCents, saque.key),
+        (1000, restante - 1000, 'final 4725'),
+      );
+      await ana.espera('withdrawal_done');
+      await expectLater(
+        passageiro.withdraw(amountCents: 100, pixKey: '529.982.247-25'),
+        throwsA(isA<ApiException>().having((e) => e.code, 'code', 'invalid')),
+      );
+      await expectLater(
+        passageiro.withdraw(amountCents: 1000, pixKey: 'chave-que-nao-existe'),
+        throwsA(isA<ApiException>().having((e) => e.code, 'code', 'invalid')),
+      );
+    },
+  );
 
   test('6. cancelar de graça e cotação já usada', () async {
     await motoqueiro.sendPosition(motoPerto.lat, motoPerto.lng);
     final cotacao = await passageiro.quote(origem, destino);
-    final corrida = await passageiro.requestRide(quoteId: cotacao.quoteId, method: 'cash');
+    final corrida = await passageiro.requestRide(
+      quoteId: cotacao.quoteId,
+      method: 'cash',
+    );
     await expectLater(
       passageiro.requestRide(quoteId: cotacao.quoteId, method: 'cash'),
-      throwsA(isA<ApiException>().having((e) => e.code, 'code', 'quote_expired')),
+      throwsA(
+        isA<ApiException>().having((e) => e.code, 'code', 'quote_expired'),
+      ),
     );
     await joao.espera('offer', rideId: corrida.rideId);
     await motoqueiro.accept(corrida.rideId);
     await ana.espera('rider_accepted', rideId: corrida.rideId);
     final cancelada = await passageiro.cancel(corrida.rideId);
-    expect((cancelada.feeCents, cancelada.refund, cancelada.fee, cancelada.refundTo), (0, false, null, null));
+    expect(
+      (cancelada.feeCents, cancelada.refund, cancelada.fee, cancelada.refundTo),
+      (0, false, null, null),
+    );
     final aviso = await joao.espera('ride_cancelled', rideId: corrida.rideId);
     expect(aviso.data['by'], 'passenger');
     expect((await passageiro.state()).ride, isNull);
     expect((await motoqueiro.state()).ride, isNull);
   });
 
-  test('7. corrida em dinheiro, dívida da taxa e voltar a ficar disponível', () async {
-    final rideId = await pedirEAceitar('cash');
-    await viajar(rideId);
-    final aReceber = (await motoqueiro.state()).awaitingPayment!;
-    expect((aReceber.rideId, aReceber.method), (rideId, 'cash'));
-    await motoqueiro.cashReceived(rideId);
-    await ana.espera('payment_confirmed', rideId: rideId);
-    await passageiro.rate(rideId, 5);
+  test(
+    '7. corrida em dinheiro, dívida da taxa e voltar a ficar disponível',
+    () async {
+      final rideId = await pedirEAceitar('cash');
+      await viajar(rideId);
+      final aReceber = (await motoqueiro.state()).awaitingPayment!;
+      expect((aReceber.rideId, aReceber.method), (rideId, 'cash'));
+      await motoqueiro.cashReceived(rideId);
+      await ana.espera('payment_confirmed', rideId: rideId);
+      await passageiro.rate(rideId, 5);
 
-    final bloqueado = await motoqueiro.state();
-    expect(bloqueado.account!.blockedReason, 'debt_pending');
-    expect(bloqueado.account!.debtToPayCents, greaterThan(0));
-    expect(bloqueado.registration.online, isFalse);
-    await expectLater(motoqueiro.goOnline(), throwsA(isA<ApiException>().having((e) => e.code, 'code', 'debt_pending')));
+      final bloqueado = await motoqueiro.state();
+      expect(bloqueado.account!.blockedReason, 'debt_pending');
+      expect(bloqueado.account!.debtToPayCents, greaterThan(0));
+      expect(bloqueado.registration.online, isFalse);
+      await expectLater(
+        motoqueiro.goOnline(),
+        throwsA(
+          isA<ApiException>().having((e) => e.code, 'code', 'debt_pending'),
+        ),
+      );
 
-    final divida = await motoqueiro.debtCharge();
-    expect(divida.amountCents, bloqueado.account!.debtToPayCents);
-    await pagarNoDev(joao, divida.chargeId);
-    await joao.espera('debt_paid');
-    expect((await motoqueiro.state()).account!.cashDebtCents, 0);
-    await motoqueiro.goOnline();
-    expect((await motoqueiro.state()).registration.online, isTrue);
-  });
+      final divida = await motoqueiro.debtCharge();
+      expect(divida.amountCents, bloqueado.account!.debtToPayCents);
+      await pagarNoDev(joao, divida.chargeId);
+      await joao.espera('debt_paid');
+      expect((await motoqueiro.state()).account!.cashDebtCents, 0);
+      await motoqueiro.goOnline();
+      expect((await motoqueiro.state()).registration.online, isTrue);
+    },
+  );
 
   test('8. sair: a sessão deixa de valer', () async {
     await ana.auth.logout();
     expect(ana.api.token, isNull);
-    final antigo = ApiClient(baseUrl: Uri.parse(url!))..token = ana.entrada.session.token;
+    final antigo = ApiClient(baseUrl: Uri.parse(url!))
+      ..token = ana.entrada.session.token;
     await expectLater(
       PassengerApi(antigo).state(),
       throwsA(isA<ApiException>().having((e) => e.status, 'status', 401)),
     );
     expect(antigo.token, isNull);
   });
+
+  test('9. auditoria de campos: o que o servidor manda é o que o pacote lê', () {
+    final parsers = <String, void Function(Map<String, Object?>)>{
+      'GET /v1/passenger/state': PassengerState.fromJson,
+      'POST /v1/passenger/quotes': Quote.fromJson,
+      'POST /v1/passenger/rides': PassengerRide.fromJson,
+      'POST /v1/passenger/rides/{id}/cancel': CancelResult.fromJson,
+      'POST /v1/passenger/balance/topup': Charge.fromJson,
+      'POST /v1/passenger/balance/withdraw': Withdrawal.fromJson,
+      'GET /v1/charges/{id}': Charge.fromJson,
+      'GET /v1/rider/state': RiderState.fromJson,
+      'POST /v1/rider/offers/{id}/accept': RiderRide.fromJson,
+      'POST /v1/rider/rides/{id}/arrive': RiderRide.fromJson,
+      'POST /v1/rider/rides/{id}/helmet': RiderRide.fromJson,
+      'POST /v1/rider/rides/{id}/start': RiderRide.fromJson,
+      'POST /v1/rider/rides/{id}/complete': RiderRide.fromJson,
+      'POST /v1/rider/debt-charge': Charge.fromJson,
+      'PUT /v1/rider/documents/selfie': UploadedDocument.fromJson,
+    };
+    final todas = <String, List<Object?>>{};
+    for (final p in [ana, joao]) {
+      p.gravador.responses.forEach((rota, lista) => todas.putIfAbsent(rota, () => []).addAll(lista));
+    }
+    todas['WS offer'] = [...ana.ofertas, ...joao.ofertas];
+    parsers['WS offer'] = Offer.fromJson;
+    final problemas = <String>[];
+    for (final entrada in parsers.entries) {
+      final respostas = todas[entrada.key];
+      if (respostas == null || respostas.isEmpty) {
+        problemas.add('${entrada.key}: nenhuma resposta gravada (o contrato não exercitou esta rota)');
+        continue;
+      }
+      final vistos = <String>{};
+      final lidos = <String>{};
+      for (final resposta in respostas) {
+        vistos.addAll(allPaths(resposta));
+        lidos.addAll(pathsRead(resposta, entrada.value));
+      }
+      final semLeitor = vistos.difference(lidos)..removeAll(camposIgnorados[entrada.key] ?? const {});
+      final semServidor = lidos.difference(vistos);
+      if (semLeitor.isNotEmpty) problemas.add('${entrada.key}: o servidor manda e o pacote não lê: ${semLeitor.toList()..sort()}');
+      if (semServidor.isNotEmpty) problemas.add('${entrada.key}: o pacote lê e o servidor não mandou: ${semServidor.toList()..sort()}');
+    }
+    expect(problemas, isEmpty, reason: problemas.join('\n'));
+  });
 }
+
+/// Campos que o servidor manda e o pacote lê de propósito sem usar (com o motivo).
+const camposIgnorados = <String, Set<String>>{};

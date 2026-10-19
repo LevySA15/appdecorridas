@@ -1,13 +1,23 @@
 /// Quem está usando o app: o token da sessão (180 dias no servidor) e quem é a pessoa.
 class Session {
-  Session({required this.token, required this.userId, required this.role, this.name});
+  Session({
+    required this.token,
+    required this.userId,
+    required this.role,
+    this.name,
+  });
 
   final String token;
   final String userId;
   final String role; // passenger | rider | admin
   final String? name;
 
-  Map<String, Object?> toJson() => {'token': token, 'user_id': userId, 'role': role, 'name': name};
+  Map<String, Object?> toJson() => {
+    'token': token,
+    'user_id': userId,
+    'role': role,
+    'name': name,
+  };
 
   /// Lê o que foi guardado. Dado estragado levanta [FormatException] (o app trata como "sem sessão").
   factory Session.fromJson(Map<String, Object?> json) {
@@ -18,7 +28,12 @@ class Session {
       throw const FormatException('sessão guardada incompleta');
     }
     final name = json['name'];
-    return Session(token: token, userId: userId, role: role, name: name is String ? name : null);
+    return Session(
+      token: token,
+      userId: userId,
+      role: role,
+      name: name is String ? name : null,
+    );
   }
 }
 
