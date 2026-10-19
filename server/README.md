@@ -55,6 +55,7 @@ Motoqueiros e passageiros de mentira que fazem corridas inteiras pela API (guia 
 - `app/runtime.py` — `Runtime.run`: a unidade de trabalho de cada pedido (sessão, serviços com um `EventCollector` só, commit, depois publicação dos avisos; repete por impasse no banco).
 - `app/realtime/hub.py` — conexões WebSocket e entrega dos avisos de qualquer thread.
 - `app/api/` — `app.py` (montagem), `errors.py` (erros → respostas), `deps.py` (quem chama), `views.py` (como a corrida aparece), `webhook.py` (aviso assinado do provedor), `routes/` (uma pasta de rotas por assunto).
+- `scripts/sandbox_server.py` — sobe o servidor descartável do simulador e fica no ar até receber SIGTERM; serve ao teste de contrato dos apps (`mobile/tool/contrato.sh`; usa o Redis banco 12).
 - `scripts/smoke_server.py` — sobe o servidor de verdade num esquema temporário e confere login, WebSocket e agendador (`PYTHONPATH=. .venv/bin/python scripts/smoke_server.py`; usa o Redis banco 14 e o apaga no fim).
 - `simulator/` — o simulador (plano 3): `sandbox.py` (servidor descartável), `rider.py`, `passenger.py` e `admin.py` (os atores), `runner.py` (a rodada), `report.py` (o relatório); só fala com o servidor pela API, exceto o `sandbox.py`.
 - `app/scheduler.py` — varredura, tarefa diária e limpeza; `app/main.py` — ponto de entrada do uvicorn; `app/cli.py` — criar o administrador.
