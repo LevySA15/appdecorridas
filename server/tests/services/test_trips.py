@@ -161,19 +161,19 @@ def test_cancelar_em_procura_retira_a_oferta_e_solta_a_moto(w, session, position
     assert "offer_expired" in tipos(events, "r1")
 
 
-def test_cancelar_depois_do_prazo_gratis_registra_a_compensacao(w, session, positions):
+def test_cancelar_depois_do_prazo_gratis_registra_a_taxa(w, session, positions):
     add_passenger(session)
     aceitar(session, positions, w, method=PaymentMethod.CASH)           # aceita em AGORA + 4
-    resultado = w.trips.cancel_by_passenger(session, "p1", "ride-1", AGORA + 4 + 61)
-    assert resultado == CancelResult(200, False)
+    resultado = w.trips.cancel_by_passenger(session, "p1", "ride-1", AGORA + 4 + 301)
+    assert resultado == CancelResult(300, False)
     tipo, dados = repo.ride_events(session, "ride-1")[-1]
-    assert tipo == "cancelled" and dados["compensation_cents"] == 200 and dados["by"] == "passenger"
+    assert tipo == "cancelled" and dados["fee_cents"] == 300 and dados["by"] == "passenger"
 
 
 def test_cancelar_dentro_do_prazo_gratis_nao_tem_compensacao(w, session, positions):
     add_passenger(session)
     aceitar(session, positions, w, method=PaymentMethod.CASH)
-    assert w.trips.cancel_by_passenger(session, "p1", "ride-1", AGORA + 4 + 30) == CancelResult(0, False)
+    assert w.trips.cancel_by_passenger(session, "p1", "ride-1", AGORA + 4 + 300) == CancelResult(0, False)
 
 
 def test_cancelar_corrida_paga_devolve_o_pix_e_libera_o_motoqueiro(w, session, positions, provider, events):

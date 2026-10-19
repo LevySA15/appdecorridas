@@ -183,16 +183,26 @@ def test_cancelar_durante_a_procura_e_gratis():
     assert ride.state is RideState.CANCELLED
 
 
-def test_cancelar_no_limite_de_60_segundos_ainda_e_gratis():
+def test_cancelar_no_limite_de_300_segundos_ainda_e_gratis():
     # Review Focus 3
     ride = accepted_ride(now=10)
-    assert cancel(ride, now=70, cfg=CFG) == CancelResult(0, False)
+    assert cancel(ride, now=310, cfg=CFG, progress=0.9) == CancelResult(0, False)
 
 
-def test_cancelar_depois_de_60_segundos_paga_compensacao():
+def test_cancelar_depois_de_300_segundos_paga_a_taxa_pela_distancia_andada():
     ride = accepted_ride(now=10)
-    assert cancel(ride, now=71, cfg=CFG) == CancelResult(200, False)
+    assert cancel(ride, now=311, cfg=CFG, progress=0.75) == CancelResult(450, False)
     assert ride.state is RideState.CANCELLED
+
+
+def test_cancelar_depois_da_janela_com_a_moto_na_porta_cobra_o_maximo_com_qualquer_progresso():
+    ride = arrived_ride(PaymentMethod.CASH)         # aceitou em t=10, chegou em t=100
+    assert cancel(ride, now=311, cfg=CFG, progress=0.0) == CancelResult(500, False)
+
+
+def test_cancelar_a_caminho_sem_posicao_da_moto_cobra_o_minimo():
+    ride = accepted_ride(now=10)
+    assert cancel(ride, now=400, cfg=CFG) == CancelResult(300, False)
 
 
 def test_cancelar_na_fila_e_sempre_gratis():
@@ -216,7 +226,7 @@ def test_espera_maxima_na_chegada():
     assert arrival_wait_expired(ride, 400, CFG) is True
     with pytest.raises(InvalidTransition):
         cancel_after_arrival_timeout(ride, 399, CFG)
-    assert cancel_after_arrival_timeout(ride, 400, CFG) == CancelResult(200, False)
+    assert cancel_after_arrival_timeout(ride, 400, CFG) == CancelResult(500, False)
     assert ride.state is RideState.CANCELLED
 
 
@@ -265,16 +275,16 @@ def test_cancelar_corrida_com_pix_pago_pede_estorno():
     assert cancel(ride, now=20, cfg=CFG) == CancelResult(0, True)
 
 
-def test_cancelar_depois_do_limite_com_pix_pago_paga_compensacao_e_pede_estorno():
+def test_cancelar_depois_do_limite_com_pix_pago_paga_a_taxa_e_pede_estorno():
     ride = accepted_ride(PaymentMethod.PIX, now=10)
     confirm_pix_paid(ride)
-    assert cancel(ride, now=71, cfg=CFG) == CancelResult(200, True)
+    assert cancel(ride, now=311, cfg=CFG, progress=0.0) == CancelResult(300, True)
 
 
 def test_cancelar_por_espera_na_chegada_com_pix_pago_pede_estorno():
     ride = arrived_ride(PaymentMethod.PIX)
     confirm_pix_paid(ride)
-    assert cancel_after_arrival_timeout(ride, 400, CFG) == CancelResult(200, True)
+    assert cancel_after_arrival_timeout(ride, 400, CFG) == CancelResult(500, True)
 
 
 def test_nao_cancela_por_pix_nao_pago_quando_o_pix_ja_foi_pago():

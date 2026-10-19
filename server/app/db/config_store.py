@@ -10,12 +10,15 @@ from sqlalchemy.orm import Session
 from app.db.models import AppConfigRow
 from app.domain.config import (
     AuthConfig,
+    BalanceConfig,
     DispatchConfig,
     FeeConfig,
     FeeTier,
     PricingConfig,
     RideConfig,
     SafetyConfig,
+    validate_balance_config,
+    validate_ride_config,
 )
 from app.domain.fees import validate_fee_config
 
@@ -26,7 +29,11 @@ _TYPES = {
     "dispatch": DispatchConfig,
     "safety": SafetyConfig,
     "auth": AuthConfig,
+    "balance": BalanceConfig,
 }
+
+# Chaves que existiram e foram retiradas: configuração gravada antes disso ainda carrega, sem elas.
+_RETIRED_KEYS = {"rides": {"cancel_compensation_cents"}}
 
 
 @dataclass(frozen=True)
@@ -37,6 +44,7 @@ class AppConfig:
     dispatch: DispatchConfig
     safety: SafetyConfig
     auth: AuthConfig = AuthConfig()
+    balance: BalanceConfig = BalanceConfig()
 
     @classmethod
     def defaults(cls) -> "AppConfig":
@@ -52,25 +60,33 @@ def _check_key(key: str) -> type:
 def _from_json(key: str, data: dict):
     cls = _check_key(key)
     try:
+        data = {k: v for k, v in data.items() if k not in _RETIRED_KEYS.get(key, ())}
         if key == "fees":
             data = {**data, "tiers": tuple(FeeTier(**t) for t in data["tiers"])}
         cfg = cls(**data)
     except (TypeError, KeyError) as exc:
         raise ValueError(f"configuração '{key}' inválida no banco: {exc!r}") from exc
-    if key == "fees":
-        try:
-            validate_fee_config(cfg)
-        except ValueError as exc:
-            raise ValueError(f"configuração 'fees' inválida no banco: {exc}") from exc
+    try:
+        _validate(key, cfg)
+    except ValueError as exc:
+        raise ValueError(f"configuração '{key}' inválida no banco: {exc}") from exc
     return cfg
+
+
+def _validate(key: str, cfg) -> None:
+    if key == "fees":
+        validate_fee_config(cfg)
+    elif key == "rides":
+        validate_ride_config(cfg)
+    elif key == "balance":
+        validate_balance_config(cfg)
 
 
 def save_config(session: Session, key: str, cfg) -> None:
     cls = _check_key(key)
     if not isinstance(cfg, cls):
         raise ValueError(f"tipo errado para '{key}': esperado {cls.__name__}")
-    if key == "fees":
-        validate_fee_config(cfg)
+    _validate(key, cfg)
     value = asdict(cfg)
     stmt = pg_insert(AppConfigRow).values(key=key, value=value)
     stmt = stmt.on_conflict_do_update(
@@ -95,4 +111,5 @@ def load_app_config(session: Session) -> AppConfig:
         dispatch=load_config(session, "dispatch"),
         safety=load_config(session, "safety"),
         auth=load_config(session, "auth"),
+        balance=load_config(session, "balance"),
     )

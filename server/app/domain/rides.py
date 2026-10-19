@@ -50,14 +50,42 @@ class Ride:
     non_payment_reported: bool = False
     completed_at: float | None = None
     fee_cents: int | None = None        # taxa por corrida decidida quando o motoqueiro aceitou
+    approach_start_m: float | None = None   # distância da moto ao ponto de embarque quando começou a vir
 
 
 @dataclass(frozen=True)
 class CancelResult:
-    """Resultado de um cancelamento: compensação ao motoqueiro e se há Pix pago para devolver."""
+    """Resultado de um cancelamento: taxa de cancelamento tardio (ao motoqueiro) e se há Pix pago para devolver."""
 
-    compensation_cents: int
+    fee_cents: int
     refund_needed: bool
+
+
+def approach_progress(start_m: float | None, now_m: float | None) -> float | None:
+    """Quanto do caminho até o ponto de embarque a moto já andou (0 a 1); `None` se faltar algum dado.
+
+    Moto que já começou a menos de 50 m do ponto conta como chegada (1,0).
+    """
+    if start_m is None or now_m is None:
+        return None
+    if start_m <= 50:
+        return 1.0
+    return min(1.0, max(0.0, 1 - now_m / start_m))
+
+
+def late_cancel_fee_cents(progress: float | None, cfg: RideConfig = _DEFAULT) -> int:
+    """Taxa do cancelamento tardio, de R$ 3 (moto saindo) a R$ 5 (moto no ponto), em passos de R$ 0,10.
+
+    REGRA PROVISÓRIA: o Levy vai trocar por um algoritmo de distância; é só esta função que muda.
+    Sem posição da moto (`None`) cobra o mínimo: na dúvida, a favor do passageiro.
+    """
+    if progress is None:
+        return cfg.cancel_fee_min_cents
+    share = min(1.0, max(0.0, progress))
+    raw = cfg.cancel_fee_min_cents + (cfg.cancel_fee_max_cents - cfg.cancel_fee_min_cents) * share
+    step = cfg.cancel_fee_round_cents
+    fee = int(raw / step + 0.5) * step
+    return min(cfg.cancel_fee_max_cents, max(cfg.cancel_fee_min_cents, fee))
 
 
 def _require(ride: Ride, *states: RideState) -> None:
@@ -183,8 +211,12 @@ def complete(ride: Ride, now: float | None = None) -> None:
     ride.completed_at = now
 
 
-def cancel(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> CancelResult:
-    """Cancelamento pelo passageiro: compensação ao motoqueiro e aviso se há Pix para devolver."""
+def cancel(ride: Ride, now: float, cfg: RideConfig = _DEFAULT, progress: float | None = None) -> CancelResult:
+    """Cancelamento pelo passageiro: taxa ao motoqueiro (se tardio) e aviso se há Pix para devolver.
+
+    `progress` é o quanto a moto já andou até o ponto de embarque (ver `approach_progress`).
+    Com a moto já no ponto (`ARRIVED`) a taxa é sempre a máxima.
+    """
     _require(
         ride,
         RideState.REQUESTED,
@@ -193,13 +225,13 @@ def cancel(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> CancelResult:
         RideState.ACCEPTED,
         RideState.ARRIVED,
     )
-    compensation = 0
+    fee = 0
     if ride.state in (RideState.ACCEPTED, RideState.ARRIVED):
         if ride.en_route_since is not None and now - ride.en_route_since > cfg.free_cancel_after_accept_s:
-            compensation = cfg.cancel_compensation_cents
+            fee = late_cancel_fee_cents(1.0 if ride.state is RideState.ARRIVED else progress, cfg)
     refund_needed = ride.pix_paid
     ride.state = RideState.CANCELLED
-    return CancelResult(compensation, refund_needed)
+    return CancelResult(fee, refund_needed)
 
 
 def arrival_wait_expired(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> bool:
@@ -215,7 +247,7 @@ def cancel_after_arrival_timeout(
         raise InvalidTransition("o tempo de espera na chegada ainda não acabou")
     refund_needed = ride.pix_paid
     ride.state = RideState.CANCELLED
-    return CancelResult(cfg.cancel_compensation_cents, refund_needed)
+    return CancelResult(late_cancel_fee_cents(1.0, cfg), refund_needed)
 
 
 def mark_no_rider(ride: Ride, now: float, cfg: RideConfig = _DEFAULT) -> None:

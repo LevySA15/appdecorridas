@@ -163,7 +163,7 @@ class TripService:
         result = self.payments.cancel_ride(session, ride_id, now)
         repo.log_ride_event(
             session, ride_id, "cancelled",
-            {"by": "passenger", "compensation_cents": result.compensation_cents, "refund": result.refund_needed},
+            {"by": "passenger", "fee_cents": result.fee_cents, "refund": result.refund_needed},
             now,
         )
         if state_before in (RideState.REQUESTED, RideState.SEARCHING):

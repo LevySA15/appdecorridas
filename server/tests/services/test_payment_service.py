@@ -242,7 +242,7 @@ def test_espera_na_chegada_esgotada_com_pix_pago_devolve_o_dinheiro_e_a_divida(s
     service.on_provider_event(session, provider.mark_paid(charge.charge_id))
     _chegada(session)
     resultado = service.cancel_after_arrival_timeout(session, "ride-1", now=100 + 300)
-    assert resultado == CancelResult(200, True)
+    assert resultado == CancelResult(500, True)
     assert provider.charges[charge.charge_id].refunded is True
     ledger = PgLedger(session)
     assert ledger.balance("rider:r1") == 0
@@ -268,7 +268,7 @@ def test_espera_na_chegada_antes_do_prazo_nao_cancela_nada(session, service, pro
 def test_espera_na_chegada_esgotada_em_dinheiro_so_cancela_com_compensacao(session, service):
     mundo(session, method=PaymentMethod.CASH)
     _chegada(session)
-    assert service.cancel_after_arrival_timeout(session, "ride-1", now=100 + 300) == CancelResult(200, False)
+    assert service.cancel_after_arrival_timeout(session, "ride-1", now=100 + 300) == CancelResult(500, False)
     assert repo.get_ride(session, "ride-1").state is RideState.CANCELLED
     assert divida(session) == (1000, 0)
 

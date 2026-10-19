@@ -140,7 +140,7 @@ def test_espera_na_chegada_de_5_minutos_cancela_com_devolucao_do_pix(w, session,
     assert provider.charges[charge_id].refunded is True
     assert PgLedger(session).balance("rider:r1") == 0
     tipo, dados = repo.ride_events(session, "ride-1")[-1]
-    assert tipo == "cancelled" and dados["by"] == "timeout" and dados["compensation_cents"] == 200
+    assert tipo == "cancelled" and dados["by"] == "timeout" and dados["fee_cents"] == 500
 
 
 def test_pagamento_em_dinheiro_nao_confirmado_bloqueia_o_passageiro(w, session, positions):

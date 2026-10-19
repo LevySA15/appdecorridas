@@ -119,7 +119,7 @@ class SweepService:
             repo.log_ride_event(
                 session, ride_id, "cancelled",
                 {"by": "timeout", "reason": "arrival_wait",
-                 "compensation_cents": result.compensation_cents, "refund": result.refund_needed},
+                 "fee_cents": result.fee_cents, "refund": result.refund_needed},
                 now,
             )
             self.events.add(ride.passenger_id, "ride_cancelled", {"ride_id": ride_id, "reason": "arrival_wait"})

@@ -41,8 +41,11 @@ class FeeConfig:
 @dataclass(frozen=True)
 class RideConfig:
     pix_window_s: int = 120
-    free_cancel_after_accept_s: int = 60
-    cancel_compensation_cents: int = 200
+    free_cancel_after_accept_s: int = 300   # janela grátis de cancelamento, contada do aceite da moto
+    cancel_fee_min_cents: int = 300         # taxa de cancelamento tardio: R$ 3,00 com a moto saindo...
+    cancel_fee_max_cents: int = 500         # ...a R$ 5,00 com a moto no ponto de embarque
+    cancel_fee_round_cents: int = 10        # a taxa é arredondada a R$ 0,10
+    appeal_window_s: int = 7 * 86_400       # prazo para o passageiro pedir revisão da taxa
     max_wait_at_arrival_s: int = 300
     queue_max_wait_s: int = 480
     search_give_up_s: int = 120
@@ -76,6 +79,15 @@ class SafetyConfig:
 
 
 @dataclass(frozen=True)
+class BalanceConfig:
+    """Saldo do passageiro. A recarga fica desligada até o advogado responder (spec, seção 7.5)."""
+
+    topup_enabled: bool = False
+    topup_min_cents: int = 1000
+    topup_max_cents: int = 20_000
+
+
+@dataclass(frozen=True)
 class AuthConfig:
     otp_digits: int = 6
     otp_ttl_s: int = 300
@@ -83,3 +95,19 @@ class AuthConfig:
     otp_requests_per_hour: int = 5
     otp_requests_per_ip_hour: int = 100   # por aparelho/rede; alto porque várias pessoas dividem o mesmo IP no 4G
     session_days: int = 180
+
+
+def validate_ride_config(cfg: RideConfig) -> None:
+    """Confere os números do cancelamento tardio e do recurso."""
+    if cfg.cancel_fee_min_cents <= 0 or cfg.cancel_fee_max_cents < cfg.cancel_fee_min_cents:
+        raise ValueError("a taxa de cancelamento precisa ser positiva e o mínimo não pode passar do máximo")
+    if cfg.cancel_fee_round_cents <= 0:
+        raise ValueError("o arredondamento da taxa de cancelamento precisa ser positivo")
+    if cfg.appeal_window_s <= 0:
+        raise ValueError("o prazo do recurso precisa ser positivo")
+
+
+def validate_balance_config(cfg: BalanceConfig) -> None:
+    """Confere os limites da recarga de saldo."""
+    if cfg.topup_min_cents <= 0 or cfg.topup_max_cents < cfg.topup_min_cents:
+        raise ValueError("os limites da recarga precisam ser positivos, com o mínimo não maior que o máximo")

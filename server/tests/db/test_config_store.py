@@ -88,3 +88,50 @@ def test_configuracao_de_login_vai_e_volta(session):
     session.expire_all()
     assert load_config(session, "auth") == custom
     assert load_app_config(session).auth == custom
+
+
+def test_configuracao_do_saldo_vai_e_volta_e_comeca_desligada(session):
+    from app.domain.config import BalanceConfig
+
+    assert load_config(session, "balance") == BalanceConfig()
+    assert BalanceConfig().topup_enabled is False
+    custom = BalanceConfig(topup_enabled=True, topup_min_cents=500, topup_max_cents=5000)
+    save_config(session, "balance", custom)
+    session.expire_all()
+    assert load_config(session, "balance") == custom
+    assert load_app_config(session).balance == custom
+
+
+def test_configuracao_antiga_de_corridas_com_a_compensacao_ainda_carrega(session):
+    # Antes do plano 4B a taxa de cancelamento tardio era uma compensação fixa de R$ 2,00.
+    antigo = {
+        "pix_window_s": 90, "free_cancel_after_accept_s": 60, "cancel_compensation_cents": 200,
+        "max_wait_at_arrival_s": 300, "queue_max_wait_s": 480, "search_give_up_s": 120, "cash_pay_wait_s": 300,
+        "quote_ttl_s": 300, "min_trip_m": 100, "max_trip_m": 40_000,
+    }
+    _gravar_cru(session, "rides", antigo)
+    carregada = load_config(session, "rides")
+    assert carregada.pix_window_s == 90 and carregada.free_cancel_after_accept_s == 60
+    assert carregada.cancel_fee_min_cents == 300 and carregada.cancel_fee_max_cents == 500
+
+
+@pytest.mark.parametrize(
+    "mudanca",
+    [
+        {"cancel_fee_min_cents": 600, "cancel_fee_max_cents": 500},
+        {"cancel_fee_min_cents": 0},
+        {"cancel_fee_round_cents": 0},
+        {"appeal_window_s": 0},
+    ],
+)
+def test_taxa_de_cancelamento_incoerente_nao_e_salva(session, mudanca):
+    with pytest.raises(ValueError, match="cancelamento|recurso"):
+        save_config(session, "rides", RideConfig(**mudanca))
+    assert load_config(session, "rides") == RideConfig()
+
+
+def test_saldo_com_limites_incoerentes_nao_e_salvo(session):
+    from app.domain.config import BalanceConfig
+
+    with pytest.raises(ValueError, match="recarga"):
+        save_config(session, "balance", BalanceConfig(topup_min_cents=5000, topup_max_cents=1000))
