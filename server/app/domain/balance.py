@@ -71,6 +71,19 @@ class CancelFee:
     decision_note: str | None = None
 
 
+@dataclass(frozen=True)
+class Withdrawal:
+    """Um saque do saldo por Pix. A chave inteira nunca é guardada: só o tipo e o final."""
+
+    withdrawal_id: str
+    passenger_id: str
+    amount_cents: int
+    key_kind: str
+    key_masked: str
+    provider_ref: str
+    created_at: float
+
+
 def apply_pending_payment(fee: CancelFee, cents: int) -> None:
     """A pendência (toda ou uma parte) foi paga depois do cancelamento."""
     if cents <= 0 or cents > fee.pending_cents:

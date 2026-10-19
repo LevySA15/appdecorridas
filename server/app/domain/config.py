@@ -93,6 +93,10 @@ class BalanceConfig:
     topup_enabled: bool = False
     topup_min_cents: int = 1000
     topup_max_cents: int = 20_000
+    pay_rides_enabled: bool = True      # o saldo paga a corrida inteira
+    withdraw_enabled: bool = False      # saque por Pix: desligado até o advogado responder (spec, seção 7.5)
+    withdraw_min_cents: int = 500
+    withdraw_max_cents: int = 50_000
 
 
 @dataclass(frozen=True)
@@ -127,6 +131,8 @@ def validate_balance_config(cfg: BalanceConfig) -> None:
     """Confere os limites da recarga de saldo."""
     if cfg.topup_min_cents <= 0 or cfg.topup_max_cents < cfg.topup_min_cents:
         raise ValueError("os limites da recarga precisam ser positivos, com o mínimo não maior que o máximo")
+    if cfg.withdraw_min_cents <= 0 or cfg.withdraw_max_cents < cfg.withdraw_min_cents:
+        raise ValueError("os limites do saque precisam ser positivos, com o mínimo não maior que o máximo")
 
 
 def _need(ok: bool, text: str) -> None:

@@ -2,7 +2,7 @@ import pytest
 
 from app.db import queries
 from app.db import repositories as repo
-from app.domain.balance import CancelFee
+from app.domain.balance import CancelFee, Withdrawal
 from app.domain.payments import PixCharge, Split
 from app.domain.rides import PassengerAccount
 from tests.helpers_db import add_accepted_ride, add_passenger, add_rider
@@ -141,3 +141,38 @@ def test_taxas_inconsistentes_aparecem_na_conferencia(session):
     _duas_corridas(session)
     repo.add_cancel_fee(session, _taxa("ride-1"))
     assert queries.inconsistent_fee_ids(session) == []
+
+
+def test_corrida_paga_com_saldo_vai_e_volta_com_a_marca(session):
+    add_passenger(session)
+    add_rider(session)
+    ride = add_accepted_ride(session)
+    assert repo.get_ride(session, "ride-1").pay_with_balance is False
+    ride.pay_with_balance = True
+    repo.save_ride(session, ride)
+    session.expire_all()
+    assert repo.get_ride(session, "ride-1").pay_with_balance is True
+
+
+def test_cobranca_paga_com_saldo_vai_e_volta_com_a_origem(session):
+    add_passenger(session)
+    add_rider(session)
+    add_accepted_ride(session)
+    charge = PixCharge("bal-1", "ride-1", "r1", 700, Split(600, 100, 0), paid=True, source="balance")
+    repo.add_charge(session, charge)
+    session.expire_all()
+    assert repo.get_charge(session, "bal-1").source == "balance"
+    outra = PixCharge("ch-1", "ride-1", "r1", 700, Split(600, 100, 0))
+    repo.add_charge(session, outra)
+    assert repo.get_charge(session, "ch-1").source == "pix"
+
+
+def test_saques_vao_e_voltam_do_mais_novo_para_o_mais_antigo(session):
+    add_passenger(session)
+    repo.add_withdrawal(session, Withdrawal("w1", "p1", 500, "cpf", "final 4725", "fake-1", 100.0))
+    repo.add_withdrawal(session, Withdrawal("w2", "p1", 800, "phone", "final 0824", "fake-2", 200.0))
+    session.expire_all()
+    saques = repo.list_withdrawals(session)
+    assert [s.withdrawal_id for s in saques] == ["w2", "w1"]
+    assert saques[0] == Withdrawal("w2", "p1", 800, "phone", "final 0824", "fake-2", 200.0)
+    assert [s.withdrawal_id for s in repo.list_withdrawals(session, limit=1, offset=1)] == ["w1"]

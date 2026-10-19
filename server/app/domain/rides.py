@@ -51,6 +51,7 @@ class Ride:
     completed_at: float | None = None
     fee_cents: int | None = None        # taxa por corrida decidida quando o motoqueiro aceitou
     approach_start_m: float | None = None   # distância da moto ao ponto de embarque quando começou a vir
+    pay_with_balance: bool = False      # o passageiro escolheu pagar com o saldo (corrida Pix quitada no aceite)
 
 
 @dataclass(frozen=True)

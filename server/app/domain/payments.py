@@ -128,6 +128,7 @@ class PixCharge:
     br_code: str = ""       # texto do Pix "copia e cola"; o app desenha o QR a partir dele
     passenger_id: str = ""  # só na recarga ("topup"): de quem é o saldo
     refunded_cents: int = 0     # quanto o provedor já devolveu (só o provedor falso guarda isto; não vai ao banco)
+    source: str = "pix"         # "pix" (o provedor recebeu) ou "balance" (quitada com o saldo do passageiro)
 
 
 class PaymentProviderError(Exception):

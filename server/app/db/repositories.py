@@ -20,8 +20,9 @@ from app.db.models import (
     RideRow,
     RiderProfileRow,
     UserRow,
+    WithdrawalRow,
 )
-from app.domain.balance import CancelFee
+from app.domain.balance import CancelFee, Withdrawal
 from app.domain.fees import RiderAccount
 from app.domain.geo import GeoPoint
 from app.domain.payments import DebtState, PixCharge, Split
@@ -160,6 +161,7 @@ def _ride_to_domain(row: RideRow) -> Ride:
         completed_at=row.completed_at,
         fee_cents=row.fee_cents,
         approach_start_m=row.approach_start_m,
+        pay_with_balance=row.pay_with_balance,
     )
 
 
@@ -182,6 +184,7 @@ def _apply_ride(row: RideRow, ride: Ride) -> None:
     row.completed_at = ride.completed_at
     row.fee_cents = ride.fee_cents
     row.approach_start_m = ride.approach_start_m
+    row.pay_with_balance = ride.pay_with_balance
 
 
 def add_ride(session: Session, ride: Ride) -> None:
@@ -242,6 +245,7 @@ def _charge_to_domain(row: PixChargeRow) -> PixCharge:
         purpose=row.purpose,
         br_code=row.br_code,
         passenger_id=row.passenger_id or "",
+        source=row.source,
     )
 
 
@@ -257,6 +261,7 @@ def _apply_charge(row: PixChargeRow, charge: PixCharge) -> None:
     row.refunded = charge.refunded
     row.debt_state = charge.debt_state.value
     row.purpose = charge.purpose
+    row.source = charge.source
     row.br_code = charge.br_code
 
 
@@ -404,6 +409,28 @@ def _apply_fee(row: CancelFeeRow, fee: CancelFee) -> None:
     row.decided_at = fee.decided_at
     row.decided_by = fee.decided_by
     row.decision_note = fee.decision_note
+
+
+def add_withdrawal(session: Session, withdrawal: Withdrawal) -> None:
+    session.add(
+        WithdrawalRow(
+            id=withdrawal.withdrawal_id, passenger_id=withdrawal.passenger_id, amount_cents=withdrawal.amount_cents,
+            key_kind=withdrawal.key_kind, key_masked=withdrawal.key_masked, provider_ref=withdrawal.provider_ref,
+            created_at=withdrawal.created_at,
+        )
+    )
+    session.flush()
+
+
+def list_withdrawals(session: Session, limit: int = 50, offset: int = 0) -> list[Withdrawal]:
+    """Os saques, do mais novo para o mais antigo."""
+    rows = session.execute(
+        select(WithdrawalRow).order_by(WithdrawalRow.created_at.desc(), WithdrawalRow.id.desc()).limit(limit).offset(offset)
+    ).scalars()
+    return [
+        Withdrawal(r.id, r.passenger_id, r.amount_cents, r.key_kind, r.key_masked, r.provider_ref, r.created_at)
+        for r in rows
+    ]
 
 
 def add_cancel_fee(session: Session, fee: CancelFee) -> None:

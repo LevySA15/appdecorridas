@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.db.models import CancelFeeRow, PassengerProfileRow, PixChargeRow
+from app.db.models import CancelFeeRow, PassengerProfileRow, PixChargeRow, WithdrawalRow
 from tests.helpers_db import add_accepted_ride, add_passenger, add_rider
 
 
@@ -121,3 +121,17 @@ def test_cobranca_de_divida_do_motoqueiro_nao_precisa_de_corrida_mas_precisa_do_
     session.add(_cobranca(**divida))
     session.flush()
     _recusa(session, _cobranca(**(divida | {"charge_id": "ch-d2", "rider_id": None})))
+
+
+def test_origem_da_cobranca_desconhecida_e_recusada(session):
+    _corrida(session)
+    _recusa(session, _cobranca(purpose="ride", source="cartao"))
+
+
+def test_saque_zero_ou_negativo_e_recusado(session):
+    add_passenger(session)
+    for valor in (0, -100):
+        _recusa(session, WithdrawalRow(
+            id=f"w{valor}", passenger_id="p1", amount_cents=valor, key_kind="cpf", key_masked="final 4725",
+            provider_ref="fake-1", created_at=1.0,
+        ))

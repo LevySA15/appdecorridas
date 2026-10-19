@@ -131,6 +131,7 @@ class RideRow(Base):
     route: Mapped[list | None] = mapped_column(JSONB, nullable=True)   # [[lat, lng], ...] do preço mostrado
     fee_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     approach_start_m: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    pay_with_balance: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     completed_at: Mapped[float | None] = mapped_column(Float(53), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -140,6 +141,7 @@ class PixChargeRow(Base):
     __table_args__ = (
         CheckConstraint("rider_cents + company_cents = amount_cents", name="charge_split_closes"),
         CheckConstraint("purpose IN ('ride','end','entry','fee','topup','debt')", name="charge_purpose_valid"),
+        CheckConstraint("source IN ('pix','balance')", name="charge_source_valid"),
         CheckConstraint("purpose IN ('entry','topup','debt') OR ride_id IS NOT NULL", name="charge_ride_required"),
         CheckConstraint(
             "(purpose = 'topup' AND passenger_id IS NOT NULL AND rider_id IS NULL)"
@@ -151,6 +153,7 @@ class PixChargeRow(Base):
     charge_id: Mapped[str] = mapped_column(String(40), primary_key=True)
     ride_id: Mapped[str | None] = mapped_column(String(40), ForeignKey("rides.id"), nullable=True)
     purpose: Mapped[str] = mapped_column(String(8), default="ride", server_default="ride")
+    source: Mapped[str] = mapped_column(String(8), default="pix", server_default="pix")
     rider_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     passenger_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     amount_cents: Mapped[int] = mapped_column(Integer)
@@ -162,6 +165,19 @@ class PixChargeRow(Base):
     debt_state: Mapped[str] = mapped_column(String(12), default="reserved", server_default="reserved")
     br_code: Mapped[str] = mapped_column(Text, default="", server_default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class WithdrawalRow(Base):
+    __tablename__ = "withdrawals"
+    __table_args__ = (CheckConstraint("amount_cents > 0", name="withdrawal_amount_positive"),)
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    passenger_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    key_kind: Mapped[str] = mapped_column(String(10))
+    key_masked: Mapped[str] = mapped_column(String(40))         # só o final: a chave inteira nunca é guardada
+    provider_ref: Mapped[str] = mapped_column(String(60))
+    created_at: Mapped[float] = mapped_column(Float(53), index=True)
 
 
 class CancelFeeRow(Base):

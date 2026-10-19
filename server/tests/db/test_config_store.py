@@ -1,3 +1,4 @@
+import dataclasses
 import json
 
 import pytest
@@ -5,6 +6,7 @@ from sqlalchemy import text
 
 from app.db.config_store import AppConfig, load_app_config, load_config, save_config
 from app.domain.config import (
+    BalanceConfig,
     DispatchConfig,
     FeeConfig,
     FeeTier,
@@ -95,6 +97,9 @@ def test_configuracao_do_saldo_vai_e_volta_e_comeca_desligada(session):
 
     assert load_config(session, "balance") == BalanceConfig()
     assert BalanceConfig().topup_enabled is False
+    padrao = BalanceConfig()
+    assert (padrao.pay_rides_enabled, padrao.withdraw_enabled) == (True, False)
+    assert (padrao.withdraw_min_cents, padrao.withdraw_max_cents) == (500, 50_000)
     custom = BalanceConfig(topup_enabled=True, topup_min_cents=500, topup_max_cents=5000)
     save_config(session, "balance", custom)
     session.expire_all()
@@ -139,3 +144,19 @@ def test_saldo_com_limites_incoerentes_nao_e_salvo(session):
 
     with pytest.raises(ValueError, match="recarga"):
         save_config(session, "balance", BalanceConfig(topup_min_cents=5000, topup_max_cents=1000))
+
+
+def test_configuracao_antiga_do_saldo_sem_o_saque_ainda_carrega(session):
+    _gravar_cru(session, "balance", {"topup_enabled": True, "topup_min_cents": 1000, "topup_max_cents": 20_000})
+    carregada = load_config(session, "balance")
+    assert carregada.topup_enabled is True
+    assert (carregada.pay_rides_enabled, carregada.withdraw_enabled) == (True, False)
+
+
+@pytest.mark.parametrize(
+    "mudanca",
+    [{"withdraw_min_cents": 0}, {"withdraw_min_cents": 900, "withdraw_max_cents": 800}, {"withdraw_max_cents": -1}],
+)
+def test_limites_de_saque_incoerentes_nao_sao_salvos(session, mudanca):
+    with pytest.raises(ValueError, match="saque"):
+        save_config(session, "balance", dataclasses.replace(BalanceConfig(), **mudanca))
