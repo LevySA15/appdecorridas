@@ -1,0 +1,12 @@
+name: corrida_core
+description: Base compartilhada dos apps do passageiro e do motoqueiro (cliente da API, tempo real e modelos).
+publish_to: none
+resolution: workspace
+environment:
+  sdk: ^3.13.0
+dependencies:
+  http: ^1.2.0
+  web_socket_channel: ^3.0.0
+dev_dependencies:
+  test: ^1.25.0
+  lints: ^6.0.0

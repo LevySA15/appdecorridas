@@ -4,3 +4,8 @@ server/var/
 __pycache__/
 .pytest_cache/
 .env
+
+# Dart / Flutter
+.dart_tool/
+mobile/**/build/
+.flutter-plugins*
