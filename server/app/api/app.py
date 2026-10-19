@@ -4,7 +4,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
 from app.api.errors import install_error_handlers
@@ -18,6 +21,8 @@ from app.api.routes import rides as rides_routes
 from app.api.routes import safety as safety_routes
 from app.api.routes import ws as ws_routes
 from app.scheduler import Scheduler
+
+PAINEL_DIR = Path(__file__).resolve().parents[2] / "painel"
 
 
 def create_app(runtime=None, *, run_background: bool = False, scheduler: Scheduler | None = None) -> FastAPI:
@@ -55,6 +60,8 @@ def create_app(runtime=None, *, run_background: bool = False, scheduler: Schedul
     app.include_router(payments_routes.router)
     app.include_router(safety_routes.router)
     app.include_router(ws_routes.router)
+    if PAINEL_DIR.is_dir():       # o site do painel do dono (só HTML e JavaScript; os dados vêm da API, com login)
+        app.mount("/painel", StaticFiles(directory=PAINEL_DIR, html=True), name="painel")
 
     if dev:
         from app.api.routes import dev as dev_routes
