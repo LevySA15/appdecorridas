@@ -22,7 +22,8 @@ def perfil_rapido(pix_share: float) -> Profile:
 def test_uma_corrida_inteira_sem_nenhuma_resposta_inesperada(box, metodo):
     cfg = SimConfig(
         url=box.url, admin_phone=ADMIN_PHONE, riders=1, passengers=1, minutes=3, seed=7,
-        profile=perfil_rapido(1.0 if metodo == "pix" else 0.0), max_rides=1, drain_s=90,
+        profile=dataclasses.replace(perfil_rapido(1.0 if metodo == "pix" else 0.0), pay_qr=0.0),   # em dinheiro, só o motoqueiro confirma
+        max_rides=1, drain_s=90,
     )
     outcome = asyncio.run(simulate(cfg))
     relatorio = build_report(outcome, box.problems(), box.retries())
