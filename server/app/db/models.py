@@ -75,10 +75,14 @@ class RiderProfileRow(Base):
 
 class PassengerProfileRow(Base):
     __tablename__ = "passenger_profiles"
-    __table_args__ = (CheckConstraint("unpaid_cents >= 0", name="passenger_unpaid_non_negative"),)
+    __table_args__ = (
+        CheckConstraint("unpaid_cents >= 0", name="passenger_unpaid_non_negative"),
+        CheckConstraint("balance_cents >= 0", name="passenger_balance_non_negative"),
+    )
 
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), primary_key=True)
     unpaid_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    balance_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     emergency_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     emergency_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
@@ -126,6 +130,7 @@ class RideRow(Base):
     price_reason: Mapped[str | None] = mapped_column(String(80), nullable=True)
     route: Mapped[list | None] = mapped_column(JSONB, nullable=True)   # [[lat, lng], ...] do preço mostrado
     fee_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    approach_start_m: Mapped[float | None] = mapped_column(Float(53), nullable=True)
     completed_at: Mapped[float | None] = mapped_column(Float(53), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -134,14 +139,20 @@ class PixChargeRow(Base):
     __tablename__ = "pix_charges"
     __table_args__ = (
         CheckConstraint("rider_cents + company_cents = amount_cents", name="charge_split_closes"),
-        CheckConstraint("purpose IN ('ride','end','entry')", name="charge_purpose_valid"),
-        CheckConstraint("purpose = 'entry' OR ride_id IS NOT NULL", name="charge_ride_required"),
+        CheckConstraint("purpose IN ('ride','end','entry','fee','topup')", name="charge_purpose_valid"),
+        CheckConstraint("purpose IN ('entry','topup') OR ride_id IS NOT NULL", name="charge_ride_required"),
+        CheckConstraint(
+            "(purpose = 'topup' AND passenger_id IS NOT NULL AND rider_id IS NULL)"
+            " OR (purpose <> 'topup' AND rider_id IS NOT NULL)",
+            name="charge_owner",
+        ),
     )
 
     charge_id: Mapped[str] = mapped_column(String(40), primary_key=True)
     ride_id: Mapped[str | None] = mapped_column(String(40), ForeignKey("rides.id"), nullable=True)
     purpose: Mapped[str] = mapped_column(String(8), default="ride", server_default="ride")
-    rider_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    rider_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    passenger_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     amount_cents: Mapped[int] = mapped_column(Integer)
     rider_cents: Mapped[int] = mapped_column(Integer)
     company_cents: Mapped[int] = mapped_column(Integer)
@@ -151,6 +162,45 @@ class PixChargeRow(Base):
     debt_state: Mapped[str] = mapped_column(String(12), default="reserved", server_default="reserved")
     br_code: Mapped[str] = mapped_column(Text, default="", server_default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class CancelFeeRow(Base):
+    __tablename__ = "cancel_fees"
+    __table_args__ = (
+        CheckConstraint("fee_cents > 0", name="fee_positive"),
+        CheckConstraint(
+            "from_balance_cents >= 0 AND retained_cents >= 0 AND pending_cents >= 0 AND paid_later_cents >= 0"
+            " AND waived_cents >= 0 AND credited_back_cents >= 0",
+            name="fee_parts_non_negative",
+        ),
+        CheckConstraint(
+            "from_balance_cents + retained_cents + pending_cents + paid_later_cents + waived_cents = fee_cents",
+            name="fee_parts_close",
+        ),
+        CheckConstraint("appeal_state IN ('none','open','accepted','rejected')", name="appeal_state_valid"),
+        Index("ix_cancel_fees_passenger", "passenger_id"),
+        Index("ix_cancel_fees_appeal", "appeal_state"),
+    )
+
+    ride_id: Mapped[str] = mapped_column(String(40), ForeignKey("rides.id"), primary_key=True)
+    passenger_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    rider_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    fee_cents: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(16))             # passenger | arrival_timeout
+    progress: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    from_balance_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    retained_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    pending_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    paid_later_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    waived_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    credited_back_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    appeal_state: Mapped[str] = mapped_column(String(10), default="none", server_default="none")
+    appeal_text: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    appealed_at: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    decided_at: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    decision_note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[float] = mapped_column(Float(53))
 
 
 class LedgerRow(Base):

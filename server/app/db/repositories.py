@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.db.models import (
+    CancelFeeRow,
     PassengerProfileRow,
     PixChargeRow,
     ProcessedEventRow,
@@ -20,6 +21,7 @@ from app.db.models import (
     RiderProfileRow,
     UserRow,
 )
+from app.domain.balance import CancelFee
 from app.domain.fees import RiderAccount
 from app.domain.geo import GeoPoint
 from app.domain.payments import DebtState, PixCharge, Split
@@ -99,7 +101,7 @@ def get_passenger_account(
     row = session.execute(stmt).scalar_one_or_none()
     if row is None:
         raise LookupError(f"passageiro {passenger_id} não encontrado")
-    return PassengerAccount(passenger_id=row.user_id, unpaid_cents=row.unpaid_cents)
+    return PassengerAccount(passenger_id=row.user_id, unpaid_cents=row.unpaid_cents, balance_cents=row.balance_cents)
 
 
 def save_passenger_account(session: Session, acc: PassengerAccount) -> None:
@@ -107,6 +109,7 @@ def save_passenger_account(session: Session, acc: PassengerAccount) -> None:
     if row is None:
         raise LookupError(f"passageiro {acc.passenger_id} não encontrado")
     row.unpaid_cents = acc.unpaid_cents
+    row.balance_cents = acc.balance_cents
     session.flush()
 
 
@@ -156,6 +159,7 @@ def _ride_to_domain(row: RideRow) -> Ride:
         non_payment_reported=row.non_payment_reported,
         completed_at=row.completed_at,
         fee_cents=row.fee_cents,
+        approach_start_m=row.approach_start_m,
     )
 
 
@@ -177,6 +181,7 @@ def _apply_ride(row: RideRow, ride: Ride) -> None:
     row.non_payment_reported = ride.non_payment_reported
     row.completed_at = ride.completed_at
     row.fee_cents = ride.fee_cents
+    row.approach_start_m = ride.approach_start_m
 
 
 def add_ride(session: Session, ride: Ride) -> None:
@@ -224,7 +229,7 @@ def _charge_to_domain(row: PixChargeRow) -> PixCharge:
     return PixCharge(
         charge_id=row.charge_id,
         ride_id=row.ride_id or "",
-        rider_id=row.rider_id,
+        rider_id=row.rider_id or "",
         amount_cents=row.amount_cents,
         split=Split(
             rider_cents=row.rider_cents,
@@ -236,12 +241,14 @@ def _charge_to_domain(row: PixChargeRow) -> PixCharge:
         debt_state=DebtState(row.debt_state),
         purpose=row.purpose,
         br_code=row.br_code,
+        passenger_id=row.passenger_id or "",
     )
 
 
 def _apply_charge(row: PixChargeRow, charge: PixCharge) -> None:
     row.ride_id = charge.ride_id or None
-    row.rider_id = charge.rider_id
+    row.rider_id = charge.rider_id or None
+    row.passenger_id = charge.passenger_id or None
     row.amount_cents = charge.amount_cents
     row.rider_cents = charge.split.rider_cents
     row.company_cents = charge.split.company_cents
@@ -362,3 +369,108 @@ def ride_event_time(session: Session, ride_id: str, kind: str) -> float | None:
     return session.execute(
         select(func.max(RideEventRow.created_at)).where(RideEventRow.ride_id == ride_id, RideEventRow.kind == kind)
     ).scalar_one()
+
+# --- taxa de cancelamento tardio ----------------------------------------------------------
+
+
+def _fee_to_domain(row: CancelFeeRow) -> CancelFee:
+    return CancelFee(
+        ride_id=row.ride_id, passenger_id=row.passenger_id, rider_id=row.rider_id, fee_cents=row.fee_cents,
+        reason=row.reason, created_at=row.created_at, progress=row.progress,
+        from_balance_cents=row.from_balance_cents, retained_cents=row.retained_cents,
+        pending_cents=row.pending_cents, paid_later_cents=row.paid_later_cents, waived_cents=row.waived_cents,
+        credited_back_cents=row.credited_back_cents, appeal_state=row.appeal_state, appeal_text=row.appeal_text,
+        appealed_at=row.appealed_at, decided_at=row.decided_at, decided_by=row.decided_by,
+        decision_note=row.decision_note,
+    )
+
+
+def _apply_fee(row: CancelFeeRow, fee: CancelFee) -> None:
+    row.passenger_id = fee.passenger_id
+    row.rider_id = fee.rider_id
+    row.fee_cents = fee.fee_cents
+    row.reason = fee.reason
+    row.created_at = fee.created_at
+    row.progress = fee.progress
+    row.from_balance_cents = fee.from_balance_cents
+    row.retained_cents = fee.retained_cents
+    row.pending_cents = fee.pending_cents
+    row.paid_later_cents = fee.paid_later_cents
+    row.waived_cents = fee.waived_cents
+    row.credited_back_cents = fee.credited_back_cents
+    row.appeal_state = fee.appeal_state
+    row.appeal_text = fee.appeal_text
+    row.appealed_at = fee.appealed_at
+    row.decided_at = fee.decided_at
+    row.decided_by = fee.decided_by
+    row.decision_note = fee.decision_note
+
+
+def add_cancel_fee(session: Session, fee: CancelFee) -> None:
+    row = CancelFeeRow(ride_id=fee.ride_id)
+    _apply_fee(row, fee)
+    session.add(row)
+    session.flush()
+
+
+def get_cancel_fee(session: Session, ride_id: str, *, for_update: bool = False) -> CancelFee:
+    row = session.execute(_locking(select(CancelFeeRow).where(CancelFeeRow.ride_id == ride_id), for_update)).scalar_one_or_none()
+    if row is None:
+        raise LookupError(f"a corrida {ride_id} não tem taxa de cancelamento")
+    return _fee_to_domain(row)
+
+
+def save_cancel_fee(session: Session, fee: CancelFee) -> None:
+    row = session.get(CancelFeeRow, fee.ride_id)
+    if row is None:
+        raise LookupError(f"a corrida {fee.ride_id} não tem taxa de cancelamento")
+    _apply_fee(row, fee)
+    session.flush()
+
+
+def pending_cancel_fee(session: Session, passenger_id: str, *, for_update: bool = False) -> CancelFee | None:
+    """A taxa com pendência mais antiga do passageiro, se houver."""
+    stmt = (
+        select(CancelFeeRow)
+        .where(CancelFeeRow.passenger_id == passenger_id, CancelFeeRow.pending_cents > 0)
+        .order_by(CancelFeeRow.created_at, CancelFeeRow.ride_id)
+        .limit(1)
+    )
+    row = session.execute(_locking(stmt, for_update)).scalar_one_or_none()
+    return None if row is None else _fee_to_domain(row)
+
+
+def recent_cancel_fees(session: Session, passenger_id: str, since: float) -> list[CancelFee]:
+    rows = session.execute(
+        select(CancelFeeRow)
+        .where(CancelFeeRow.passenger_id == passenger_id, CancelFeeRow.created_at >= since)
+        .order_by(CancelFeeRow.created_at.desc(), CancelFeeRow.ride_id)
+    ).scalars()
+    return [_fee_to_domain(row) for row in rows]
+
+
+def find_open_charge(session: Session, ride_id: str, purpose: str) -> PixCharge | None:
+    """Cobrança do propósito pedido ainda não paga nem devolvida, para a mesma corrida."""
+    row = session.execute(
+        select(PixChargeRow)
+        .where(
+            PixChargeRow.ride_id == ride_id, PixChargeRow.purpose == purpose,
+            PixChargeRow.paid.is_(False), PixChargeRow.refunded.is_(False),
+        )
+        .order_by(PixChargeRow.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    return None if row is None else _charge_to_domain(row)
+
+
+def find_open_topup_charge(session: Session, passenger_id: str) -> PixCharge | None:
+    row = session.execute(
+        select(PixChargeRow)
+        .where(
+            PixChargeRow.passenger_id == passenger_id, PixChargeRow.purpose == "topup",
+            PixChargeRow.paid.is_(False), PixChargeRow.refunded.is_(False),
+        )
+        .order_by(PixChargeRow.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    return None if row is None else _charge_to_domain(row)

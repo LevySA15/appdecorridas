@@ -6,7 +6,16 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
-from app.db.models import RideOfferRow, RideRow, RiderProfileRow, SafetyAlertRow, UserRow
+from app.db.models import (
+    CancelFeeRow,
+    LedgerRow,
+    PassengerProfileRow,
+    RideOfferRow,
+    RideRow,
+    RiderProfileRow,
+    SafetyAlertRow,
+    UserRow,
+)
 from app.domain.fees import RiderAccount
 from app.domain.geo import GeoPoint
 from app.domain.rides import RideState
@@ -469,3 +478,63 @@ def riders_with_two_active_rides(session: Session) -> list[str]:
             .order_by(RideRow.rider_id)
         ).scalars()
     )
+
+
+@dataclass(frozen=True)
+class AppealItem:
+    ride_id: str
+    passenger_id: str
+    passenger_name: str
+    rider_name: str
+    fee_cents: int
+    reason: str
+    created_at: float
+    appeal_state: str
+    appeal_text: str | None
+    appealed_at: float | None
+    decided_at: float | None
+    decision_note: str | None
+
+
+def list_appeals(session: Session, status: str, limit: int, offset: int) -> list[AppealItem]:
+    """Recursos da taxa de cancelamento na situação pedida, o mais antigo primeiro."""
+    passenger, rider = aliased(UserRow), aliased(UserRow)
+    rows = session.execute(
+        select(CancelFeeRow, passenger.name, rider.name)
+        .join(passenger, passenger.id == CancelFeeRow.passenger_id)
+        .join(rider, rider.id == CancelFeeRow.rider_id)
+        .where(CancelFeeRow.appeal_state == status)
+        .order_by(func.coalesce(CancelFeeRow.appealed_at, CancelFeeRow.created_at), CancelFeeRow.ride_id)
+        .limit(limit)
+        .offset(offset)
+    ).all()
+    return [
+        AppealItem(
+            f.ride_id, f.passenger_id, passenger_name, rider_name, f.fee_cents, f.reason, f.created_at,
+            f.appeal_state, f.appeal_text, f.appealed_at, f.decided_at, f.decision_note,
+        )
+        for f, passenger_name, rider_name in rows
+    ]
+
+
+def passenger_balances_total(session: Session) -> int:
+    """Soma dos saldos de todos os passageiros, como estão nos perfis."""
+    return int(session.execute(select(func.coalesce(func.sum(PassengerProfileRow.balance_cents), 0))).scalar_one())
+
+
+def ledger_balances_total(session: Session) -> int:
+    """Soma das contas `balance:*` do livro-caixa; precisa ser igual à soma dos saldos dos perfis."""
+    return int(
+        session.execute(
+            select(func.coalesce(func.sum(LedgerRow.amount_cents), 0)).where(LedgerRow.account.like("balance:%"))
+        ).scalar_one()
+    )
+
+
+def inconsistent_fee_ids(session: Session) -> list[str]:
+    """Taxas cujas partes não somam o valor da taxa (o banco já recusa; a conferência final olha mesmo assim)."""
+    parts = (
+        CancelFeeRow.from_balance_cents + CancelFeeRow.retained_cents + CancelFeeRow.pending_cents
+        + CancelFeeRow.paid_later_cents + CancelFeeRow.waived_cents
+    )
+    return list(session.execute(select(CancelFeeRow.ride_id).where(parts != CancelFeeRow.fee_cents)).scalars())

@@ -22,6 +22,7 @@ def test_migracoes_do_0002_ao_topo_desfazem_e_refazem(settings):
                 passo(config, destino)
         with engine.connect() as conn:
             assert conn.execute(text("select to_regclass(:name)"), {"name": f'"{schema}".safety_alerts'}).scalar()
+            assert conn.execute(text("select to_regclass(:name)"), {"name": f'"{schema}".cancel_fees'}).scalar()
     finally:
         engine.dispose()
         with admin.connect() as conn:

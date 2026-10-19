@@ -123,8 +123,11 @@ class PixCharge:
     paid: bool = False
     refunded: bool = False
     debt_state: DebtState = DebtState.RESERVED
-    purpose: str = "ride"   # "ride" (Pix antes da corrida), "end" (QR do fim em dinheiro) ou "entry" (entrada de R$ 50)
+    purpose: str = "ride"   # "ride" (Pix antes da corrida), "end" (QR do fim em dinheiro), "entry" (entrada de R$ 50),
+                            # "fee" (taxa de cancelamento pendente) ou "topup" (recarga do saldo do passageiro)
     br_code: str = ""       # texto do Pix "copia e cola"; o app desenha o QR a partir dele
+    passenger_id: str = ""  # só na recarga ("topup"): de quem é o saldo
+    refunded_cents: int = 0     # quanto o provedor já devolveu (só o provedor falso guarda isto; não vai ao banco)
 
 
 class PaymentProviderError(Exception):
