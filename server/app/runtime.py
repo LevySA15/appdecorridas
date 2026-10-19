@@ -47,6 +47,7 @@ from app.realtime.hub import Hub
 from app.services.auth import AuthService, OtpSender
 from app.services.dispatch import DispatchService, Reservations
 from app.services.events import EventCollector
+from app.services.passenger_money import PassengerMoneyService
 from app.services.payments import PaymentService
 from app.services.quotes import QuoteService
 from app.services.ride_requests import RideRequestService
@@ -81,6 +82,7 @@ class Unit:
     requests: RideRequestService
     sweeps: SweepService
     safety: SafetyService
+    money: PassengerMoneyService
 
 
 @dataclass
@@ -137,6 +139,7 @@ class Runtime:
             requests=RideRequestService(dispatch, events, cfg),
             sweeps=SweepService(payments, dispatch, trips, events, cfg),
             safety=SafetyService(self.safety_store, self.positions, self.notifier, events, cfg),
+            money=PassengerMoneyService(payments, events, cfg),
         )
 
     def run(self, work: Callable[[Unit], T], *, retries: int = 2) -> T:

@@ -18,6 +18,7 @@ from app.infra.documents import UploadError
 from app.domain.rides import InvalidTransition, WrongPin
 from app.services.auth import TooManyRequests
 from app.services.dispatch import OfferGone
+from app.services.passenger_money import NothingToPay, TopupDisabled
 from app.services.quotes import NotAllowed, QuoteExpired
 from app.services.riders import CannotGoOnline, DuplicateRegistration, InvalidState, RegistrationError
 from app.services.safety import AlertClosed
@@ -46,6 +47,8 @@ class _Rule:
 _RULES: dict[type[Exception], _Rule] = {
     TooManyRequests: _Rule(429, "too_many_requests"),
     NotAllowed: _Rule(403, "not_allowed"),
+    TopupDisabled: _Rule(403, "topup_disabled"),
+    NothingToPay: _Rule(409, "nothing_to_pay"),
     QuoteExpired: _Rule(409, "quote_expired"),
     OfferGone: _Rule(409, "offer_gone"),
     NotYourRide: _Rule(403, "not_your_ride"),

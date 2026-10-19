@@ -57,6 +57,8 @@ def passenger_block_reason(session: Session, passenger_id: str) -> str | None:
     if repo.get_passenger_account(session, passenger_id).unpaid_cents > 0 or queries.passenger_unpaid_cash_ride_id(
         session, passenger_id
     ):
+        if repo.pending_cancel_fee(session, passenger_id) is not None:
+            return "Falta pagar a taxa do cancelamento. Pague para pedir outra moto."
         return "Falta pagar a última corrida. Pague para pedir outra moto."
     if queries.passenger_open_ride_id(session, passenger_id):
         return "Você já tem uma corrida em andamento."

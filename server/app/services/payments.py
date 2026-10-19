@@ -14,7 +14,14 @@ from sqlalchemy.orm import Session
 
 from app.db import repositories as repo
 from app.db.pg_ledger import PgLedger
-from app.domain.balance import CancelFee, FeePlan, credit, plan_fee_collection, spend_up_to
+from app.domain.balance import (
+    CancelFee,
+    FeePlan,
+    apply_pending_payment,
+    credit,
+    plan_fee_collection,
+    spend_up_to,
+)
 from app.domain.config import FeeConfig, RideConfig
 from app.domain.fees import RiderAccount, add_cash_fee_debt, mark_entry_paid
 from app.domain.payments import (
@@ -151,6 +158,10 @@ class PaymentService:
         known = repo.get_charge(session, event["charge_id"])
         if known.purpose == "entry":
             return self._on_entry_paid(session, known)
+        if known.purpose == "topup":
+            return self._on_topup_paid(session, known)
+        if known.purpose == "fee":
+            return self._on_fee_paid(session, known)
         ride = repo.get_ride(session, known.ride_id, for_update=True)
         acc = repo.get_rider_account(session, known.rider_id, for_update=True)
         charge = repo.get_charge(session, known.charge_id, for_update=True)
@@ -201,6 +212,62 @@ class PaymentService:
         if was_blocked:
             self._emit(ride.passenger_id, "unblocked", {"ride_id": ride.ride_id})
         return False
+
+    def _on_topup_paid(self, session: Session, known: PixCharge) -> str:
+        """Recarga do saldo do passageiro paga."""
+        charge = repo.get_charge(session, known.charge_id, for_update=True)
+        if charge.paid:
+            return "duplicate"
+        passenger = repo.get_passenger_account(session, charge.passenger_id, for_update=True)
+        charge.paid = True
+        charge.debt_state = DebtState.APPLIED
+        PgLedger(session).post_topup(charge.charge_id, charge.passenger_id, charge.amount_cents)
+        credit(passenger, charge.amount_cents)
+        repo.save_passenger_account(session, passenger)
+        repo.save_charge(session, charge)
+        self._emit(charge.passenger_id, "balance_changed", {"balance_cents": passenger.balance_cents})
+        return "applied"
+
+    def _on_fee_paid(self, session: Session, known: PixCharge) -> str:
+        """Pix da taxa de cancelamento pendente. Se a taxa já foi paga ou perdoada no meio tempo (recurso aceito),
+        o dinheiro volta para o passageiro."""
+        ride = repo.get_ride(session, known.ride_id)
+        acc = repo.get_rider_account(session, known.rider_id, for_update=True)
+        charge = repo.get_charge(session, known.charge_id, for_update=True)
+        if charge.paid:
+            return "duplicate"
+        passenger = repo.get_passenger_account(session, ride.passenger_id, for_update=True)
+        fee = repo.get_cancel_fee(session, known.ride_id, for_update=True)
+        charge.paid = True
+        ledger = PgLedger(session)
+        ledger.post_charge_payment(charge.charge_id, charge.rider_id, charge.amount_cents, charge.split)
+        if fee.pending_cents == charge.amount_cents:
+            apply_pending_payment(fee, charge.amount_cents)
+            passenger.unpaid_cents = max(0, passenger.unpaid_cents - charge.amount_cents)
+            charge.debt_state = DebtState.APPLIED
+            repo.save_passenger_account(session, passenger)
+            repo.save_cancel_fee(session, fee)
+            self._emit(
+                ride.passenger_id, "fee_paid",
+                {"ride_id": ride.ride_id, "amount_cents": charge.amount_cents, "balance_cents": passenger.balance_cents},
+            )
+            if passenger.unpaid_cents == 0:
+                self._emit(ride.passenger_id, "unblocked", {"ride_id": ride.ride_id})
+            self._emit(
+                charge.rider_id, "payment_received",
+                {"ride_id": ride.ride_id, "amount_cents": charge.amount_cents, "kind": "cancel_fee"},
+            )
+            outcome = "applied"
+        else:
+            destination = self._refund(session, ride.passenger_id, charge, acc, ledger)
+            refunded = {"ride_id": ride.ride_id, "amount_cents": charge.amount_cents, "to": destination}
+            if destination == "balance":
+                refunded["balance_cents"] = repo.get_passenger_account(session, ride.passenger_id).balance_cents
+            self._emit(ride.passenger_id, "payment_refunded", refunded)
+            outcome = "refunded"
+        repo.save_charge(session, charge)
+        repo.save_rider_account(session, acc)
+        return outcome
 
     def _on_entry_paid(self, session: Session, known: PixCharge) -> str:
         acc = repo.get_rider_account(session, known.rider_id, for_update=True)
