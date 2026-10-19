@@ -134,3 +134,24 @@ def test_recarga_de_saldo_paga_a_taxa_sem_pendencia(box):
     fees = outcome.stats.fees
     assert fees["recargas"] == 1 and fees["cobradas"] == 1 and fees["do_saldo"] >= 300 and fees["pendentes"] == 0, relatorio.text
     assert outcome.audit["balance_matches_ledger"] is True
+
+
+@pytest.mark.slow
+def test_motoqueiro_que_perde_o_sinal_gera_o_alerta_e_o_passageiro_responde(box):
+    """A moto anda devagar e fica 150 s sem mandar posição no meio da viagem: o servidor rápido alerta aos 40 s."""
+    perfil = dataclasses.replace(
+        perfil_rapido(0.0), speed_mps=1.0, speedup=1.0, lose_signal=1.0, lose_signal_s=150.0, emergency_contact=1.0
+    )
+    cfg = SimConfig(
+        url=box.url, admin_phone=ADMIN_PHONE, riders=1, passengers=1, minutes=3, seed=11, profile=perfil, max_rides=1,
+        drain_s=120,
+    )
+    outcome = asyncio.run(simulate(cfg))
+    relatorio = build_report(outcome, box.problems(), box.retries(), box.error_details())
+    assert relatorio.passed, relatorio.text
+    [corrida] = outcome.stats.rides.values()
+    assert corrida.outcome == "completed"
+    notas = outcome.stats.notes
+    assert notas["moto ficou sem sinal de propósito"] == 1
+    assert outcome.stats.events["safety_check"] >= 1 and outcome.stats.events["safety_alert"] >= 1
+    assert notas["respondeu \"está tudo bem\""] >= 1

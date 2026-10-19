@@ -34,6 +34,7 @@ class RiderActor:
         self._route_key: tuple | None = None
         self._route_speed = self.speed
         self._pause_until = 0.0
+        self._silent_until = 0.0                # sem mandar posição até esse instante (perda de sinal de propósito)
         self._break_until = 0.0
         self._stop_point: Point | None = None
         self._plans: dict[tuple, float | None] = {}
@@ -96,7 +97,7 @@ class RiderActor:
                     await self.feed.drop()
                 self._plan_route(now)
                 self._move(dt, now)
-                if self._reports_position() and now - last_report >= self.p.position_every_s:
+                if self._reports_position() and now >= self._silent_until and now - last_report >= self.p.position_every_s:
                     last_report = now
                     await self.report_position()
                 events = self.feed.take()
@@ -138,6 +139,9 @@ class RiderActor:
                 self._route = [sideways_point(pickup, destination, self.p.detour_m), destination]
                 self.note("desvio de rota")
             self._stop_point = midpoint(pickup, destination) if self.ch.chance(self.p.stop_mid_trip) else None
+            if self.ch.chance(self.p.lose_signal):
+                self._silent_until = now + self.p.lose_signal_s
+                self.note("moto ficou sem sinal de propósito")
         else:
             self._route = []
 

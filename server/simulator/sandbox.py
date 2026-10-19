@@ -51,7 +51,11 @@ def seed_database(session: Session, *, fast: bool) -> None:
         )
         save_config(session, "dispatch", dataclasses.replace(DispatchConfig(), offer_timeout_s=8))
         save_config(
-            session, "safety", dataclasses.replace(SafetyConfig(), stopped_after_s=40, alert_cooldown_s=120)
+            session, "safety",
+            dataclasses.replace(
+                SafetyConfig(), stopped_after_s=40, alert_cooldown_s=120, no_signal_short_s=40, no_signal_mid_s=80,
+                no_signal_long_s=120,
+            ),
         )
     create_admin(session, ADMIN_PHONE, "Levy (sim)")
     session.commit()

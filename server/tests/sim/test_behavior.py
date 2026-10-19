@@ -85,3 +85,11 @@ def test_perfis_novos_tem_probabilidades_validas():
 def test_probabilidade_fora_de_zero_a_um_e_recusada(campo):
     with pytest.raises(ValueError, match=campo):
         Profile(**{campo: 1.5}).check()
+
+
+def test_perda_de_sinal_so_acontece_nos_perfis_com_bagunca():
+    calmo, normal, bagunca = preset("calmo"), preset("normal"), preset("bagunca")
+    assert calmo.lose_signal == 0.0 and 0 < normal.lose_signal < bagunca.lose_signal <= 1
+    assert bagunca.lose_signal_s > 0
+    with pytest.raises(ValueError, match="lose_signal"):
+        Profile(lose_signal=-0.1).check()
