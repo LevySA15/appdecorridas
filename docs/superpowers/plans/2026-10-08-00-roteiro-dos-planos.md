@@ -12,7 +12,7 @@ A especificação cobre várias partes independentes. Cada parte vira um plano p
 | 2C | **API e tempo real** (`2026-10-18-02c-api-e-tempo-real.md`) | FastAPI sobre os serviços do 2B: login, cadastro com fotos, preço, pedido, ofertas, corrida, cobrança e QR do Pix, aviso assinado do provedor, WebSocket, varredura de tempo e checagem diária rodando sozinhas, alertas de segurança com SOS, mínimo do painel (aprovar cadastros e ver alertas) e o contrato em `docs/api-v1.md`. | 2B | não |
 | 3 | **Simulador** (`2026-10-18-03-simulador.md`) | Pacote `simulator/`: motoqueiros e passageiros de mentira andando por Santo Antônio de Jesus e fazendo corridas inteiras só pela API (HTTP + WebSocket), com servidor descartável (`demo`), perfis de comportamento (`calmo`, `normal`, `bagunca`), relatório em português com veredito e a rota de conferência `GET /v1/dev/audit`. Guia em `docs/simulador.md`. | 2C | não |
 | 4B | **Cancelamento tardio e saldo do passageiro** — **feito** (`2026-10-19-04b-cancelamento-tardio-e-saldo.md`) | Taxa de R$ 3 a R$ 5 pela distância que a moto já andou, cobrada do saldo do passageiro, da devolução do Pix ou como pendência; saldo do passageiro (crédito de devolução que não chegou, recarga desligada por padrão); recurso. | 2C | não |
-| 4C | **Alerta de sem sinal** (`2026-10-19-04c-sem-sinal.md`) | Moto sem mandar posição no meio da corrida: tempo pelo tamanho da corrida, aviso ao passageiro e ao contato de emergência. | 2C | não |
+| 4C | **Alerta de sem sinal** — **feito** (`2026-10-19-04c-sem-sinal.md`) | Moto sem mandar posição no meio da corrida: tempo pelo tamanho da corrida, aviso ao passageiro e ao contato de emergência. | 2C | não |
 | 4D | **Bloqueio por dívida do motoqueiro** (`2026-10-19-04d-bloqueio-por-divida.md`) | Uma corrida de folga e depois nenhuma oferta e "não estou rodando" travado até pagar; pagamento da dívida por Pix. | 2C | não |
 | 4A | **Painel do dono** | Site para aprovar cadastros, ver corridas, dinheiro, taxas, bloqueios, fila de recursos. Feito por último (o Levy pediu a ordem B, C, D, A em 19/10/2026). | 2, 4B, 4C, 4D | não |
 | 5 | **App do motoqueiro (Flutter, Android)** | Cadastro, ficar disponível, oferta, fila, capacete, QR, extrato. | 2 | não |
@@ -36,7 +36,7 @@ Plano 7 (integrações reais): adaptadores da Woovi, do Google Maps e do WhatsAp
 
 Mais de um processo: exige um canal entre eles (Redis pub/sub) para o hub do WebSocket e uma trava para o agendador.
 
-Da revisão final do 2C (ainda abertos): alerta de "muito tempo sem sinal" (spec, seção 12) quando a moto para de mandar posição no meio da corrida, que precisa de um tipo de alerta novo, uma varredura no agendador e do Levy definir o tempo e quem é avisado; efeitos externos (devolução no provedor, mensagem do SOS, marca do Redis) rodam antes do commit e se repetem se o banco derrubar a transação por impasse (plano 7: idempotência); menores: fotos órfãs sem limpeza nem cota; WebSocket aberto continua recebendo avisos depois de logout ou bloqueio; SOS em dois toques simultâneos pode criar dois alertas; `ValueError` genérico devolve texto interno ao app; `/rider/state` pode mostrar oferta já vencida por até 3 s; cobrança de entrada pendente não reaparece no estado do motoqueiro; `answer_ok` trava antes de conferir o dono. (O pool do banco, 10+10, foi medido no plano 3 com 60 motoqueiros e 200 passageiros e não formou fila: fica como está.)
+Da revisão final do 2C (ainda abertos): efeitos externos (devolução no provedor, mensagem do SOS, marca do Redis) rodam antes do commit e se repetem se o banco derrubar a transação por impasse (plano 7: idempotência); menores: fotos órfãs sem limpeza nem cota; WebSocket aberto continua recebendo avisos depois de logout ou bloqueio; SOS em dois toques simultâneos pode criar dois alertas; `ValueError` genérico devolve texto interno ao app; `/rider/state` pode mostrar oferta já vencida por até 3 s; cobrança de entrada pendente não reaparece no estado do motoqueiro; `answer_ok` trava antes de conferir o dono. (O pool do banco, 10+10, foi medido no plano 3 com 60 motoqueiros e 200 passageiros e não formou fila: fica como está.)
 
 Menores do 2B que seguem abertos: o `downgrade` da migração 0002 falha se existe cobrança de entrada; a taxa da corrida da fila é fixada no aceite.
 
@@ -52,13 +52,17 @@ Plano 4A (painel): fila de recursos (`GET /v1/admin/appeals`), lista de pendênc
 
 Menores adiados da revisão final do 4B: `unpaid_cents` mistura corrida em dinheiro não paga e taxa pendente (o aviso `unblocked` pode sair com a taxa ainda pendente e a mensagem de bloqueio só fala da taxa); `POST /v1/passenger/fees/pay` paga só a taxa pendente mais antiga; `refund_to` fica `"pix"` mesmo quando nada voltou (taxa igual ao preço); `ride_cancelled.fee_cents` do motoqueiro não diz se a taxa foi cobrada ou ficou pendente; o veredito do simulador não reprova passageiro que ficou bloqueado por taxa que queria pagar; o simulador não exercita a devolução que não chega (só os testes); faltam no banco `credited_back_cents <= soma cobrada`, `reason IN ('passenger','arrival_timeout')` e um índice em `pix_charges.passenger_id`; o texto de ordem de travas no começo de `app/services/payments.py` não cita passageiro e taxa; um 500 em `POST /v1/rider/offers/{id}/accept` apareceu em 2 de 8 rodadas longas do simulador (`--profile bagunca --seed 7`) e não voltou em 6 repetições; candidatos: impasse que sobrevive às 2 repetições (a ordem de travas da fila, já antiga, fica mais exposta com cancelamentos tardios frequentes) ou fim das conexões do banco (10+10) com carga junta; o relatório agora imprime o fim da pilha dos erros do servidor para achar a causa na próxima vez.
 
+## Itens que sobraram do plano 4C
+
+Do Levy decidir: o "algoritmo de distância" que troca a tabela do tempo sem sinal (hoje 2, 4 e 6 minutos para corridas de até 3 km, de 3 a 10 km e acima de 10 km; função `no_signal_after_s`); se a moto sem sinal **a caminho** do passageiro também deve alertar (hoje só com o passageiro na moto). Plano 4A (painel): mostrar a última posição conhecida no mapa. O aviso ao contato de emergência continua falso até o plano 7 (WhatsApp).
+
 ## Itens que sobraram do plano 3
 
 Do Levy decidir: nada novo.
 
 Para os planos seguintes:
 - Plano 4 (painel): o mapa ao vivo com as motos é do painel; o simulador só grava o relatório da rodada.
-- Aviso de "muito tempo sem sinal" (item aberto do 2C): quando existir, ensinar o motoqueiro de mentira a parar de mandar posição no meio da corrida.
+- Aviso de "muito tempo sem sinal": feito no plano 4C; o motoqueiro de mentira já para de mandar posição (`lose_signal`).
 - O primeiro minuto de uma rodada grande (todo mundo entra de uma vez) tem chamadas acima de 3 s. Se os apps abrirem em rajada na vida real, olhar a fila de conexões e a consulta de estado.
 - Plano 7: o simulador usa as rotas `/v1/dev/*`, que não existem com os adaptadores reais. Contra o ambiente de testes da Woovi ele precisaria de outro jeito de "pagar" o Pix; até lá fica no modo `demo`, com adaptadores falsos.
 - Fora do alcance do simulador: mais de um processo do servidor e queda do banco ou do Redis no meio da rodada.
