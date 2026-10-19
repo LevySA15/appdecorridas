@@ -93,3 +93,10 @@ def test_perda_de_sinal_so_acontece_nos_perfis_com_bagunca():
     assert bagunca.lose_signal_s > 0
     with pytest.raises(ValueError, match="lose_signal"):
         Profile(lose_signal=-0.1).check()
+
+
+def test_perfis_tem_chance_de_pagar_a_divida_do_motoqueiro():
+    calmo, normal, bagunca = preset("calmo"), preset("normal"), preset("bagunca")
+    assert calmo.pay_debt == 1.0 and bagunca.pay_debt < normal.pay_debt < 1.0
+    with pytest.raises(ValueError, match="pay_debt"):
+        Profile(pay_debt=2.0).check()

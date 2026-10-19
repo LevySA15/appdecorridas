@@ -155,3 +155,37 @@ def test_motoqueiro_que_perde_o_sinal_gera_o_alerta_e_o_passageiro_responde(box)
     assert notas["moto ficou sem sinal de propósito"] == 1
     assert outcome.stats.events["safety_check"] >= 1 and outcome.stats.events["safety_alert"] >= 1
     assert notas["respondeu \"está tudo bem\""] >= 1
+
+
+def perfil_de_divida(**mudancas) -> Profile:
+    """Dinheiro vivo, o passageiro não paga o QR e o motoqueiro confirma o dinheiro na mão: a taxa vira dívida dele."""
+    return dataclasses.replace(perfil_rapido(0.0), pay_qr=0.0, cash_by_hand=1.0, **mudancas)
+
+
+def rodar_divida(box, perfil, rides=2, seed=11):
+    cfg = SimConfig(
+        url=box.url, admin_phone=ADMIN_PHONE, riders=1, passengers=1, minutes=3, seed=seed, profile=perfil,
+        max_rides=rides, drain_s=150,
+    )
+    outcome = asyncio.run(simulate(cfg))
+    return outcome, build_report(outcome, box.problems(), box.retries(), box.error_details())
+
+
+@pytest.mark.slow
+def test_motoqueiro_que_deve_a_taxa_e_bloqueado_paga_e_volta_a_trabalhar(box):
+    outcome, relatorio = rodar_divida(box, perfil_de_divida(pay_debt=1.0))
+    assert relatorio.passed, relatorio.text
+    assert sorted(r.outcome for r in outcome.stats.rides.values()) == ["completed", "completed"]
+    assert outcome.stats.notes["dívida da taxa paga"] >= 1
+    assert outcome.stats.events["debt_required"] >= 1 and outcome.stats.events["debt_paid"] >= 1
+    assert outcome.audit["ledger_balanced"] is True and outcome.audit["reconcile_diff"] == {}
+
+
+@pytest.mark.slow
+def test_motoqueiro_que_escolhe_nao_pagar_fica_bloqueado_e_a_rodada_termina(box):
+    outcome, relatorio = rodar_divida(box, perfil_de_divida(pay_debt=0.0))
+    assert relatorio.passed, relatorio.text
+    resultados = sorted(r.outcome for r in outcome.stats.rides.values())
+    assert resultados.count("completed") == 1 and "completed" in resultados and len(resultados) == 2
+    assert outcome.stats.notes["dívida da taxa não paga (por escolha)"] == 1
+    assert outcome.stats.notes["dívida da taxa paga"] == 0

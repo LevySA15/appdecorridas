@@ -53,6 +53,7 @@ Sai com código 0 se deu tudo certo, 1 se achou problema e 2 se nem conseguiu co
 - **Dinheiro:** corridas e valores por forma de pagamento, e os preços mostrados (o preço sobe quando falta moto livre).
 - **Taxas de cancelamento tardio:** quantas taxas de R$ 3,00 a R$ 5,00 foram cobradas, de onde saiu o dinheiro (saldo do passageiro, retido da devolução do Pix ou pendência), quantas pendências foram pagas depois, quantos recursos foram pedidos e como o administrador de mentira decidiu, e quantas recargas de saldo houve. No servidor descartável a recarga fica ligada; no servidor de desenvolvimento ela fica desligada e essa linha só mostra as taxas.
 - **Sem sinal:** em "O que as pessoas fizeram", a linha "moto ficou sem sinal de propósito" mostra quantas motos pararam de mandar posição no meio da viagem. Se a viagem durar mais que o limite do servidor (no servidor rápido: 40 s, 80 s ou 120 s conforme o tamanho; no normal: 2, 4 ou 6 minutos), o passageiro recebe o "está tudo bem?" e o administrador de mentira resolve o alerta.
+- **Dívida do motoqueiro:** em "O que as pessoas fizeram", "dívida da taxa paga" e "dívida da taxa não paga (por escolha)" mostram os motoqueiros que ficaram bloqueados por dever a taxa das corridas em dinheiro (depois da corrida de folga) e o que fizeram: pagaram pelo Pix e voltaram a trabalhar, ou ficaram em "não estou". Os avisos `debt_required` e `debt_paid` aparecem na lista de avisos.
 - **O que as pessoas fizeram:** a contagem dos comportamentos (oferta recusada, código errado, SOS, QR pago...).
 - **Suspeitas de localização falsa:** aparece só se o servidor avisou o administrador. O simulador não falsifica nada, então isso quase sempre quer dizer moto rápida demais para o intervalo entre as posições; não reprova a rodada.
 - **Chamadas à API:** por rota, quantas vezes, quantos erros e o tempo (mediana, 90% e máximo). "Erros" aqui inclui erros normais, como uma oferta que venceu antes do toque.
@@ -67,7 +68,6 @@ Sai com código 0 se deu tudo certo, 1 se achou problema e 2 se nem conseguiu co
 - Pix, WhatsApp e o contato de emergência são falsos até o plano 7.
 - Não derruba o banco nem o Redis no meio da rodada, e não testa mais de um processo do servidor.
 - Não simula devolução de Pix que "não chega" ao passageiro (vira saldo); isso é coberto pelos testes do servidor, não pela simulação.
-- Passageiros e motoqueiros bloqueados por dívida (plano 4D) ainda não existem.
 
 ## Medidas de referência (18/10/2026)
 

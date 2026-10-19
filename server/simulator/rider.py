@@ -10,7 +10,7 @@ from simulator.people import RiderIdentity
 from simulator.world import Login, World
 
 ARRIVED_M = 25.0                # a que distância do ponto a moto considera que chegou
-GO_ONLINE_ERRORS = ("entry_pending", "not_approved", "blocked", "documents_expired")
+GO_ONLINE_ERRORS = ("entry_pending", "debt_pending", "not_approved", "blocked", "documents_expired")
 
 
 def _point(place: dict) -> Point:
@@ -35,6 +35,7 @@ class RiderActor:
         self._route_speed = self.speed
         self._pause_until = 0.0
         self._silent_until = 0.0                # sem mandar posição até esse instante (perda de sinal de propósito)
+        self._debt_round = 0                    # quantas vezes ficou bloqueado por dívida e já resolveu (pagou ou escolheu não pagar)
         self._break_until = 0.0
         self._stop_point: Point | None = None
         self._plans: dict[tuple, float | None] = {}
@@ -65,6 +66,11 @@ class RiderActor:
             return True
         if s["ride"] or s["offer"] or s["queued_ride"] or self._late:
             return False
+        account = s["account"]
+        if account and account["blocked_reason"] == "debt_pending":
+            key = ("debt", self._debt_round)
+            if not (key in self._plans and (self._plans[key] is None or key in self._done)):
+                return False                    # ainda vai pagar a dívida
         unpaid = s["awaiting_payment"]
         if unpaid is None:
             return True
@@ -178,6 +184,12 @@ class RiderActor:
         if s is None:
             return False
         reg = s["registration"]
+        account = s["account"]
+        if account and account["blocked_reason"] == "debt_pending" and s["ride"] is None:
+            if await self._pay_debt(now):
+                return True
+            if not reg["online"]:
+                return False                    # bloqueado: fica em "não estou" até pagar
         if not reg["online"] and reg["status"] == "approved" and s["ride"] is None and now >= self._break_until:
             return await self._go_online(now)
         if self._late and now >= self._late[0][0]:
@@ -206,6 +218,25 @@ class RiderActor:
             self.note(f"não conseguiu ficar disponível ({reply.code})")
             self._break_until = now + 30.0
         return reply.ok
+
+    async def _pay_debt(self, now: float) -> bool:
+        """Bloqueado por dívida da taxa: paga pelo Pix (com a chance do perfil) ou escolhe ficar de fora."""
+        key = ("debt", self._debt_round)
+        at = self._when(key, lambda: now + self.ch.think(15, 90) if self.ch.chance(self.p.pay_debt) else None)
+        if at is None:
+            if ("debt-skip", self._debt_round) not in self._done:
+                self._done.add(("debt-skip", self._debt_round))
+                self.note("dívida da taxa não paga (por escolha)")
+            return False
+        if now < at or key in self._done:
+            return False
+        self._done.add(key)
+        charge = await self.call("POST", "/v1/rider/debt-charge", ok=("invalid_state",))
+        if charge.ok:
+            await self.w.pay_pix(charge.body["charge_id"])
+            self.note("dívida da taxa paga")
+        self._debt_round += 1
+        return True
 
     async def _pay_entry(self) -> None:
         charge = await self.call("POST", "/v1/rider/entry-charge")
