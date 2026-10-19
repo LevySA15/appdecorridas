@@ -1,7 +1,7 @@
 import pytest
 
 from app.adapters.fake_payments import FakePaymentProvider
-from app.domain.payments import RefundUndeliverable, Split, compute_split
+from app.domain.payments import PaymentProviderError, RefundUndeliverable, Split, compute_split
 
 
 def test_cada_cobranca_falsa_tem_codigo_proprio_com_o_valor():
@@ -69,3 +69,31 @@ def test_cobranca_de_recarga_guarda_de_quem_e_o_saldo():
     provider = FakePaymentProvider()
     charge = provider.create_pix_charge("", "", 2000, Split(0, 2000, 0), purpose="topup", passenger_id="p1")
     assert (charge.purpose, charge.passenger_id, charge.rider_id, charge.ride_id) == ("topup", "p1", "", "")
+
+
+def test_payout_registra_e_devolve_referencia():
+    provider = FakePaymentProvider()
+    ref = provider.payout("w1", "52998224725", 1500)
+    assert ref == "fake-payout-w1"
+    assert provider.payouts == {"w1": ("52998224725", 1500)}
+
+
+def test_payout_repetido_nao_paga_duas_vezes():
+    provider = FakePaymentProvider()
+    primeira = provider.payout("w1", "52998224725", 1500)
+    segunda = provider.payout("w1", "52998224725", 1500)
+    assert primeira == segunda
+    assert provider.payouts == {"w1": ("52998224725", 1500)}
+
+
+def test_payout_com_provedor_fora_do_ar_levanta_erro_de_pagamento_e_nao_registra():
+    provider = FakePaymentProvider()
+    provider.fail_payouts = True
+    with pytest.raises(PaymentProviderError):
+        provider.payout("w1", "52998224725", 1500)
+    assert provider.payouts == {}
+
+
+def test_payout_de_valor_nao_positivo_e_recusado():
+    with pytest.raises(ValueError, match="positivo"):
+        FakePaymentProvider().payout("w1", "52998224725", 0)

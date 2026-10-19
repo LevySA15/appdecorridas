@@ -1,7 +1,7 @@
 """Provedor de pagamento falso, para testes e para o simulador. Não fala com ninguém."""
 from __future__ import annotations
 
-from app.domain.payments import PixCharge, RefundUndeliverable, Split
+from app.domain.payments import PaymentProviderError, PixCharge, RefundUndeliverable, Split
 
 
 class FakePaymentProvider:
@@ -10,6 +10,8 @@ class FakePaymentProvider:
         self._counter = 0
         self.undeliverable: set[str] = set()            # cobranças cuja devolução "não chega" à chave do passageiro
         self.refund_all_undeliverable = False           # idem, para todas (testes e simulador)
+        self.payouts: dict[str, tuple[str, int]] = {}   # saques pagos: id do saque -> (chave Pix, valor)
+        self.fail_payouts = False                       # provedor fora do ar para saques (testes)
 
     def create_pix_charge(
         self, ride_id: str, rider_id: str, amount_cents: int, split: Split, purpose: str = "ride",
@@ -41,6 +43,15 @@ class FakePaymentProvider:
             "ride_id": charge.ride_id,
             "amount_cents": charge.amount_cents,
         }
+
+    def payout(self, withdrawal_id: str, pix_key: str, amount_cents: int) -> str:
+        """Paga um saque por Pix na hora. Repetir o mesmo saque devolve a mesma referência sem pagar de novo."""
+        if amount_cents <= 0:
+            raise ValueError("o valor do saque precisa ser positivo")
+        if self.fail_payouts:
+            raise PaymentProviderError("o provedor não conseguiu pagar o saque")
+        self.payouts.setdefault(withdrawal_id, (pix_key, amount_cents))
+        return f"fake-payout-{withdrawal_id}"
 
     def refund(self, charge_id: str, amount_cents: int | None = None) -> None:
         charge = self.charges[charge_id]

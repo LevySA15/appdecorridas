@@ -149,3 +149,8 @@ class PaymentProvider(Protocol):
     def refund(self, charge_id: str, amount_cents: int | None = None) -> None:
         """Devolve o Pix pago (tudo, ou `amount_cents`). Levanta `RefundUndeliverable` se não chega ao passageiro."""
         ...
+
+    def payout(self, withdrawal_id: str, pix_key: str, amount_cents: int) -> str:
+        """Paga por Pix o saque do saldo e devolve a referência do provedor. Levanta `PaymentProviderError` se não
+        conseguir; repetir o mesmo `withdrawal_id` nunca paga duas vezes."""
+        ...
