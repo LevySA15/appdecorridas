@@ -13,6 +13,7 @@ _DEFAULT = SafetyConfig()
 class AlertType(str, Enum):
     STOPPED = "stopped"
     OFF_ROUTE = "off_route"
+    NO_SIGNAL = "no_signal"
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,27 @@ def is_off_route(
         return False
     tail = samples[-cfg.off_route_confirmations :]
     return all(distance_to_route_m(s.point, route) > cfg.off_route_m for s in tail)
+
+
+def no_signal_after_s(distance_m: float, cfg: SafetyConfig = _DEFAULT) -> int:
+    """Quantos segundos sem posição da moto, numa corrida desse tamanho, viram o alerta de "sem sinal".
+
+    REGRA PROVISÓRIA: o Levy vai trocar por um algoritmo de distância; é só esta função que muda.
+    """
+    if distance_m <= cfg.no_signal_short_m:
+        return cfg.no_signal_short_s
+    if distance_m <= cfg.no_signal_long_m:
+        return cfg.no_signal_mid_s
+    return cfg.no_signal_long_s
+
+
+def signal_gap_s(last_seen: float | None, started_at: float | None, now: float) -> float | None:
+    """Há quanto tempo a moto está sem mandar posição: conta do último sinal ou, se ele sumiu (limpeza, Redis
+    esvaziado), do começo da corrida. `None` se não há nenhum dos dois."""
+    known = [t for t in (last_seen, started_at) if t is not None]
+    if not known:
+        return None
+    return max(0.0, now - max(known))
 
 
 def evaluate(

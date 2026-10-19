@@ -75,6 +75,12 @@ class SafetyConfig:
     reanchor_after_rejects: int = 3
     mock_location_jumps: int = 2
     alert_cooldown_s: int = 600     # depois de um aviso, o mesmo tipo de aviso não repete nesse tempo
+    # "muito tempo sem sinal": tabela provisória do Levy (19/10/2026); depois vira um algoritmo de distância
+    no_signal_short_m: int = 3000   # corrida até 3 km...
+    no_signal_long_m: int = 10_000  # ...de 3 a 10 km... (acima disso, a faixa longa)
+    no_signal_short_s: int = 120    # ...2 minutos sem sinal
+    no_signal_mid_s: int = 240      # ...4 minutos
+    no_signal_long_s: int = 360     # ...6 minutos
     max_samples: int = 120          # posições guardadas por corrida (cerca de 8 minutos a cada 4 s)
 
 

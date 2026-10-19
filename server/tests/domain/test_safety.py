@@ -1,8 +1,13 @@
+import pytest
+
+from app.domain.config import SafetyConfig
 from app.domain.safety import (
     AlertType,
     PositionSample,
     clean_samples,
     evaluate,
+    no_signal_after_s,
+    signal_gap_s,
     speed_kmh,
 )
 from tests.helpers import pt
@@ -112,3 +117,29 @@ def test_pico_no_fim_sem_desfecho_ainda_nao_conta():
     good, jumps = clean_samples(walk(5) + [PositionSample(pt(400, 50_000), 50)])
     assert jumps == 0
     assert good[-1].t == 40
+
+
+@pytest.mark.parametrize(
+    "metros, esperado",
+    [(500, 120), (3000, 120), (3001, 240), (10_000, 240), (10_001, 360), (40_000, 360)],
+)
+def test_tempo_sem_sinal_pelo_tamanho_da_corrida(metros, esperado):
+    assert no_signal_after_s(metros) == esperado
+
+
+def test_tempo_sem_sinal_segue_os_parametros():
+    cfg = SafetyConfig(no_signal_short_s=60)
+    assert no_signal_after_s(1000, cfg) == 60
+    assert no_signal_after_s(5000, cfg) == 240
+
+
+@pytest.mark.parametrize(
+    "ultimo_sinal, comecou, esperado",
+    [(100, 50, 60), (None, 50, 110), (100, None, 60), (None, None, None), (200, 50, 0)],
+)
+def test_ha_quanto_tempo_esta_sem_sinal(ultimo_sinal, comecou, esperado):
+    assert signal_gap_s(ultimo_sinal, comecou, now=160) == esperado
+
+
+def test_alerta_de_sem_sinal_tem_nome_proprio():
+    assert AlertType.NO_SIGNAL.value == "no_signal"
