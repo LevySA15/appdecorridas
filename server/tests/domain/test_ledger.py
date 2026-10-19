@@ -134,3 +134,104 @@ def test_livro_pode_ser_montado_a_partir_de_lancamentos_existentes():
     copia.post_refund("ch-1")
     assert copia.is_balanced() is True
     assert len(original.entries) == 3  # o original não muda
+
+
+def test_devolucao_parcial_deixa_a_taxa_com_o_motoqueiro_e_o_resto_volta_ao_provedor():
+    ledger = _ledger_com_cobranca()                       # preço 700: motoqueiro 600, empresa 100
+    ledger.post_refund("ch-1", keep_cents=400)
+    assert ledger.balance("rider:rider-1") == 400
+    assert ledger.balance(Ledger.COMPANY) == 0
+    assert ledger.balance(Ledger.PROVIDER) == -400
+    assert ledger.is_balanced() is True
+
+
+def test_devolucao_parcial_do_valor_inteiro_nao_manda_nada_ao_provedor():
+    ledger = Ledger()
+    ledger.post_charge_payment("ch-1", "rider-1", 500, compute_split(500, 100))     # motoqueiro 400, empresa 100
+    ledger.post_refund("ch-1", keep_cents=500)
+    assert ledger.balance("rider:rider-1") == 500
+    assert ledger.balance(Ledger.COMPANY) == 0
+    assert ledger.balance(Ledger.PROVIDER) == -500
+    assert ledger.is_balanced() is True
+
+
+def test_devolucao_para_o_saldo_guarda_o_resto_na_conta_do_passageiro():
+    ledger = _ledger_com_cobranca()
+    ledger.post_refund_to_balance("ch-1", "p1", keep_cents=400)
+    assert ledger.balance(Ledger.balance_account("p1")) == 300
+    assert ledger.balance("rider:rider-1") == 400
+    assert ledger.balance(Ledger.COMPANY) == 0
+    assert ledger.balance(Ledger.PROVIDER) == -700           # o dinheiro continua no provedor
+    assert ledger.is_balanced() is True
+
+
+def test_devolucao_inteira_para_o_saldo():
+    ledger = _ledger_com_cobranca()
+    ledger.post_refund_to_balance("ch-1", "p1")
+    assert ledger.balance(Ledger.balance_account("p1")) == 700
+    assert ledger.balance("rider:rider-1") == 0 and ledger.balance(Ledger.COMPANY) == 0
+    assert ledger.is_balanced() is True
+
+
+@pytest.mark.parametrize("primeira, segunda", [
+    ("pix", "pix"), ("pix", "saldo"), ("saldo", "pix"), ("saldo", "saldo"),
+])
+def test_devolver_duas_vezes_e_recusado_de_qualquer_jeito(primeira, segunda):
+    ledger = _ledger_com_cobranca()
+
+    def devolver(como):
+        if como == "pix":
+            ledger.post_refund("ch-1")
+        else:
+            ledger.post_refund_to_balance("ch-1", "p1")
+
+    devolver(primeira)
+    with pytest.raises(ValueError, match="já devolvida"):
+        devolver(segunda)
+
+
+@pytest.mark.parametrize("retido", [-1, 701])
+def test_parte_retida_fora_do_valor_da_cobranca_e_recusada(retido):
+    ledger = _ledger_com_cobranca()
+    with pytest.raises(ValueError, match="retida"):
+        ledger.post_refund("ch-1", keep_cents=retido)
+    assert ledger.is_balanced() is True and ledger.balance(Ledger.PROVIDER) == -700
+
+
+def test_gasto_do_saldo_paga_o_motoqueiro_e_fecha():
+    ledger = Ledger()
+    ledger.post_spend_balance("fee:ride-1:cancel", "p1", "rider-1", 450)
+    assert ledger.balance(Ledger.balance_account("p1")) == -450
+    assert ledger.balance("rider:rider-1") == 450
+    assert ledger.is_balanced() is True
+    with pytest.raises(ValueError, match="já lançado"):
+        ledger.post_spend_balance("fee:ride-1:cancel", "p1", "rider-1", 450)
+
+
+def test_recarga_credita_o_saldo_e_fecha():
+    ledger = Ledger()
+    ledger.post_topup("ch-9", "p1", 2000)
+    assert ledger.balance(Ledger.balance_account("p1")) == 2000
+    assert ledger.balance(Ledger.PROVIDER) == -2000
+    assert ledger.is_balanced() is True
+    with pytest.raises(ValueError, match="já lançada"):
+        ledger.post_topup("ch-9", "p1", 2000)
+
+
+def test_credito_da_empresa_ao_passageiro_fecha():
+    ledger = Ledger()
+    ledger.post_credit_from_company("fee:ride-1:appeal", "p1", 400)
+    assert ledger.balance(Ledger.COMPANY) == -400
+    assert ledger.balance(Ledger.balance_account("p1")) == 400
+    assert ledger.is_balanced() is True
+
+
+@pytest.mark.parametrize("valor", [0, -10])
+def test_lancamentos_do_saldo_recusam_valor_zero_ou_negativo(valor):
+    ledger = Ledger()
+    with pytest.raises(ValueError, match="positivo"):
+        ledger.post_spend_balance("fee:x:cancel", "p1", "rider-1", valor)
+    with pytest.raises(ValueError, match="positivo"):
+        ledger.post_topup("ch-1", "p1", valor)
+    with pytest.raises(ValueError, match="positivo"):
+        ledger.post_credit_from_company("fee:x:appeal", "p1", valor)

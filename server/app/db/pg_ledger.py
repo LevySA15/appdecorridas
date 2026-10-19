@@ -43,10 +43,34 @@ class PgLedger:
         ledger.post_charge_payment(charge_id, rider_id, price_cents, split)
         self._store_new(ledger, before)
 
-    def post_refund(self, charge_id: str) -> None:
+    def post_refund(self, charge_id: str, *, keep_cents: int = 0) -> None:
         ledger = self._load(f"charge:{charge_id}")
         before = len(ledger.entries)
-        ledger.post_refund(charge_id)
+        ledger.post_refund(charge_id, keep_cents=keep_cents)
+        self._store_new(ledger, before)
+
+    def post_refund_to_balance(self, charge_id: str, passenger_id: str, *, keep_cents: int = 0) -> None:
+        ledger = self._load(f"charge:{charge_id}")
+        before = len(ledger.entries)
+        ledger.post_refund_to_balance(charge_id, passenger_id, keep_cents=keep_cents)
+        self._store_new(ledger, before)
+
+    def post_spend_balance(self, ref: str, passenger_id: str, rider_id: str, amount_cents: int) -> None:
+        ledger = self._load(ref)
+        before = len(ledger.entries)
+        ledger.post_spend_balance(ref, passenger_id, rider_id, amount_cents)
+        self._store_new(ledger, before)
+
+    def post_topup(self, charge_id: str, passenger_id: str, amount_cents: int) -> None:
+        ledger = self._load(f"charge:{charge_id}")
+        before = len(ledger.entries)
+        ledger.post_topup(charge_id, passenger_id, amount_cents)
+        self._store_new(ledger, before)
+
+    def post_credit_from_company(self, ref: str, passenger_id: str, amount_cents: int) -> None:
+        ledger = self._load(ref)
+        before = len(ledger.entries)
+        ledger.post_credit_from_company(ref, passenger_id, amount_cents)
         self._store_new(ledger, before)
 
     def post_entry_fee(self, rider_id: str, amount_cents: int) -> None:

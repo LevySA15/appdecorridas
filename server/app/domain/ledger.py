@@ -18,6 +18,9 @@ class EntryKind(str, Enum):
     REFUND = "refund"
     ENTRY_FEE = "entry_fee"
     CORRECTION = "correction"
+    BALANCE_CREDIT = "balance_credit"   # dinheiro que fica como saldo do passageiro (devolução que não chegou, recurso)
+    BALANCE_SPEND = "balance_spend"     # saldo do passageiro paga a taxa ao motoqueiro
+    TOPUP = "topup"                     # recarga do saldo por Pix
 
 
 @dataclass(frozen=True)
@@ -33,6 +36,11 @@ class LedgerEntry:
 class Ledger:
     PROVIDER = "provider"
     COMPANY = "company"
+
+    @staticmethod
+    def balance_account(passenger_id: str) -> str:
+        """Conta do saldo do passageiro (positiva = dinheiro dele guardado no app)."""
+        return f"balance:{passenger_id}"
 
     def __init__(self) -> None:
         self._entries: list[LedgerEntry] = []
@@ -68,15 +76,58 @@ class Ledger:
         self._append(ref, f"rider:{rider_id}", split.rider_cents, EntryKind.RIDE_PAYMENT)
         self._append(ref, self.COMPANY, split.company_cents, EntryKind.RIDE_PAYMENT)
 
-    def post_refund(self, charge_id: str) -> None:
+    def _reverse(self, charge_id: str, destination: str, kind: EntryKind, keep_cents: int) -> None:
+        """Desfaz um pagamento. O motoqueiro fica com `keep_cents` (taxa retida), a empresa devolve a sua parte
+        e o resto do valor vai para `destination` (o provedor, que devolve o Pix, ou o saldo do passageiro)."""
         ref = f"charge:{charge_id}"
         originals = [e for e in self._entries if e.ref == ref and e.kind is EntryKind.RIDE_PAYMENT]
         if not originals:
             raise ValueError(f"pagamento da cobrança {charge_id} não encontrado")
-        if self._has(ref, EntryKind.REFUND):
+        if self._has(ref, EntryKind.REFUND) or self._has(ref, EntryKind.BALANCE_CREDIT):
             raise ValueError(f"cobrança {charge_id} já devolvida")
+        price = -sum(e.amount_cents for e in originals if e.account == self.PROVIDER)
+        if not 0 <= keep_cents <= price:
+            raise ValueError("a parte retida precisa estar entre zero e o valor da cobrança")
         for e in originals:
-            self._append(ref, e.account, -e.amount_cents, EntryKind.REFUND)
+            if e.account == self.PROVIDER:
+                continue
+            adjust = keep_cents - e.amount_cents if e.account.startswith("rider:") else -e.amount_cents
+            self._append(ref, e.account, adjust, kind)
+        self._append(ref, destination, price - keep_cents, kind)
+
+    def post_refund(self, charge_id: str, *, keep_cents: int = 0) -> None:
+        """Devolve o Pix pago; com `keep_cents`, a taxa retida fica com o motoqueiro e só o resto volta."""
+        self._reverse(charge_id, self.PROVIDER, EntryKind.REFUND, keep_cents)
+
+    def post_refund_to_balance(self, charge_id: str, passenger_id: str, *, keep_cents: int = 0) -> None:
+        """A devolução não chegou à chave Pix do passageiro: o valor vira saldo dele no app."""
+        self._reverse(charge_id, self.balance_account(passenger_id), EntryKind.BALANCE_CREDIT, keep_cents)
+
+    def post_spend_balance(self, ref: str, passenger_id: str, rider_id: str, amount_cents: int) -> None:
+        if amount_cents <= 0:
+            raise ValueError("o valor gasto do saldo precisa ser positivo")
+        if self._has(ref, EntryKind.BALANCE_SPEND):
+            raise ValueError(f"gasto do saldo {ref} já lançado")
+        self._append(ref, self.balance_account(passenger_id), -amount_cents, EntryKind.BALANCE_SPEND)
+        self._append(ref, f"rider:{rider_id}", amount_cents, EntryKind.BALANCE_SPEND)
+
+    def post_topup(self, charge_id: str, passenger_id: str, amount_cents: int) -> None:
+        if amount_cents <= 0:
+            raise ValueError("o valor da recarga precisa ser positivo")
+        ref = f"charge:{charge_id}"
+        if self._has(ref, EntryKind.TOPUP):
+            raise ValueError(f"recarga da cobrança {charge_id} já lançada")
+        self._append(ref, self.PROVIDER, -amount_cents, EntryKind.TOPUP)
+        self._append(ref, self.balance_account(passenger_id), amount_cents, EntryKind.TOPUP)
+
+    def post_credit_from_company(self, ref: str, passenger_id: str, amount_cents: int) -> None:
+        """A empresa devolve ao passageiro, como saldo, uma taxa que o administrador aceitou rever."""
+        if amount_cents <= 0:
+            raise ValueError("o crédito precisa ser positivo")
+        if self._has(ref, EntryKind.BALANCE_CREDIT):
+            raise ValueError(f"crédito {ref} já lançado")
+        self._append(ref, self.COMPANY, -amount_cents, EntryKind.BALANCE_CREDIT)
+        self._append(ref, self.balance_account(passenger_id), amount_cents, EntryKind.BALANCE_CREDIT)
 
     def post_entry_fee(self, rider_id: str, amount_cents: int) -> None:
         ref = f"entry:{rider_id}"

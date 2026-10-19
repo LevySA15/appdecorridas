@@ -277,6 +277,7 @@ def confirm_end_payment(ride: Ride) -> None:
 class PassengerAccount:
     passenger_id: str
     unpaid_cents: int = 0
+    balance_cents: int = 0      # saldo no app (crédito de devolução, recarga); paga a taxa de cancelamento
 
 
 def can_request(acc: PassengerAccount) -> bool:

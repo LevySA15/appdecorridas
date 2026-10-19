@@ -107,3 +107,33 @@ def test_lancamento_solto_que_nao_fecha_e_detectado(session):
     session.add(LedgerRow(ref="charge:ch-x", account="company", amount_cents=100, kind="ride_payment"))
     session.flush()
     assert ledger.is_balanced() is False
+
+
+def test_devolucao_parcial_pelo_banco_deixa_a_taxa_com_o_motoqueiro(session):
+    ledger = _com_cobranca(session)
+    ledger.post_refund("ch-1", keep_cents=400)
+    assert ledger.balance("rider:rider-1") == 400
+    assert ledger.balance(PgLedger.COMPANY) == 0
+    assert ledger.balance(PgLedger.PROVIDER) == -400
+    assert ledger.is_balanced() is True
+
+
+def test_devolucao_repetida_pelo_banco_e_recusada_sem_gravar_nada(session):
+    ledger = _com_cobranca(session)
+    ledger.post_refund_to_balance("ch-1", "p1", keep_cents=400)
+    antes = session.execute(text("SELECT count(*) FROM ledger_entries")).scalar()
+    with pytest.raises(ValueError, match="já devolvida"):
+        ledger.post_refund("ch-1")
+    assert session.execute(text("SELECT count(*) FROM ledger_entries")).scalar() == antes
+    assert ledger.balance("balance:p1") == 300 and ledger.is_balanced() is True
+
+
+def test_gasto_recarga_e_credito_do_saldo_pelo_banco_fecham(session):
+    ledger = PgLedger(session)
+    ledger.post_topup("ch-9", "p1", 2000)
+    ledger.post_spend_balance("fee:ride-1:cancel", "p1", "rider-1", 450)
+    ledger.post_credit_from_company("fee:ride-1:appeal", "p1", 450)
+    assert ledger.balance("balance:p1") == 2000
+    assert ledger.balance("rider:rider-1") == 450
+    assert ledger.balance(PgLedger.COMPANY) == -450
+    assert ledger.is_balanced() is True
