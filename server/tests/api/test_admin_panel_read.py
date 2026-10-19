@@ -127,3 +127,12 @@ def test_lista_vazia_devolve_lista_vazia(client, admin):
     assert client.get("/v1/admin/rides", headers=admin.headers).json() == []
     assert client.get("/v1/admin/passengers", headers=admin.headers).json() == []
     assert client.get("/v1/admin/money", headers=admin.headers).json()["rides_by_state"] == {}
+
+
+def test_resumo_de_dinheiro_soma_o_que_foi_sacado(client, pax, admin, session):
+    from app.domain.balance import Withdrawal
+
+    repo.add_withdrawal(session, Withdrawal("w1", pax.user_id, 500, "cpf", "final 4725", "fake-1", 100.0))
+    repo.add_withdrawal(session, Withdrawal("w2", pax.user_id, 1200, "phone", "final 0824", "fake-2", 200.0))
+    corpo = client.get("/v1/admin/money", headers=admin.headers).json()
+    assert corpo["withdrawn_cents"] == 1700 and corpo["passenger_balances_cents"] == 0

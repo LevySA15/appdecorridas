@@ -3,7 +3,7 @@ import pytest
 
 from app.db.config_store import save_config
 from app.domain.config import BalanceConfig
-from tests.api.helpers import login
+from tests.api.helpers import login, online_rider, rider_phone
 
 
 @pytest.fixture()
@@ -174,3 +174,64 @@ def test_lista_de_saques_so_para_administrador(client, pax, session, runtime):
     assert lista[0]["passenger_id"] == pax.user_id and lista[0]["passenger_name"] == "Ana Lima"
     assert (lista[0]["amount_cents"], lista[0]["key_kind"], lista[0]["key_masked"]) == (1500, "cpf", "final 4725")
     assert "pix_key" not in lista[0] and "52998224725" not in str(lista[0])
+
+
+# --- o que o app vê -----------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def rider(client, runtime, session, clock):
+    online_rider(session, runtime, clock, 1)
+    return login(client, runtime, rider_phone(1), "rider")
+
+
+def test_cotacao_oferece_saldo_so_quando_cobre(client, pax, session, runtime):
+    assert _cotar(client, pax)["payment_methods"] == ["pix", "cash"]
+    _recarregar(client, pax, session, runtime)
+    assert _cotar(client, pax)["payment_methods"] == ["pix", "cash", "balance"]
+    save_config(session, "balance", BalanceConfig(topup_enabled=True, pay_rides_enabled=False))
+    runtime._config = None
+    assert _cotar(client, pax)["payment_methods"] == ["pix", "cash"]
+
+
+def test_cotacao_de_corrida_mais_cara_que_o_saldo_nao_oferece_saldo(client, pax, session, runtime):
+    _recarregar(client, pax, session, runtime, valor=1000)
+    assert "balance" in _cotar(client, pax)["payment_methods"]            # corrida de R$ 6,00, saldo de R$ 10,00
+    from tests.helpers import ORIGIN, pt
+
+    longe = {"pickup": _lugar(ORIGIN, "Rua A"), "destination": _lugar(pt(12_000, 0), "Distrito")}
+    cotacao = client.post("/v1/passenger/quotes", json=longe, headers=pax.headers).json()
+    assert cotacao["price_cents"] > 1000 and "balance" not in cotacao["payment_methods"]
+
+
+def test_estado_do_passageiro_traz_as_chaves_do_saldo(client, pax, session, runtime):
+    estado = client.get("/v1/passenger/state", headers=pax.headers).json()
+    assert (estado["pay_with_balance_enabled"], estado["withdraw_enabled"]) == (True, False)
+    assert (estado["withdraw_min_cents"], estado["withdraw_max_cents"]) == (500, 50_000)
+    ligar(session, runtime, withdraw_enabled=True)
+    assert client.get("/v1/passenger/state", headers=pax.headers).json()["withdraw_enabled"] is True
+
+
+def test_visao_da_corrida_paga_com_saldo_marca_e_nao_mostra_pix(client, pax, rider, session, runtime):
+    _recarregar(client, pax, session, runtime)
+    cotacao = _cotar(client, pax)
+    ride_id = client.post(
+        "/v1/passenger/rides", json={"quote_id": cotacao["quote_id"], "method": "balance"}, headers=pax.headers
+    ).json()["ride_id"]
+    assert client.get("/v1/passenger/state", headers=pax.headers).json()["ride"]["pay_with_balance"] is True
+    assert client.post(f"/v1/rider/offers/{ride_id}/accept", headers=rider.headers).status_code == 200
+    corrida = client.get("/v1/passenger/state", headers=pax.headers).json()["ride"]
+    assert (corrida["method"], corrida["pay_with_balance"], corrida["pix_paid"], corrida["pay"]) == ("pix", True, True, None)
+    assert client.get("/v1/passenger/state", headers=pax.headers).json()["balance_cents"] == 2000 - cotacao["price_cents"]
+    assert client.get("/v1/dev/audit").json()["balance_matches_ledger"] is True
+
+
+def test_saque_com_provedor_fora_do_ar_responde_503_e_nao_debita(client, pax, session, runtime):
+    _recarregar(client, pax, session, runtime)
+    ligar(session, runtime, withdraw_enabled=True)
+    runtime.provider.fail_payouts = True
+    resposta = client.post("/v1/passenger/balance/withdraw", json={"amount_cents": 1500, "pix_key": CPF}, headers=pax.headers)
+    assert resposta.status_code == 503 and resposta.json()["error"]["code"] == "payment_unavailable"
+    assert client.get("/v1/passenger/state", headers=pax.headers).json()["balance_cents"] == 2000
+    auditoria = client.get("/v1/dev/audit").json()
+    assert auditoria["reconcile_diff"] == {} and auditoria["balance_matches_ledger"] is True

@@ -16,6 +16,7 @@ from app.db.models import (
     RiderProfileRow,
     SafetyAlertRow,
     UserRow,
+    WithdrawalRow,
 )
 from app.domain.fees import RiderAccount
 from app.domain.geo import GeoPoint
@@ -724,6 +725,7 @@ def money_summary(session: Session) -> dict:
         "provider_cents": ledger(LedgerRow.account == "provider"),
         "riders_cents": ledger(LedgerRow.account.like("rider:%")),
         "passenger_balances_cents": passenger_balances_total(session),
+        "withdrawn_cents": total(WithdrawalRow.amount_cents),
         "rider_debts_cents": total(RiderProfileRow.cash_debt_cents),
         "passenger_unpaid_cents": total(PassengerProfileRow.unpaid_cents),
         "pending_fees_cents": total(CancelFeeRow.pending_cents),

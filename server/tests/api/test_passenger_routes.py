@@ -145,6 +145,8 @@ def test_estado_do_passageiro_sem_corrida(client, pax):
         "ride": None, "pending_payment": None, "blocked_reason": None, "unpaid_cents": 0,
         "emergency_contact": None, "payment_methods": ["pix", "cash"],
         "balance_cents": 0, "topup_enabled": False, "pending_fee": None, "recent_fees": [],
+        "pay_with_balance_enabled": True, "withdraw_enabled": False,
+        "withdraw_min_cents": 500, "withdraw_max_cents": 50_000,
     }
 
 

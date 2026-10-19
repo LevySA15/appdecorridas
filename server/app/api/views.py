@@ -80,6 +80,7 @@ def passenger_ride_view(unit: Unit, ride_id: str) -> dict:
         "ride_id": ride.ride_id, "state": ride.state.value, "queued": ride.state is RideState.QUEUED,
         "price_cents": ride.price_cents, "price_reason": details.price_reason, "method": ride.payment_method.value,
         "pin": ride.pin, "helmet_confirmed": ride.helmet_confirmed, "pix_paid": ride.pix_paid,
+        "pay_with_balance": ride.pay_with_balance,
         "pickup": place(details.pickup.lat, details.pickup.lng, details.pickup_text),
         "destination": place(details.destination.lat, details.destination.lng, details.destination_text),
         "distance_m": details.distance_m, "rider": rider, "rider_position": position,
@@ -129,6 +130,10 @@ def passenger_state(unit: Unit, passenger_id: str, payment_methods: list[str]) -
         "unpaid_cents": account.unpaid_cents,
         "balance_cents": account.balance_cents,
         "topup_enabled": unit.cfg.balance.topup_enabled,
+        "pay_with_balance_enabled": unit.cfg.balance.pay_rides_enabled,
+        "withdraw_enabled": unit.cfg.balance.withdraw_enabled,
+        "withdraw_min_cents": unit.cfg.balance.withdraw_min_cents,
+        "withdraw_max_cents": unit.cfg.balance.withdraw_max_cents,
         "pending_fee": pending_fee,
         "recent_fees": [
             {

@@ -30,19 +30,20 @@ A sessão dura 180 dias. `role: "admin"` só entra se o número já foi criado c
 | Rota | Corpo | Resposta |
 |---|---|---|
 | `POST /v1/passenger/quotes` | `{"pickup": {lat,lng,text}, "destination": {lat,lng,text}}` | preço: `quote_id, price_cents, reason, distance_m, duration_s, expires_at, pickup, destination, eta_seconds` (estimativa, `null` sem moto livre), `nearby_riders`, `payment_methods` (`["pix","cash"]`, ou só `["cash"]` com o Pix fora do ar) |
-| `POST /v1/passenger/rides` | `{"quote_id","method": "pix"\|"cash"}` | 201 com a corrida (abaixo) |
+| `POST /v1/passenger/rides` | `{"quote_id","method": "pix"\|"cash"\|"balance"}` | 201 com a corrida (abaixo). `balance` é uma corrida Pix paga com o saldo (veja "Saldo"); 403 `not_allowed` se o saldo não cobre o preço da cotação ou o recurso está desligado |
 | `POST /v1/passenger/rides/{id}/cancel` | | `{"refund", "fee_cents", "fee", "refund_to", "balance_cents"}` (veja "Cancelamento tardio" abaixo) |
 | `POST /v1/passenger/fees/pay` | | paga a taxa de cancelamento pendente: `{"paid": true}` se o saldo cobriu tudo, senão `{"paid": false, "charge_id","amount_cents","br_code"}` (Pix do valor inteiro). 409 `nothing_to_pay` |
 | `POST /v1/passenger/rides/{id}/fee/appeal` | `{"text"}` (3 a 500 letras) | 204. 404 sem taxa; 403 `not_your_ride`; 409 `appeal_not_allowed` (já pedido ou passou de 7 dias) |
 | `POST /v1/passenger/balance/topup` | `{"amount_cents"}` | `{"charge_id","amount_cents","br_code"}`. 403 `topup_disabled` (desligada por padrão); 422 fora de R$ 10,00 a R$ 200,00 |
-| `GET /v1/passenger/state` | | `{"ride", "pending_payment", "blocked_reason", "unpaid_cents", "balance_cents", "topup_enabled", "pending_fee", "recent_fees", "emergency_contact", "payment_methods"}` |
+| `POST /v1/passenger/balance/withdraw` | `{"amount_cents","pix_key"}` | 201 `{"withdrawal_id","amount_cents","balance_cents","key"}` (`key` é só o final da chave, ex. `"final 4725"`). 403 `withdraw_disabled` (desligado por padrão), 403 `not_allowed` (saldo menor que o valor, ou taxa/pagamento pendente), 422 fora de R$ 5,00 a R$ 500,00 ou chave Pix inválida (CPF, CNPJ, telefone com `+55`, e-mail ou chave aleatória). 503 `payment_unavailable` se o provedor não conseguiu fazer o Pix do saque: nada é debitado |
+| `GET /v1/passenger/state` | | `{"ride", "pending_payment", "blocked_reason", "unpaid_cents", "balance_cents", "topup_enabled", "pay_with_balance_enabled", "withdraw_enabled", "withdraw_min_cents", "withdraw_max_cents", "pending_fee", "recent_fees", "emergency_contact", "payment_methods"}` |
 | `PUT /v1/passenger/emergency-contact` | `{"name","phone"}` | 204. Não pode ser o número do próprio passageiro. |
 | `POST /v1/rides/{id}/rating` | `{"stars": 1..5}` | 204 (vale para os dois lados, depois que a corrida acabou) |
 | `POST /v1/rides/{id}/sos` | | `{"alert_id","contact_registered","contact_notified","repeated","emergency_number": "190"}` |
 | `POST /v1/rides/{id}/safety/{alert_id}/ok` | | 204 ("está tudo bem" ao aviso automático) |
 
 **Corrida (visão do passageiro):** `ride_id, state` (`searching, queued, accepted, arrived, in_progress`),
-`queued, price_cents, price_reason, method, pin` (os 4 dígitos que ele diz ao motoqueiro), `helmet_confirmed, pix_paid,
+`queued, price_cents, price_reason, method, pin` (os 4 dígitos que ele diz ao motoqueiro), `helmet_confirmed, pix_paid, pay_with_balance,
 pickup, destination, distance_m, rider` (`rider_id, name, plate, moto_model, rating, rating_count, photo_url`),
 `rider_position` (`{lat,lng}` ou `null`), `queue` (`{"finishing_at","eta_seconds"}` quando está na fila),
 `safety_alert` (`{"alert_id","kind"}` enquanto o "está tudo bem?" não foi respondido, para redesenhar a tela ao reconectar),
@@ -66,8 +67,19 @@ pendência. `recent_fees` traz as últimas 5 taxas dentro do prazo do recurso: `
 (`appeal_state`: `none`, `open`, `accepted` ou `rejected`). O **recurso** vale por 7 dias, uma vez por taxa; enquanto é analisado a taxa
 continua cobrada. Aceito: a pendência é perdoada e o que já foi cobrado volta como saldo (a empresa paga; o motoqueiro fica com a taxa).
 
-**Saldo** (`balance_cents`): dinheiro do passageiro guardado no app. Recebe a devolução que não chegou à chave Pix e, com a recarga
-ligada (`topup_enabled`), recargas por Pix. Por enquanto só paga a taxa de cancelamento.
+**Saldo** (`balance_cents`): dinheiro do passageiro guardado no app. Recebe a devolução que não chegou à chave Pix, o crédito de um
+recurso aceito e, com a recarga ligada (`topup_enabled`), recargas por Pix. Ele **paga a taxa de cancelamento**, **paga corridas** e
+**pode ser sacado por Pix**:
+
+- **Pagar a corrida com o saldo:** a cotação (`payment_methods`) lista `"balance"` só quando o saldo cobre o preço inteiro e
+  `pay_with_balance_enabled` é verdadeiro. `POST /v1/passenger/rides` com `method: "balance"` cria uma corrida Pix marcada
+  `pay_with_balance`; o saldo é cobrado **quando a moto aceita** (evento `balance_paid`, e o `rider_accepted` traz `pay: null` e
+  `paid_with_balance: true`), sem cobrança Pix: a corrida já aparece com `pix_paid: true`. Para o motoqueiro é uma corrida Pix comum
+  (`method: "pix"`, já paga). Se até o aceite o saldo deixar de cobrir, a corrida segue como **Pix comum** e o passageiro recebe
+  `balance_short` (`ride_id, balance_cents, price_cents`) junto com os dados do Pix em `rider_accepted.pay`. Cancelar, sair da fila e a
+  taxa de cancelamento funcionam como no Pix, mas o que volta (menos a taxa retida) volta **sempre para o saldo** (`refund_to: "balance"`).
+- **Sacar:** `POST /v1/passenger/balance/withdraw`. Desligado por padrão (`withdraw_enabled`), recusado enquanto há taxa ou pagamento
+  pendente. O servidor guarda só o final da chave. O administrador lista os saques em `GET /v1/admin/withdrawals`.
 
 `pending_payment` (corrida em dinheiro terminada e sem pagamento): `{"ride_id","amount_cents","charge_id","blocked"}`.
 Com `blocked: true` o passageiro não pede outra corrida até pagar o QR (`charge_id`).
@@ -126,6 +138,7 @@ motoqueiro. O passageiro vê só a `selfie`, de um motoqueiro que já aceitou um
 | `GET /v1/admin/riders?status=pending\|approved\|blocked\|rejected&limit&offset` | fila de cadastros |
 | `POST /v1/admin/riders/{id}/approve` · `/unblock` | 204 |
 | `POST /v1/admin/riders/{id}/reject` · `/block` | `{"reason"}` → 204 |
+| `GET /v1/admin/withdrawals?limit&offset` | saques de saldo por Pix, o mais novo primeiro: `withdrawal_id, passenger_id, passenger_name, amount_cents, key_kind, key_masked, created_at` (nunca a chave inteira) |
 | `GET /v1/admin/appeals?status=open\|accepted\|rejected&limit&offset` | recursos da taxa de cancelamento, o mais antigo primeiro: `ride_id, passenger_id, passenger_name, rider_name, fee_cents, reason, created_at, appeal_state, appeal_text, appealed_at, decided_at, decision_note` |
 | `POST /v1/admin/appeals/{ride_id}/decide` | `{"decision": "accept"\|"reject", "note"?}` → 204. 409 `appeal_not_allowed` se não está aberto |
 | `GET /v1/admin/safety-alerts?status=open\|ok\|sos\|resolved` | alertas com nomes, placa e posição |
@@ -136,7 +149,7 @@ motoqueiro. O passageiro vê só a `selfie`, de um motoqueiro que já aceitou um
 Só administrador. Leituras: `GET /v1/admin/rides?state=&limit=&offset=` (corridas, mais novas primeiro, com nomes), `GET /v1/admin/rides/{id}`
 (detalhe com `events` e `cancel_fee`; nunca traz o código de 4 dígitos), `GET /v1/admin/passengers?q=` (busca por nome ou telefone: `user_id, name, phone,
 is_blocked, unpaid_cents, balance_cents, created_at`), `GET /v1/admin/debtors` (`riders` e `passengers` que devem algo), `GET /v1/admin/money` (totais do
-livro-caixa e das contas: `company_cents, provider_cents, riders_cents, passenger_balances_cents, rider_debts_cents, passenger_unpaid_cents,
+livro-caixa e das contas: `company_cents, provider_cents, riders_cents, passenger_balances_cents, withdrawn_cents, rider_debts_cents, passenger_unpaid_cents,
 pending_fees_cents, rides_by_state, ledger_balanced`), `GET /v1/admin/config` (todas as chaves de parâmetros) e `GET /v1/admin/actions?limit&offset`
 (registro das ações, mais nova primeiro: `id, admin_id, admin_name, action, target_type, target_id, detail, at`).
 Escritas: `POST /v1/admin/passengers/{id}/block` (`{"reason"}`) e `/unblock` → 204; `PUT /v1/admin/config/{key}` (o objeto da chave) → 204, 422 `invalid`
@@ -175,7 +188,7 @@ Nos dois casos, reconecte e peça o estado. O app pode mandar texto qualquer (`"
 | `ride_assigned` | motoqueiro | `ride_id, queued` |
 | `next_ride` | motoqueiro | `ride_id` (a corrida da fila começou) |
 | `ride_cancelled` | os dois | `ride_id`, `by: "passenger"` ou `reason: "pix_expired"\|"arrival_wait"`, e `fee_cents` (a taxa de cancelamento tardio; 0 ou ausente se grátis) |
-| `rider_accepted` | passageiro | `ride_id, queued, pin, queue, rider, pay` |
+| `rider_accepted` | passageiro | `ride_id, queued, pin, queue, rider, pay` (`null` se a corrida já está paga), `paid_with_balance` |
 | `rider_on_the_way` | passageiro | `ride_id` (a corrida da fila começou) |
 | `rider_arrived` · `trip_started` | passageiro | `ride_id` |
 | `rider_position` | passageiro | `ride_id, lat, lng` |
@@ -187,7 +200,10 @@ Nos dois casos, reconecte e peça o estado. O app pode mandar texto qualquer (`"
 | `payment_refunded` | passageiro | `ride_id, amount_cents, to: "pix"\|"balance"` (e `balance_cents` quando foi para o saldo) |
 | `cancel_fee` | passageiro | `ride_id, fee_cents, from_balance_cents, retained_cents, pending_cents, balance_cents` |
 | `fee_paid` | passageiro | `ride_id, amount_cents, balance_cents` (a pendência foi paga) |
-| `balance_changed` | passageiro | `balance_cents` (recarga) |
+| `balance_changed` | passageiro | `balance_cents` (recarga ou saque) |
+| `balance_paid` | passageiro | `ride_id, amount_cents, balance_cents` (a moto aceitou e o saldo pagou a corrida) |
+| `balance_short` | passageiro | `ride_id, balance_cents, price_cents` (o saldo não cobre mais: a corrida segue como Pix comum) |
+| `withdrawal_done` | passageiro | `withdrawal_id, amount_cents, balance_cents` |
 | `appeal_opened` | administradores | `ride_id` |
 | `appeal_decided` | passageiro | `ride_id, decision: "accept"\|"reject", credited_cents` |
 | `qr_ready` | os dois | `ride_id, charge_id, amount_cents` (o QR do fim da corrida em dinheiro) |
@@ -204,7 +220,7 @@ Nos dois casos, reconecte e peça o estado. O app pode mandar texto qualquer (`"
 
 ## Códigos de erro
 
-`appeal_not_allowed` 409 · `debt_pending` 409 · `nothing_to_pay` 409 · `topup_disabled` 403 · `unauthorized` 401 · `wrong_role` 403 · `forbidden` 403 · `not_found` 404 · `invalid` 422 (`fields` lista os campos) ·
+`appeal_not_allowed` 409 · `debt_pending` 409 · `nothing_to_pay` 409 · `topup_disabled` 403 · `withdraw_disabled` 403 · `unauthorized` 401 · `wrong_role` 403 · `forbidden` 403 · `not_found` 404 · `invalid` 422 (`fields` lista os campos) ·
 `not_allowed` 403 · `quote_expired` 409 · `offer_gone` 409 · `not_your_ride` 403 · `already_rated` 409 ·
 `invalid_state` 409 · `alert_closed` 409 · `duplicate_registration` 409 (`field`) · `not_approved`, `blocked`,
 `documents_expired`, `entry_pending` 409 · `wrong_pin` 422 · `code_invalid` 401 · `too_many_requests` 429 ·

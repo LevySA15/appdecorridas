@@ -54,7 +54,11 @@ def create_quote(body: QuoteIn, request: Request, user: AuthUser = Depends(passe
             unit.session, user.user_id, body.pickup.point, body.destination.point,
             body.pickup.text, body.destination.text, unit.now,
         )
-        return quote_view(quote, runtime.payment_methods(unit.now))
+        methods = runtime.payment_methods(unit.now)
+        saldo = repo.get_passenger_account(unit.session, user.user_id).balance_cents
+        if unit.cfg.balance.pay_rides_enabled and saldo >= quote.price_cents:
+            methods = [*methods, "balance"]            # o saldo cobre a corrida inteira
+        return quote_view(quote, methods)
 
     return runtime.run(work)
 
