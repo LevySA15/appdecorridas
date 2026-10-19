@@ -14,7 +14,7 @@ A especificação cobre várias partes independentes. Cada parte vira um plano p
 | 4B | **Cancelamento tardio e saldo do passageiro** — **feito** (`2026-10-19-04b-cancelamento-tardio-e-saldo.md`) | Taxa de R$ 3 a R$ 5 pela distância que a moto já andou, cobrada do saldo do passageiro, da devolução do Pix ou como pendência; saldo do passageiro (crédito de devolução que não chegou, recarga desligada por padrão); recurso. | 2C | não |
 | 4C | **Alerta de sem sinal** — **feito** (`2026-10-19-04c-sem-sinal.md`) | Moto sem mandar posição no meio da corrida: tempo pelo tamanho da corrida, aviso ao passageiro e ao contato de emergência. | 2C | não |
 | 4D | **Bloqueio por dívida do motoqueiro** — **feito** (`2026-10-19-04d-bloqueio-por-divida.md`) | Uma corrida de folga e depois nenhuma oferta e "não estou rodando" travado até pagar; pagamento da dívida por Pix. | 2C | não |
-| 4A | **Painel do dono** | Site para aprovar cadastros, ver corridas, dinheiro, taxas, bloqueios, fila de recursos. Feito por último (o Levy pediu a ordem B, C, D, A em 19/10/2026). | 2, 4B, 4C, 4D | não |
+| 4A | **Painel do dono** — **feito** (`2026-10-19-04a-painel.md`) | Site para aprovar cadastros, ver corridas, dinheiro, taxas, bloqueios, fila de recursos. Feito por último (o Levy pediu a ordem B, C, D, A em 19/10/2026). | 2, 4B, 4C, 4D | não |
 | 5 | **App do motoqueiro (Flutter, Android)** | Cadastro, ficar disponível, oferta, fila, capacete, QR, extrato. | 2 | não |
 | 6 | **App do passageiro (Flutter, Android)** | Pedir, pagar, acompanhar, código, SOS, avaliar. | 2 | não |
 | 7 | **Integrações reais** | Woovi (Pix e divisão), Google Maps, código por WhatsApp. | 2, CNPJ, advogado | **sim** |
@@ -39,6 +39,10 @@ Mais de um processo: exige um canal entre eles (Redis pub/sub) para o hub do Web
 Da revisão final do 2C (ainda abertos): efeitos externos (devolução no provedor, mensagem do SOS, marca do Redis) rodam antes do commit e se repetem se o banco derrubar a transação por impasse (plano 7: idempotência); menores: fotos órfãs sem limpeza nem cota; WebSocket aberto continua recebendo avisos depois de logout ou bloqueio; SOS em dois toques simultâneos pode criar dois alertas; `ValueError` genérico devolve texto interno ao app; `/rider/state` pode mostrar oferta já vencida por até 3 s; cobrança de entrada pendente não reaparece no estado do motoqueiro; `answer_ok` trava antes de conferir o dono. (O pool do banco, 10+10, foi medido no plano 3 com 60 motoqueiros e 200 passageiros e não formou fila: fica como está.)
 
 Menores do 2B que seguem abertos: o `downgrade` da migração 0002 falha se existe cobrança de entrada; a taxa da corrida da fila é fixada no aceite.
+
+## Itens que sobraram do plano 4A
+
+Do Levy: abrir `http://localhost:8000/painel` e olhar cada tela (o site não pôde ser aberto num navegador por quem o escreveu; foi conferido por testes de contrato com a API e pelo servidor de verdade). Níveis de acesso (por exemplo, "suporte" que só lê) ainda não existem: todo administrador é "dono", e cada ação já grava quem fez. Faltam tela própria por parâmetro (hoje JSON por chave), gráficos, mapa ao vivo com as motos (precisa da chave do Google Maps, plano 7) e aviso no próprio site quando entra recurso ou alerta (hoje só o WebSocket avisa os administradores).
 
 ## Itens que sobraram do plano 4B
 

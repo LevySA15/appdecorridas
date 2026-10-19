@@ -32,6 +32,7 @@ apague com `DROP SCHEMA "t_..." CASCADE`. O Redis dos testes é o banco número 
 
     .venv/bin/python -m app.cli create-admin --phone "75 99999-0000" --name "Levy"    # uma vez
     .venv/bin/uvicorn --factory app.main:create_default_app --port 8000                # um processo só
+    # o painel do dono abre em http://localhost:8000/painel (entre com o telefone do administrador e o código)
 
 - Sem WhatsApp e sem Pix de verdade ainda (plano 7): o código de login aparece no registro do servidor e em
   `GET /v1/dev/otp?phone=...`; um Pix é "pago" com `POST /v1/dev/pix/{charge_id}/pay`.

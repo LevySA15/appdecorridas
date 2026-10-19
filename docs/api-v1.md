@@ -117,7 +117,7 @@ needs_entry, cash_debt_cents, cash_debt_limit_cents`), `offer` (a oferta pendent
 `GET /v1/riders/{rider_id}/documents/{selfie|cnh|crlv}` devolve a imagem. Vê tudo: o administrador e o próprio
 motoqueiro. O passageiro vê só a `selfie`, de um motoqueiro que já aceitou uma corrida dele.
 
-## Administrador (o painel completo é o plano 4)
+## Administrador (a API do painel do dono, `/painel`)
 
 | Rota | |
 |---|---|
@@ -128,6 +128,19 @@ motoqueiro. O passageiro vê só a `selfie`, de um motoqueiro que já aceitou um
 | `POST /v1/admin/appeals/{ride_id}/decide` | `{"decision": "accept"\|"reject", "note"?}` → 204. 409 `appeal_not_allowed` se não está aberto |
 | `GET /v1/admin/safety-alerts?status=open\|ok\|sos\|resolved` | alertas com nomes, placa e posição |
 | `POST /v1/admin/safety-alerts/{id}/resolve` | `{"note"?}` → 204 |
+
+### Rotas do painel do dono (plano 4A)
+
+Só administrador. Leituras: `GET /v1/admin/rides?state=&limit=&offset=` (corridas, mais novas primeiro, com nomes), `GET /v1/admin/rides/{id}`
+(detalhe com `events` e `cancel_fee`; nunca traz o código de 4 dígitos), `GET /v1/admin/passengers?q=` (busca por nome ou telefone: `user_id, name, phone,
+is_blocked, unpaid_cents, balance_cents, created_at`), `GET /v1/admin/debtors` (`riders` e `passengers` que devem algo), `GET /v1/admin/money` (totais do
+livro-caixa e das contas: `company_cents, provider_cents, riders_cents, passenger_balances_cents, rider_debts_cents, passenger_unpaid_cents,
+pending_fees_cents, rides_by_state, ledger_balanced`), `GET /v1/admin/config` (todas as chaves de parâmetros) e `GET /v1/admin/actions?limit&offset`
+(registro das ações, mais nova primeiro: `id, admin_id, admin_name, action, target_type, target_id, detail, at`).
+Escritas: `POST /v1/admin/passengers/{id}/block` (`{"reason"}`) e `/unblock` → 204; `PUT /v1/admin/config/{key}` (o objeto da chave) → 204, 422 `invalid`
+com a frase do erro se o valor não faz sentido, 404 se a chave não existe; vale na hora neste processo. **Toda escrita do administrador** (aprovar,
+recusar, bloquear e liberar motoqueiro e passageiro, resolver alerta, decidir recurso, gravar parâmetro) grava uma linha em `admin_actions` na mesma
+transação. O site fica em `GET /painel` (HTML e JavaScript, sem dado; os dados vêm destas rotas, com o token do administrador).
 
 ## Aviso do provedor de pagamento
 
