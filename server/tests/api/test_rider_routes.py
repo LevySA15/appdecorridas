@@ -66,7 +66,8 @@ def test_estado_do_motoqueiro_aprovado_mostra_conta_e_nota(client, rider):
     assert estado["registration"]["rating"] is None
     assert estado["account"] == {
         "completed_rides": 0, "trial_rides": 10, "entry_paid": False, "entry_fee_cents": 5000,
-        "needs_entry": False, "cash_debt_cents": 0, "cash_debt_limit_cents": 70,
+        "needs_entry": False, "blocked_reason": None, "cash_debt_cents": 0, "cash_debt_limit_cents": 70,
+        "debt_to_pay_cents": 0,
     }
     assert (estado["offer"], estado["ride"], estado["queued_ride"], estado["awaiting_payment"]) == (None,) * 4
 

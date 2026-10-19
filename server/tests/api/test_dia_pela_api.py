@@ -134,9 +134,9 @@ def test_um_dia_inteiro_pela_api(client, runtime, session, clock, listen):
     assert client.post("/v1/rider/online", headers=rider.headers).json()["error"]["code"] == "entry_pending"
     entrada = client.post("/v1/rider/entry-charge", headers=rider.headers).json()
     assert client.post(f"/v1/dev/pix/{entrada['charge_id']}/pay").json() == {"status": "applied"}
-    acc = repo.get_rider_account(session, rider.user_id, for_update=True)
-    acc.cash_debt_cents = 0                      # a dívida de R$ 1,00 também bloqueia; quitada (a cobrança Pix dela é testada à parte)
-    repo.save_rider_account(session, acc)
+    assert client.post("/v1/rider/online", headers=rider.headers).json()["error"]["code"] == "debt_pending"
+    divida = client.post("/v1/rider/debt-charge", headers=rider.headers).json()      # a dívida de R$ 1,00 também bloqueia
+    assert client.post(f"/v1/dev/pix/{divida['charge_id']}/pay").json() == {"status": "applied"}
     assert client.post("/v1/rider/online", headers=rider.headers).status_code == 204
     conta = client.get("/v1/rider/state", headers=rider.headers).json()["account"]
     assert (conta["completed_rides"], conta["entry_paid"], conta["cash_debt_cents"], conta["needs_entry"]) == (
@@ -148,8 +148,8 @@ def test_um_dia_inteiro_pela_api(client, runtime, session, clock, listen):
     assert livro.is_balanced() is True
     p1, p2 = corrida1["price_cents"], corrida2["price_cents"]
     assert livro.balance(f"rider:{rider.user_id}") == (p1 - 100) + (p2 - 100)
-    assert livro.balance(PgLedger.COMPANY) == 100 + 100 + 5000
-    assert livro.balance(PgLedger.PROVIDER) == -(p1 + p2 + 5000)
+    assert livro.balance(PgLedger.COMPANY) == 100 + 100 + 5000 + 100
+    assert livro.balance(PgLedger.PROVIDER) == -(p1 + p2 + 5000 + 100)
     extrato = {
         (f"entry:{c.rider_id}" if c.purpose == "entry" else f"charge:{c.charge_id}"): c.amount_cents
         for c in runtime.provider.charges.values()

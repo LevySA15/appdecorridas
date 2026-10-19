@@ -108,17 +108,19 @@ def test_um_dia_de_ponta_a_ponta_com_pix_dinheiro_bloqueio_e_entrada(session):
     assert erro.value.code == "entry_pending"
     entrada = payments.start_entry_charge(session, rider.user_id)
     assert payments.on_provider_event(session, provider.mark_paid(entrada.charge_id)) == "applied"
-    acc = repo.get_rider_account(session, rider.user_id)
-    acc.cash_debt_cents = 0                      # a dívida de R$ 1,00 também bloqueia; quitada (a cobrança Pix dela é testada à parte)
-    repo.save_rider_account(session, acc)
+    with pytest.raises(CannotGoOnline) as erro:      # a dívida de R$ 1,00 da corrida em dinheiro também bloqueia
+        riders.go_online(session, rider.user_id, hoje)
+    assert erro.value.code == "debt_pending"
+    divida = payments.start_debt_charge(session, rider.user_id)
+    assert payments.on_provider_event(session, provider.mark_paid(divida.charge_id)) == "applied"
     riders.go_online(session, rider.user_id, hoje)
 
     # 6) fechamento do dia: o livro soma zero e bate com o extrato do provedor
     ledger = PgLedger(session)
     assert ledger.is_balanced() is True
     assert ledger.balance(f"rider:{rider.user_id}") == (preco1 - 100) + (preco2 - 100)
-    assert ledger.balance(PgLedger.COMPANY) == 100 + 100 + 5000
-    assert ledger.balance(PgLedger.PROVIDER) == -(preco1 + preco2 + 5000)
+    assert ledger.balance(PgLedger.COMPANY) == 100 + 100 + 5000 + 100
+    assert ledger.balance(PgLedger.PROVIDER) == -(preco1 + preco2 + 5000 + 100)
     extrato = {
         (f"entry:{c.rider_id}" if c.purpose == "entry" else f"charge:{c.charge_id}"): c.amount_cents
         for c in provider.charges.values()

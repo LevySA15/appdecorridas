@@ -165,6 +165,17 @@ def entry_charge(request: Request, user: AuthUser = Depends(rider_user)) -> dict
     return get_runtime(request).run(work)
 
 
+@router.post("/debt-charge", status_code=201)
+def debt_charge(request: Request, user: AuthUser = Depends(rider_user)) -> dict:
+    """Cobrança Pix para pagar a dívida da taxa das corridas em dinheiro (quem deve fica sem receber corridas)."""
+
+    def work(unit):
+        charge = unit.payments.start_debt_charge(unit.session, user.user_id)
+        return {"charge_id": charge.charge_id, "amount_cents": charge.amount_cents, "br_code": charge.br_code}
+
+    return get_runtime(request).run(work)
+
+
 @router.post("/offers/{ride_id}/accept")
 def accept_offer(ride_id: str, request: Request, user: AuthUser = Depends(rider_user)) -> dict:
     def work(unit):

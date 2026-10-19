@@ -81,7 +81,7 @@ só depois de 10 minutos de silêncio que continua.
 
 `GET /v1/charges/{charge_id}` → `{"charge_id","purpose","ride_id","amount_cents","paid","br_code"}`.
 `purpose`: `ride` (Pix antes da corrida), `end` (QR do fim da corrida em dinheiro), `entry` (entrada do motoqueiro),
-`fee` (taxa de cancelamento pendente) ou `topup` (recarga do saldo, `ride_id` nulo).
+`fee` (taxa de cancelamento pendente), `topup` (recarga do saldo, `ride_id` nulo) ou `debt` (dívida da taxa do motoqueiro, `ride_id` nulo; só o motoqueiro dono e o administrador veem).
 O app desenha o QR a partir de `br_code`. Vê quem participa da corrida (passageiro e motoqueiro) e o administrador;
 a entrada, só o motoqueiro; a recarga, só o passageiro dono.
 
@@ -92,10 +92,11 @@ a entrada, só o motoqueiro; a recarga, só o passageiro dono.
 | `PUT /v1/rider/documents/{selfie\|cnh\|crlv}` | a foto crua (JPEG, PNG ou WebP, até 8 MB) | 201 `{"key","bytes"}` |
 | `POST /v1/rider/register` | nome, CPF, CNH, placa, modelo, validade da CNH e do documento da moto, `selfie_key`, `cnh_photo_key`, `crlv_key` | 201 `{"status":"pending"}` |
 | `POST /v1/rider/documents/renew` | `{"cnh_expires_on","crlv_expires_on","cnh_photo_key"?,"crlv_key"?}` | 204 |
-| `GET /v1/rider/state` | | `{"registration","account","offer","ride","queued_ride","awaiting_payment"}` |
-| `POST /v1/rider/online` · `/offline` | | 204. 409 com o `code` do motivo (`not_approved`, `blocked`, `documents_expired`, `entry_pending`) |
+| `GET /v1/rider/state` | | `{"registration","account","offer","ride","queued_ride","awaiting_payment"}`. `account` traz também `blocked_reason` (`"entry_pending"`, `"debt_pending"` ou `null`), `cash_debt_cents`, `cash_debt_limit_cents` (uma taxa: R$ 0,70) e `debt_to_pay_cents` |
+| `POST /v1/rider/online` · `/offline` | | 204. 409 com o `code` do motivo (`not_approved`, `blocked`, `documents_expired`, `entry_pending`, `debt_pending`) |
 | `POST /v1/rider/position` | `{"lat","lng"}` | 204. A cada ~4 s enquanto disponível (e durante a corrida). |
 | `POST /v1/rider/entry-charge` | | 201 `{"charge_id","amount_cents","br_code"}` (a entrada de R$ 50) |
+| `POST /v1/rider/debt-charge` | | 201 `{"charge_id","amount_cents","br_code"}` (a dívida da taxa das corridas em dinheiro; 409 `invalid_state` se não deve nada) |
 | `POST /v1/rider/offers/{ride_id}/accept` | | a corrida (visão do motoqueiro) |
 | `POST /v1/rider/offers/{ride_id}/decline` | | 204, sem penalidade |
 | `POST /v1/rider/rides/{id}/arrive` · `/helmet` · `/complete` | | a corrida |
@@ -180,6 +181,7 @@ Nos dois casos, reconecte e peça o estado. O app pode mandar texto qualquer (`"
 | `passenger_blocked` | motoqueiro | `ride_id` (o passageiro foi bloqueado; você está livre) |
 | `unblocked` | passageiro | `ride_id` |
 | `entry_required` · `entry_paid` | motoqueiro | `entry_fee_cents` · sem dados |
+| `debt_required` · `debt_paid` | motoqueiro | `cash_debt_cents, debt_limit_cents` (a dívida chegou ao limite: ele foi para "não estou" e não recebe corrida) · `cash_debt_cents, amount_cents` |
 | `rider_approved` · `rider_rejected` · `rider_blocked` · `rider_unblocked` · `documents_expired` | motoqueiro | `reason` quando houver |
 | `safety_check` | passageiro | `ride_id, alert_id, kind` (`stopped`, `off_route` ou `no_signal`): "está tudo bem?" |
 | `sos_sent` | passageiro | `alert_id, contact_registered, contact_notified` |
@@ -187,7 +189,7 @@ Nos dois casos, reconecte e peça o estado. O app pode mandar texto qualquer (`"
 
 ## Códigos de erro
 
-`appeal_not_allowed` 409 · `nothing_to_pay` 409 · `topup_disabled` 403 · `unauthorized` 401 · `wrong_role` 403 · `forbidden` 403 · `not_found` 404 · `invalid` 422 (`fields` lista os campos) ·
+`appeal_not_allowed` 409 · `debt_pending` 409 · `nothing_to_pay` 409 · `topup_disabled` 403 · `unauthorized` 401 · `wrong_role` 403 · `forbidden` 403 · `not_found` 404 · `invalid` 422 (`fields` lista os campos) ·
 `not_allowed` 403 · `quote_expired` 409 · `offer_gone` 409 · `not_your_ride` 403 · `already_rated` 409 ·
 `invalid_state` 409 · `alert_closed` 409 · `duplicate_registration` 409 (`field`) · `not_approved`, `blocked`,
 `documents_expired`, `entry_pending` 409 · `wrong_pin` 422 · `code_invalid` 401 · `too_many_requests` 429 ·

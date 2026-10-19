@@ -4,7 +4,7 @@ from __future__ import annotations
 from app.db import queries
 from app.db import repositories as repo
 from app.db.models import RiderProfileRow, UserRow
-from app.domain.fees import offer_block_reason
+from app.domain.fees import debt_to_pay_cents, offer_block_reason
 from app.domain.rides import Ride, RideState
 from app.domain.types import PaymentMethod
 from app.runtime import Unit
@@ -185,6 +185,7 @@ def rider_state(unit: Unit, rider_id: str) -> dict:
     active_id = queries.rider_active_ride_id(session, rider_id)
     queued_id = queries.queued_ride_id_of_rider(session, rider_id)
     unpaid_id = queries.rider_unpaid_cash_ride_id(session, rider_id)
+    block = offer_block_reason(account, fees)
     return {
         "registration": {
             "status": profile.status, "online": profile.online, "reason": profile.rejected_reason,
@@ -195,8 +196,10 @@ def rider_state(unit: Unit, rider_id: str) -> dict:
         "account": {
             "completed_rides": account.completed_rides, "trial_rides": fees.trial_rides,
             "entry_paid": account.entry_paid, "entry_fee_cents": fees.entry_fee_cents,
-            "needs_entry": offer_block_reason(account, fees) is not None,
+            "needs_entry": block == "entrada_pendente",
+            "blocked_reason": {"entrada_pendente": "entry_pending", "divida_pendente": "debt_pending"}.get(block),
             "cash_debt_cents": account.cash_debt_cents, "cash_debt_limit_cents": fees.cash_debt_limit_cents,
+            "debt_to_pay_cents": debt_to_pay_cents(account),
         },
         "offer": offer,
         "ride": rider_ride_view(unit, active_id) if active_id else None,
