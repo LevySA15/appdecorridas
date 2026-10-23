@@ -1,0 +1,24 @@
+name: passenger
+description: App do passageiro.
+publish_to: none
+resolution: workspace
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  corrida_core:
+    path: ../../packages/corrida_core
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  http: ^1.2.0
+  stream_channel: ^2.1.0
+  web_socket_channel: ^3.0.0
+
+flutter:
+  uses-material-design: true
