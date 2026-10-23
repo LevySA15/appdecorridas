@@ -18,7 +18,8 @@ A especificação cobre várias partes independentes. Cada parte vira um plano p
 | 4E | **Saldo que paga corrida e pode ser sacado** — **feito** (`2026-10-19-04e-saldo-paga-corrida-e-saque.md`) | O saldo do passageiro paga a corrida inteira (cobrado quando a moto aceita; se não cobrir mais, vira Pix comum), devoluções voltam sempre ao saldo, e o saldo pode ser sacado por Pix (saque **desligado** até o advogado; chave guardada só pelo final). | 4B | não |
 | 5A | **Base dos apps** — **feito** (`2026-10-19-05a-base-dos-apps.md`) | Flutter 3.47.7 instalado em `~/development/flutter`; pasta `mobile/` com o pacote Dart `corrida_core`: cliente da API, sessão, modelos do passageiro e do motoqueiro e tempo real com reconexão; teste de contrato contra o servidor de verdade (`mobile/tool/contrato.sh`). | 2C | não |
 | 5 | **App do motoqueiro (Flutter, Android)** | Cadastro, ficar disponível, oferta, fila, capacete, QR, extrato. | 2 | não |
-| 6 | **App do passageiro (Flutter, Android)** | Pedir, pagar, acompanhar, código, SOS, avaliar. | 2 | não |
+| 6A | **App do passageiro — telas e navegação** — **feito** (`2026-10-23-06a-app-do-passageiro.md`) | Login, início, pedir corrida (mapa de mentira), acompanhar, avaliar, carteira (saldo/saque/contato de emergência/recurso); `PassengerController` liga as telas ao `corrida_core`; navegação própria que volta ao login na hora se a sessão vencer e abre avaliar quando a corrida termina. | 5A | não |
+| 6 | **App do passageiro (Flutter, Android)** | Pedir, pagar, acompanhar, código, SOS, avaliar. | 6A | não |
 | 7 | **Integrações reais** | Woovi (Pix e divisão), Google Maps, código por WhatsApp. | 2, CNPJ, advogado | **sim** |
 | 8 | **Etapa 2 e publicação** | Cartão pela Asaas; publicação na Google Play; iPhone. | 7 | **sim** |
 
@@ -86,7 +87,15 @@ Menores adiados da revisão do 4E: sacar com uma corrida paga com saldo ainda em
 
 Decisões que o Levy confere: Flutter em `~/development/flutter` (fora do repositório, sem mexer no perfil do shell, análise de uso desligada); **licenças do Android não aceitas por mim** (para gerar o aplicativo no celular o Levy roda `flutter doctor --android-licenses` e aceita); não há celular nem emulador neste computador (7 GB de memória), então a parte visual dos apps será conferida por testes de tela e por ele num celular real; os dois apps ficam em `mobile/apps/` junto do pacote em comum.
 
-Adiado: telas e navegação dos dois apps (planos 5B e 6A em diante), armazenamento seguro do token no celular, serviço em primeiro plano da posição do motoqueiro, notificações (Firebase), mapa (interface própria; mapa de mentira até a chave do Google no plano 7), estado de rede dos apps ("instável"), fotos de documento a partir da câmera, rotas do administrador no cliente Dart (o painel é um site separado), `GET /v1/riders/{id}/documents/selfie` (foto do motoqueiro: o app precisa baixar com o token).
+Adiado: telas e navegação do app do motoqueiro (plano 5B em diante), armazenamento seguro do token no celular, serviço em primeiro plano da posição do motoqueiro, notificações (Firebase), mapa (interface própria; mapa de mentira até a chave do Google no plano 7), estado de rede dos apps ("instável"), fotos de documento a partir da câmera, rotas do administrador no cliente Dart (o painel é um site separado), `GET /v1/riders/{id}/documents/selfie` (foto do motoqueiro: o app precisa baixar com o token).
+
+## Itens que sobraram do plano 6A
+
+Achado e corrigido na revisão: a corrida terminando enquanto o passageiro acompanhava derrubava a própria tela de avaliar que tinha acabado de abrir (a releitura do estado em paralelo, mais lenta, via `ride: null` e desfazia a navegação) — corrigido antes do merge; e "Ver Pix" da corrida em dinheiro não paga travava quando o motoqueiro ainda não tinha pedido o QR (`charge_id` nulo nessa janela) — corrigido também.
+
+Menores adiados da revisão do 6A (nenhum te impede de usar o app, registrados para quando alguém for arrumar essa tela de novo): o mesmo tipo de valor nulo em `ride_screen.dart` (`end_payment.charge_id`) está lá, mas é código morto hoje — o servidor só manda isso numa corrida já terminada, que nunca aparece como corrida aberta do passageiro; a tela de pedir corrida não limpa os pontos marcados quando a cotação falha por erro de rede (cosmético, basta marcar de novo); os formulários dentro dos diálogos da carteira (recarga, saque, recurso) não liberam o campo de texto quando o diálogo fecha (um vazamento pequeno por diálogo aberto); o diálogo de segurança não confere se a tela ainda está montada antes de abrir (janela de corrida muito improvável); um `trip_completed` repetido (reconexão) pode abrir a tela de avaliar duas vezes.
+
+Fora deste plano (mesmo padrão do roteiro): mapa de verdade (chave do Google, plano 7); notificações (Firebase); foto por câmera e envio de documentos (é do app do motoqueiro, plano 5B); armazenamento seguro do token no celular; tradução de textos; qualquer aviso de tempo real que não seja `trip_completed` ganhando reação própria na tela (por exemplo, um toast para `ride_cancelled` iniciado pelo motoqueiro) — por ora todos os outros avisos só releem o `state`.
 
 ## Itens que sobraram do plano 3
 
