@@ -118,6 +118,35 @@ void main() {
     expect(mostrado, charge);
   });
 
+  testWidgets(
+    'pendencia de dinheiro sem qr ainda nao mostra o botao de ver pix',
+    (tester) async {
+      await tester.pumpWidget(
+        _app(
+          HomeScreen(
+            state: const PassengerState(
+              pendingPayment: PendingPayment(
+                rideId: 'r1',
+                amountCents: 500,
+                // sem charge_id: o motoqueiro ainda não pediu o QR do fim da corrida.
+              ),
+            ),
+            onRequestRide: () {},
+            onOpenRide: () {},
+            onOpenWallet: () {},
+            onSignOut: () {},
+            onPayPendingFee: () async => const PayFeeResult(paid: true),
+            onShowPendingCash: (_) async =>
+                const Charge(chargeId: 'c1', amountCents: 100),
+            onShowCharge: (_) {},
+          ),
+        ),
+      );
+
+      expect(find.text('Ver Pix'), findsNothing);
+    },
+  );
+
   testWidgets('taxa pendente paga do saldo nao mostra pix', (tester) async {
     Charge? mostrado;
     await tester.pumpWidget(

@@ -218,6 +218,39 @@ void main() {
     },
   );
 
+  testWidgets(
+    'trip_completed enquanto acompanha mantem a tela de avaliar',
+    (tester) async {
+      final m = Mundo();
+      await m.store.save(
+        Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
+      );
+      m.stateJson = {
+        'ride': {'ride_id': 'r1', 'state': 'in_progress'},
+      };
+      await m.controller.start();
+      await tester.pumpWidget(PassengerApp(controller: m.controller));
+      await tester.pump();
+
+      await tester.tap(find.text('Acompanhar corrida'));
+      await tester.pumpAndSettle();
+      expect(find.byType(RideScreen), findsOneWidget);
+
+      // a corrida some do estado assim que termina (igual ao servidor de verdade: COMPLETED é
+      // terminal e não é "corrida aberta") — ao mesmo tempo que o aviso de tempo real chega.
+      m.stateJson = const {};
+      m.canais.single.servidorMandaAviso('trip_completed', {
+        'ride_id': 'r1',
+        'price_cents': 500,
+        'method': 'pix',
+      });
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RateScreen), findsOneWidget);
+      await tester.runAsync(() => m.controller.signOut());
+    },
+  );
+
   testWidgets('trip_completed abre a tela de avaliar com o ride_id certo', (
     tester,
   ) async {

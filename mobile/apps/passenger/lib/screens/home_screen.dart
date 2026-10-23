@@ -96,18 +96,23 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListTile(
                 title: Text(brl(state.pendingPayment!.amountCents)),
                 subtitle: const Text('Corrida em dinheiro não paga'),
-                trailing: FilledButton(
-                  onPressed: _loadingCash
-                      ? null
-                      : () => _showPendingCash(state.pendingPayment!.chargeId!),
-                  child: _loadingCash
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Ver Pix'),
-                ),
+                // chargeId é nulo até o motoqueiro pedir o QR do fim da corrida; sem QR não há
+                // o que mostrar ainda.
+                trailing: state.pendingPayment!.chargeId == null
+                    ? null
+                    : FilledButton(
+                        onPressed: _loadingCash
+                            ? null
+                            : () =>
+                                  _showPendingCash(state.pendingPayment!.chargeId!),
+                        child: _loadingCash
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text('Ver Pix'),
+                      ),
               ),
             ),
           ],

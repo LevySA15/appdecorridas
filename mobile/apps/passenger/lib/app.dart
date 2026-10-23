@@ -92,6 +92,12 @@ class _SignedInShellState extends State<SignedInShell> {
   void _onEvent(ServerEvent event) {
     if (event.type != 'trip_completed') return;
     final rideId = asString(event.data['ride_id']);
+    // A corrida terminada sai do `state` (é terminal) assim que o próximo `refreshState` chegar;
+    // tira a tela de acompanhar da pilha e desarma o `_onControllerChanged` agora, para essa
+    // releitura (que corre em paralelo com este aviso) não derrubar a tela de avaliar que vamos
+    // empurrar a seguir.
+    _rideRouteOpen = false;
+    _navigatorKey.currentState?.popUntil((route) => route.isFirst);
     _navigatorKey.currentState?.push(
       MaterialPageRoute(
         builder: (_) => RateScreen(
