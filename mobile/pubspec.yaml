@@ -6,3 +6,4 @@ workspace:
   - packages/corrida_core
   - packages/corrida_ui
   - apps/passenger
+  - apps/rider
