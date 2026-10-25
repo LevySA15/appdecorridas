@@ -65,6 +65,11 @@ def normalize_cnh(raw: str) -> str:
     return digits
 
 
+# O motivo que a varredura de documentos vencidos grava. Quem foi bloqueado pela varredura (e não pelo
+# administrador: `UserRow.is_blocked` desligado) volta sozinho ao renovar os documentos.
+EXPIRED_DOCUMENTS_REASON = "documento vencido"
+
+
 class RiderService:
     def __init__(self, positions: PositionStore, events: EventCollector, fee_cfg: FeeConfig | None = None) -> None:
         self.positions = positions
@@ -207,6 +212,15 @@ class RiderService:
             profile.cnh_photo_key = cnh_photo_key
         if crlv_key is not None:
             profile.crlv_key = crlv_key
+        user = session.get(UserRow, rider_id)
+        if (
+            profile.status == "blocked"
+            and profile.rejected_reason == EXPIRED_DOCUMENTS_REASON
+            and not user.is_blocked
+        ):
+            profile.status = "approved"
+            profile.rejected_reason = None
+            self.events.add(rider_id, "rider_unblocked")
         session.flush()
 
     # --- disponibilidade ----------------------------------------------------------
@@ -261,7 +275,7 @@ class RiderService:
         for profile in rows:
             profile.status = "blocked"
             profile.online = False
-            profile.rejected_reason = "documento vencido"
+            profile.rejected_reason = EXPIRED_DOCUMENTS_REASON
             self.positions.remove(profile.user_id)
             self.events.add(profile.user_id, "documents_expired")
             blocked.append(profile.user_id)

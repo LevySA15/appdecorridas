@@ -244,6 +244,59 @@ def test_renovar_documentos_atualiza_as_datas(service, session):
         service.renew_documents(session, "r1", cnh_expires_on=dt.date(2020, 1, 1), crlv_expires_on=FUTURO, today=HOJE)
 
 
+def bloqueado_por_documento_vencido(service, session, events):
+    """Aprovado com o documento da moto vencendo em 2026-12-31 e bloqueado pela varredura de 2027-01-01."""
+    aprovado(service, session, "r1", crlv_expires_on=dt.date(2026, 12, 31))
+    assert service.block_expired_documents(session, dt.date(2027, 1, 1)) == ["r1"]
+    events.drain()
+
+
+def test_renovar_documentos_libera_quem_foi_bloqueado_por_documento_vencido(service, session, events):
+    bloqueado_por_documento_vencido(service, session, events)
+    service.renew_documents(
+        session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1),
+        today=dt.date(2027, 1, 1),
+    )
+    perfil = session.get(RiderProfileRow, "r1")
+    assert (perfil.status, perfil.rejected_reason, perfil.online) == ("approved", None, False)
+    assert [e.type for e in events.events] == ["rider_unblocked"]
+    service.go_online(session, "r1", dt.date(2027, 1, 1))
+    assert session.get(RiderProfileRow, "r1").online is True
+
+
+def test_renovar_documentos_nao_libera_o_bloqueio_do_administrador(service, session, events):
+    aprovado(service, session, "r1")
+    service.block(session, "r1", "documento vencido")     # o mesmo texto da varredura, mas é do administrador
+    events.drain()
+    service.renew_documents(
+        session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE,
+    )
+    assert session.get(RiderProfileRow, "r1").status == "blocked"
+    assert session.get(UserRow, "r1").is_blocked is True
+    assert not events.events
+
+
+def test_renovar_com_data_vencida_continua_bloqueado(service, session, events):
+    bloqueado_por_documento_vencido(service, session, events)
+    with pytest.raises(RegistrationError, match="vencid"):
+        service.renew_documents(
+            session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2026, 12, 31),
+            today=dt.date(2027, 1, 1),
+        )
+    assert session.get(RiderProfileRow, "r1").status == "blocked"
+    assert not events.events
+
+
+def test_renovar_documentos_de_quem_nao_esta_bloqueado_nao_emite_aviso(service, session, events):
+    aprovado(service, session)
+    events.drain()
+    service.renew_documents(
+        session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE,
+    )
+    assert session.get(RiderProfileRow, "r1").status == "approved"
+    assert not events.events
+
+
 def test_ficha_do_motoqueiro_para_o_passageiro(service, session):
     aprovado(service, session)
     ficha = service.rider_card(session, "r1")
