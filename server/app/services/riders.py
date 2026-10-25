@@ -98,7 +98,12 @@ class RiderService:
         user = session.get(UserRow, user_id)
         if user is None or user.role != "rider":
             raise RegistrationError("Entre com um número de motoqueiro para se cadastrar.")
-        if session.get(RiderProfileRow, user_id) is not None:
+        # Cadastro recusado pode ser reenviado (decisão do Levy, 25/10/2026): o mesmo cadastro volta a `pending`.
+        # A linha é travada, então dois toques seguidos são serializados e o segundo vê `pending`.
+        existing = session.execute(
+            select(RiderProfileRow).where(RiderProfileRow.user_id == user_id).with_for_update()
+        ).scalar_one_or_none()
+        if existing is not None and existing.status != "rejected":
             raise RegistrationError("Seu cadastro já foi enviado.")
         clean_name = name.strip()
         if len(clean_name) < 2:
@@ -113,36 +118,48 @@ class RiderService:
             raise RegistrationError("Sua CNH está vencida.")
         if crlv_expires_on < today:
             raise RegistrationError("O documento da moto está vencido.")
-        duplicate = self._find_duplicate(session, cpf=cpf_ok, cnh_number=cnh_ok, plate=plate_ok)
+        duplicate = self._find_duplicate(
+            session, cpf=cpf_ok, cnh_number=cnh_ok, plate=plate_ok, exclude_user_id=user_id
+        )
         if duplicate is not None:
             raise duplicate
         user.name = clean_name
         try:
             with session.begin_nested():
-                session.add(
-                    RiderProfileRow(
-                        user_id=user_id, cpf=cpf_ok, cnh_number=cnh_ok, plate=plate_ok,
-                        moto_model=moto_model.strip(), status="pending", selfie_key=selfie_key,
-                        cnh_photo_key=cnh_photo_key, crlv_key=crlv_key,
-                        cnh_expires_on=cnh_expires_on, crlv_expires_on=crlv_expires_on,
+                if existing is None:
+                    session.add(
+                        RiderProfileRow(
+                            user_id=user_id, cpf=cpf_ok, cnh_number=cnh_ok, plate=plate_ok,
+                            moto_model=moto_model.strip(), status="pending", selfie_key=selfie_key,
+                            cnh_photo_key=cnh_photo_key, crlv_key=crlv_key,
+                            cnh_expires_on=cnh_expires_on, crlv_expires_on=crlv_expires_on,
+                        )
                     )
-                )
+                else:
+                    existing.cpf, existing.cnh_number, existing.plate = cpf_ok, cnh_ok, plate_ok
+                    existing.moto_model = moto_model.strip()
+                    existing.selfie_key, existing.cnh_photo_key, existing.crlv_key = selfie_key, cnh_photo_key, crlv_key
+                    existing.cnh_expires_on, existing.crlv_expires_on = cnh_expires_on, crlv_expires_on
+                    existing.status, existing.rejected_reason = "pending", None
                 session.flush()
         except IntegrityError:
             # Outro cadastro entrou entre a conferência e a gravação (dois toques, duas telas): o banco decide.
             raise self._find_duplicate(
-                session, cpf=cpf_ok, cnh_number=cnh_ok, plate=plate_ok
+                session, cpf=cpf_ok, cnh_number=cnh_ok, plate=plate_ok, exclude_user_id=user_id
             ) or RegistrationError("Seu cadastro já foi enviado.") from None
 
     def _find_duplicate(
-        self, session: Session, *, cpf: str, cnh_number: str, plate: str
+        self, session: Session, *, cpf: str, cnh_number: str, plate: str, exclude_user_id: str | None = None
     ) -> DuplicateRegistration | None:
         for field, phrase, column, value in (
             ("CPF", "este CPF", RiderProfileRow.cpf, cpf),
             ("número de CNH", "este número de CNH", RiderProfileRow.cnh_number, cnh_number),
             ("placa", "esta placa", RiderProfileRow.plate, plate),
         ):
-            if session.execute(select(RiderProfileRow.user_id).where(column == value)).first() is not None:
+            query = select(RiderProfileRow.user_id).where(column == value)
+            if exclude_user_id is not None:
+                query = query.where(RiderProfileRow.user_id != exclude_user_id)   # o próprio cadastro não conta
+            if session.execute(query).first() is not None:
                 return DuplicateRegistration(field, phrase)
         return None
 

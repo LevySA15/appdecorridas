@@ -146,6 +146,67 @@ def test_so_motoqueiro_cadastra_e_so_uma_vez(service, session):
         cadastrar(service, session, cpf=CPF2, cnh_number="99999999999", plate="ZZZ9Z99")
 
 
+def test_cadastro_recusado_pode_ser_reenviado(service, session):
+    novo_usuario(session)
+    cadastrar(service, session)
+    service.reject(session, "r1", "Foto da CNH ilegível")
+    cadastrar(
+        service, session, name="Carlos Moto Novo", moto_model="Yamaha Factor", selfie_key="s2.jpg",
+        cnh_photo_key="c2.jpg", crlv_key="m2.jpg",
+    )
+    perfil = session.get(RiderProfileRow, "r1")
+    assert (perfil.status, perfil.rejected_reason) == ("pending", None)
+    assert (perfil.moto_model, perfil.selfie_key, perfil.cnh_photo_key, perfil.crlv_key) == (
+        "Yamaha Factor", "s2.jpg", "c2.jpg", "m2.jpg",
+    )
+    assert session.get(UserRow, "r1").name == "Carlos Moto Novo"
+    assert len(session.execute(select(RiderProfileRow)).scalars().all()) == 1
+
+
+def test_reenviar_com_o_mesmo_cpf_e_placa_do_proprio_cadastro_funciona(service, session):
+    novo_usuario(session)
+    cadastrar(service, session)
+    service.reject(session, "r1", "Foto da CNH ilegível")
+    cadastrar(service, session)          # mesmos CPF, CNH e placa: não colide com o próprio cadastro
+    assert session.get(RiderProfileRow, "r1").status == "pending"
+
+
+def test_reenviar_com_dado_de_outro_motoqueiro_e_recusado(service, session):
+    novo_usuario(session)
+    cadastrar(service, session)
+    service.reject(session, "r1", "Foto da CNH ilegível")
+    aprovado(service, session, "r2", phone="+5575900000003", cpf=CPF2, cnh_number="99999999999", plate="ZZZ9Z99")
+    with pytest.raises(DuplicateRegistration) as erro:
+        cadastrar(service, session, "r1", cpf=CPF2)
+    assert erro.value.field == "CPF"
+    perfil = session.get(RiderProfileRow, "r1")
+    assert (perfil.status, perfil.rejected_reason) == ("rejected", "Foto da CNH ilegível")
+
+
+@pytest.mark.parametrize("situacao", ["pending", "approved", "blocked"])
+def test_cadastro_que_nao_foi_recusado_nao_reenvia(service, session, situacao):
+    novo_usuario(session)
+    cadastrar(service, session)
+    if situacao in ("approved", "blocked"):
+        service.approve(session, "r1", now=100.0)
+    if situacao == "blocked":
+        service.block(session, "r1", "denúncia")
+    with pytest.raises(RegistrationError, match="já foi enviado"):
+        cadastrar(service, session, moto_model="Outra moto")
+    assert session.get(RiderProfileRow, "r1").status == situacao
+    assert session.get(RiderProfileRow, "r1").moto_model == "Honda CG 160"
+
+
+def test_reenvio_com_dado_ruim_continua_recusado_com_a_mensagem(service, session):
+    novo_usuario(session)
+    cadastrar(service, session)
+    service.reject(session, "r1", "Foto da CNH ilegível")
+    with pytest.raises(RegistrationError):
+        cadastrar(service, session, cpf="123")
+    perfil = session.get(RiderProfileRow, "r1")
+    assert (perfil.status, perfil.rejected_reason) == ("rejected", "Foto da CNH ilegível")
+
+
 def test_aprovar_recusar_bloquear_e_liberar(service, session, events):
     novo_usuario(session)
     cadastrar(service, session)

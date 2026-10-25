@@ -196,6 +196,24 @@ def test_recusar_cadastro_guarda_o_motivo(client, rider, admin, hoje, session):
     assert sem_motivo.status_code == 422
 
 
+def test_motoqueiro_recusado_reenvia_o_cadastro_pela_api(client, rider, admin, hoje):
+    assert cadastro(client, rider, hoje).status_code == 201
+    recusa = client.post(
+        f"/v1/admin/riders/{rider.user_id}/reject", json={"reason": "Foto da CNH ilegível"}, headers=admin.headers
+    )
+    assert recusa.status_code == 204
+    estado = client.get("/v1/rider/state", headers=rider.headers).json()
+    assert estado["registration"]["status"] == "rejected"
+    assert estado["registration"]["reason"] == "Foto da CNH ilegível"
+
+    novo = cadastro(client, rider, hoje, name="Carlos Moto Novo")
+
+    assert (novo.status_code, novo.json()) == (201, {"status": "pending"})
+    estado = client.get("/v1/rider/state", headers=rider.headers).json()
+    assert estado["registration"]["status"] == "pending"
+    assert estado["registration"]["reason"] is None
+
+
 def test_decidir_motoqueiro_que_nao_existe_e_404(client, admin):
     assert client.post("/v1/admin/riders/ninguem/approve", headers=admin.headers).status_code == 404
 
