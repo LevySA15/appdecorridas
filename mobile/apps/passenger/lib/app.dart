@@ -1,13 +1,11 @@
 import 'dart:async';
 
 import 'package:corrida_core/corrida_core.dart';
+import 'package:corrida_ui/corrida_ui.dart';
 import 'package:flutter/material.dart';
 
 import 'passenger_controller.dart';
-import 'screens/charge_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/login_screen.dart';
-import 'screens/rate_screen.dart';
 import 'screens/request_ride_screen.dart';
 import 'screens/ride_screen.dart';
 import 'screens/wallet_screen.dart';

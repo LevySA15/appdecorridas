@@ -1,7 +1,7 @@
 import 'package:corrida_core/corrida_core.dart';
 import 'package:flutter/material.dart';
 
-import '../fake_map.dart';
+import 'package:corrida_ui/corrida_ui.dart';
 
 const _labels = {'pix': 'Pix', 'cash': 'Dinheiro', 'balance': 'Saldo'};
 

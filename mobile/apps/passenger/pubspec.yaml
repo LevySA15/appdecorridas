@@ -12,6 +12,8 @@ dependencies:
     sdk: flutter
   corrida_core:
     path: ../../packages/corrida_core
+  corrida_ui:
+    path: ../../packages/corrida_ui
 
 dev_dependencies:
   flutter_test:

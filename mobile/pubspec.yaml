@@ -4,4 +4,5 @@ environment:
   sdk: ^3.13.0
 workspace:
   - packages/corrida_core
+  - packages/corrida_ui
   - apps/passenger

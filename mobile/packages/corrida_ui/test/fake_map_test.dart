@@ -1,7 +1,7 @@
 import 'package:corrida_core/corrida_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:passenger/fake_map.dart';
+import 'package:corrida_ui/corrida_ui.dart';
 
 void main() {
   test('toque no centro do quadrado da o centro da cidade', () {

@@ -1,5 +1,6 @@
-import 'package:corrida_core/corrida_core.dart';
 import 'package:flutter/material.dart';
+
+import 'messages.dart';
 
 /// Telefone + código: `onRequestCode`/`onVerify` são o `PassengerController`, sem a tela importar
 /// `corrida_core` além do que precisa para mostrar o erro.
@@ -30,12 +31,6 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  String _messageOf(Object error) => switch (error) {
-    ApiException(message: final message) => message,
-    NetworkException(message: final message) => message,
-    _ => 'Algo deu errado. Tente de novo.',
-  };
-
   Future<void> _run(Future<void> Function() action) async {
     setState(() => _busy = true);
     try {
@@ -44,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(_messageOf(error))));
+      ).showSnackBar(SnackBar(content: Text(friendlyMessage(error))));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:corrida_core/corrida_core.dart';
+import 'package:corrida_ui/corrida_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -9,8 +10,6 @@ import 'package:http/testing.dart';
 import 'package:passenger/app.dart';
 import 'package:passenger/passenger_controller.dart';
 import 'package:passenger/screens/home_screen.dart';
-import 'package:passenger/screens/login_screen.dart';
-import 'package:passenger/screens/rate_screen.dart';
 import 'package:passenger/screens/ride_screen.dart';
 import 'package:stream_channel/stream_channel.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';

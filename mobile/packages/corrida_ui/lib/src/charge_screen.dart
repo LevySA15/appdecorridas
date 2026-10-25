@@ -6,6 +6,8 @@ String _titulo(String purpose) => switch (purpose) {
   'end' => 'Pix da corrida em dinheiro',
   'fee' => 'Pix da taxa de cancelamento',
   'topup' => 'Pix da recarga',
+  'entry' => 'Pix da entrada',
+  'debt' => 'Pix da dívida',
   _ => 'Pix a pagar',
 };
 

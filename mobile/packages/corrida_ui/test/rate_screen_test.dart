@@ -1,7 +1,7 @@
 import 'package:corrida_core/corrida_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:passenger/screens/rate_screen.dart';
+import 'package:corrida_ui/corrida_ui.dart';
 
 void main() {
   testWidgets('tocar a 4a estrela chama onRate(4)', (tester) async {
