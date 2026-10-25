@@ -1,4 +1,24 @@
+import 'package:corrida_core/corrida_core.dart';
 import 'package:flutter/material.dart';
 
-// Provisório: a Tarefa 11 do plano 5B monta o app de verdade.
-void main() => runApp(const MaterialApp(home: SizedBox()));
+import 'app.dart';
+import 'rider_controller.dart';
+
+/// Celular de verdade ligado por USB: `adb reverse tcp:8000 tcp:8000` faz o "localhost" do celular
+/// chegar ao servidor do computador pelo cabo, sem precisar da mesma rede Wi-Fi. (Num emulador
+/// Android, o endereço seria `10.0.2.2` em vez de `localhost`.)
+final _serverUrl = Uri.parse('http://localhost:8000');
+
+void main() {
+  final client = ApiClient(baseUrl: _serverUrl);
+  final authApi = AuthApi(client);
+  final session = SessionManager(authApi, MemorySessionStore(), client);
+  final controller = RiderController(
+    authApi: authApi,
+    session: session,
+    api: RiderApi(client),
+    realtimeBaseUrl: _serverUrl,
+  );
+  controller.start();
+  runApp(RiderApp(controller: controller));
+}
