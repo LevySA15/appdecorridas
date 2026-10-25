@@ -218,11 +218,13 @@ void main() {
           'net_cents': 600,
           'method': 'pix',
           'distance_m': 2300,
+          'confirmed': false,
         },
       ],
       'next_ride_number': 3,
       'next_fee_cents': 100,
       'cash_debt_cents': 100,
+      'pending_cents': 900,
     });
 
     expect((extrato.date, extrato.completedCount), ('2026-10-25', 2));
@@ -235,6 +237,7 @@ void main() {
       (700, 700, 100),
     );
     expect((extrato.nextRideNumber, extrato.nextFeeCents), (3, 100));
+    expect(extrato.pendingCents, 900);
     final corrida = extrato.rides.single;
     expect(
       (corrida.rideId, corrida.priceCents, corrida.feeCents),
@@ -245,6 +248,7 @@ void main() {
       (600, 'pix', 2300),
     );
     expect(corrida.completedAt, 1761400000.5);
+    expect(corrida.confirmed, isFalse);
   });
 
   test(
@@ -256,6 +260,8 @@ void main() {
       expect(extrato.rides, isEmpty);
       expect(extrato.nextRideNumber, isNull);
       expect(extrato.nextFeeCents, isNull);
+      expect(extrato.pendingCents, 0);
+      expect(extrato.cashDebtCents, 0); // a dívida vem nula em dia passado
     },
   );
 }

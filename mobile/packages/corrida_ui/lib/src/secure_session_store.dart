@@ -22,7 +22,11 @@ class SecureSessionStore implements SessionStore {
     } on PlatformException {
       // O Keystore às vezes perde as chaves (restauração de backup, troca de tela de bloqueio): o valor guardado
       // não abre mais. Esquece e pede o login de novo, em vez de travar o app.
-      await clear();
+      try {
+        await clear();
+      } on PlatformException {
+        // nem apagar o Keystore deixa: segue sem sessão e pede o login (o app não pode travar aqui)
+      }
       return null;
     }
     if (raw == null) return null;

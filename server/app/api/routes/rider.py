@@ -4,7 +4,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,7 @@ from app.domain.geo import GeoPoint
 from app.domain.rides import WrongPin
 from app.infra.documents import KINDS, MAX_UPLOAD_BYTES, DocumentStore, UploadError
 from app.services.auth import AuthUser, TooManyRequests
+from app.services.dispatch import OfferGone
 from app.services.riders import RegistrationError
 
 router = APIRouter(prefix="/v1/rider", tags=["motoqueiro"])
@@ -121,7 +122,11 @@ def state(request: Request, user: AuthUser = Depends(rider_user)) -> dict:
 
 
 @router.get("/statement")
-def statement(request: Request, date: dt.date | None = None, user: AuthUser = Depends(rider_user)) -> dict:
+def statement(
+    request: Request,
+    date: dt.date | None = Query(default=None, ge=dt.date(2020, 1, 1), le=dt.date(2100, 12, 31)),
+    user: AuthUser = Depends(rider_user),
+) -> dict:
     """Extrato do dia (hoje, ou o dia de `?date=AAAA-MM-DD`): corridas, ganhos, taxa e a próxima faixa."""
     return get_runtime(request).run(lambda unit: rider_statement(unit, user.user_id, date))
 
@@ -134,7 +139,18 @@ def go_online(request: Request, user: AuthUser = Depends(rider_user)) -> Respons
 
 @router.post("/offline", status_code=204)
 def go_offline(request: Request, user: AuthUser = Depends(rider_user)) -> Response:
-    get_runtime(request).run(lambda unit: unit.riders.go_offline(unit.session, user.user_id))
+    def work(unit):
+        unit.riders.go_offline(unit.session, user.user_id)
+        # Quem para de rodar não quer a oferta que acabou de chegar: recusa por ele, e o passageiro não espera
+        # os 15 s inteiros. (Sem penalidade: recusar nunca pune.)
+        pending = queries.pending_offer_for_rider(unit.session, user.user_id)
+        if pending is not None:
+            try:
+                unit.dispatch.decline_offer(unit.session, user.user_id, pending.ride_id, unit.now)
+            except OfferGone:
+                pass        # venceu ou foi para outro no mesmo instante: tanto faz
+
+    get_runtime(request).run(work)
     return Response(status_code=204)
 
 

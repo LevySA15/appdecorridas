@@ -8,6 +8,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Um armazenamento que sempre falha como o Keystore do Android falha quando as chaves estragam.
 class _QuebradoStorage implements FlutterSecureStorage {
+  _QuebradoStorage({this.apagarTambemFalha = false});
+
+  final bool apagarTambemFalha;
   final apagados = <String>[];
 
   @override
@@ -16,6 +19,9 @@ class _QuebradoStorage implements FlutterSecureStorage {
       return Future<String?>.error(PlatformException(code: 'keystore'));
     }
     if (invocation.memberName == #delete) {
+      if (apagarTambemFalha) {
+        return Future<void>.error(PlatformException(code: 'keystore'));
+      }
       apagados.add(invocation.namedArguments[#key] as String);
       return Future<void>.value();
     }
@@ -85,4 +91,15 @@ void main() {
     expect(lida, isNull);
     expect(quebrado.apagados, ['session']);
   });
+
+  test(
+    'keystore quebrado ate para apagar: ainda assim pede login, sem derrubar',
+    () async {
+      final lida = await SecureSessionStore(
+        storage: _QuebradoStorage(apagarTambemFalha: true),
+      ).load();
+
+      expect(lida, isNull);
+    },
+  );
 }

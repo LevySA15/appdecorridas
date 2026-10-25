@@ -69,7 +69,10 @@ void main() {
     );
 
     // a tela não se atualiza sozinha: quem muda é a tela de trás (pelo estado)
-    expect(find.text('Depois de pagar, pode fechar esta tela.'), findsOneWidget);
+    expect(
+      find.text('Depois de pagar, pode fechar esta tela.'),
+      findsOneWidget,
+    );
     expect(find.textContaining('atualiza sozinha'), findsNothing);
   });
 }

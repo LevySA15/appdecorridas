@@ -236,20 +236,27 @@ def rider_statement(unit: Unit, rider_id: str, day: dt.date | None) -> dict:
             "ride_id": ride.id, "completed_at": ride.completed_at, "price_cents": ride.price_cents,
             "fee_cents": fee, "net_cents": ride.price_cents - fee, "method": ride.payment_method,
             "distance_m": details.distance_m,
+            # Pix entrou (o código só começa a corrida com o Pix pago); dinheiro só conta depois que o motoqueiro
+            # confirma que recebeu (ou que o passageiro pagou o QR do fim). Antes disso é "a receber".
+            "confirmed": ride.payment_method != "cash" or ride.end_payment_confirmed,
         })
-    gross = sum(i["price_cents"] for i in items)
-    fees = sum(i["fee_cents"] for i in items)
+    confirmed = [i for i in items if i["confirmed"]]
+    gross = sum(i["price_cents"] for i in confirmed)
+    fees = sum(i["fee_cents"] for i in confirmed)
     account = repo.get_rider_account(unit.session, rider_id)
     is_today = day == today
-    next_number = len(items) + 1
+    # a mesma conta de `accept_offer`: terminadas + a que está em andamento + a próxima
+    busy = queries.rider_active_ride_id(unit.session, rider_id) is not None
+    next_number = len(items) + (1 if busy else 0) + 1
     return {
         "date": str(day), "completed_count": len(items), "gross_cents": gross, "fee_cents": fees,
         "net_cents": gross - fees,
-        "cash_cents": sum(i["price_cents"] for i in items if i["method"] == "cash"),
-        "pix_cents": sum(i["price_cents"] for i in items if i["method"] != "cash"),
+        "cash_cents": sum(i["price_cents"] for i in confirmed if i["method"] == "cash"),
+        "pix_cents": sum(i["price_cents"] for i in confirmed if i["method"] != "cash"),
+        "pending_cents": sum(i["price_cents"] for i in items if not i["confirmed"]),
         "rides": items,
         "next_ride_number": next_number if is_today else None,
         "next_fee_cents": fee_for_ride(next_number, unit.cfg.fees) if is_today else None,
-        "cash_debt_cents": account.cash_debt_cents,
+        "cash_debt_cents": account.cash_debt_cents if is_today else None,     # a dívida é de agora, não do dia
     }
 

@@ -359,6 +359,7 @@ def test_extrato_de_outro_dia_vem_vazio_e_sem_proxima_taxa(client, pax, rider, r
     assert dados["date"] == str(ontem)
     assert (dados["completed_count"], dados["gross_cents"], dados["net_cents"], dados["rides"]) == (0, 0, 0, [])
     assert dados["next_ride_number"] is None and dados["next_fee_cents"] is None
+    assert dados["cash_debt_cents"] is None      # a dívida é de agora, não daquele dia
 
 
 def test_extrato_nao_mostra_corrida_de_outro_motoqueiro(client, pax, rider, runtime, session, clock):
@@ -375,4 +376,55 @@ def test_extrato_so_para_motoqueiro_e_com_data_valida(client, pax, rider):
     assert client.get("/v1/rider/statement", headers=pax.headers).status_code == 403
     assert client.get("/v1/rider/statement").status_code == 401
     assert client.get("/v1/rider/statement", params={"date": "ontem"}, headers=rider.headers).status_code == 422
+
+
+def test_extrato_nao_conta_como_ganho_a_corrida_em_dinheiro_ainda_nao_recebida(client, pax, rider):
+    corrida = pedir(client, pax, "cash")
+    rid = corrida["ride_id"]
+    aceitar(client, rider, rid)
+    acao(client, rider, rid, "arrive")
+    acao(client, rider, rid, "helmet")
+    acao(client, rider, rid, "start", pin=corrida["pin"])
+    acao(client, rider, rid, "complete")
+
+    antes = client.get("/v1/rider/statement", headers=rider.headers).json()
+
+    assert antes["completed_count"] == 1
+    assert (antes["gross_cents"], antes["fee_cents"], antes["net_cents"], antes["cash_cents"]) == (0, 0, 0, 0)
+    assert antes["pending_cents"] == corrida["price_cents"]
+    assert antes["rides"][0]["confirmed"] is False
+    assert antes["cash_debt_cents"] == 0          # a taxa só vira dívida quando o dinheiro é confirmado
+
+    assert acao(client, rider, rid, "cash-received").status_code == 204
+    depois = client.get("/v1/rider/statement", headers=rider.headers).json()
+    assert (depois["gross_cents"], depois["cash_cents"], depois["pending_cents"]) == (
+        corrida["price_cents"], corrida["price_cents"], 0,
+    )
+    assert depois["rides"][0]["confirmed"] is True
+
+
+def test_extrato_proxima_taxa_conta_a_corrida_em_andamento(client, pax, rider, runtime, session):
+    corrida_pix_ate_o_fim(client, pax, rider, runtime, session)
+    segunda = pedir(client, pax)
+    aceitar(client, rider, segunda["ride_id"])          # a 2ª está em andamento: a próxima a aceitar é a 3ª
+
+    dados = client.get("/v1/rider/statement", headers=rider.headers).json()
+
+    assert dados["completed_count"] == 1
+    assert (dados["next_ride_number"], dados["next_fee_cents"]) == (3, 100)
+
+
+@pytest.mark.parametrize("dia", ["9999-12-31", "2019-12-31"])
+def test_extrato_recusa_data_fora_do_intervalo(client, rider, dia):
+    resposta = client.get("/v1/rider/statement", params={"date": dia}, headers=rider.headers)
+    assert resposta.status_code == 422
+
+
+def test_parar_de_rodar_retira_a_oferta_pendente(client, pax, rider):
+    pedir(client, pax)
+    assert client.get("/v1/rider/state", headers=rider.headers).json()["offer"] is not None
+
+    assert client.post("/v1/rider/offline", headers=rider.headers).status_code == 204
+
+    assert client.get("/v1/rider/state", headers=rider.headers).json()["offer"] is None
 

@@ -17,4 +17,11 @@ void main() {
       );
     },
   );
+
+  test('o backup do Android fica desligado (restaurar sem as chaves do Keystore estraga o login guardado)', () {
+    final manifest = File('android/app/src/main/AndroidManifest.xml')
+        .readAsStringSync();
+
+    expect(manifest, contains('android:allowBackup="false"'));
+  });
 }

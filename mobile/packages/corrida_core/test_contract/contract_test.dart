@@ -38,7 +38,8 @@ class Pessoa {
   late final VerifyResult entrada;
   RealtimeClient? tempoReal;
   final _pendentes = <ServerEvent>[];
-  final ofertas = <Object?>[]; // dados dos avisos "offer", para a auditoria de campos
+  final ofertas =
+      <Object?>[]; // dados dos avisos "offer", para a auditoria de campos
 
   Future<void> entrar({String? nome}) async {
     await auth.requestCode(phone);
@@ -443,7 +444,9 @@ void main() {
     };
     final todas = <String, List<Object?>>{};
     for (final p in [ana, joao]) {
-      p.gravador.responses.forEach((rota, lista) => todas.putIfAbsent(rota, () => []).addAll(lista));
+      p.gravador.responses.forEach(
+        (rota, lista) => todas.putIfAbsent(rota, () => []).addAll(lista),
+      );
     }
     todas['WS offer'] = [...ana.ofertas, ...joao.ofertas];
     parsers['WS offer'] = Offer.fromJson;
@@ -451,7 +454,9 @@ void main() {
     for (final entrada in parsers.entries) {
       final respostas = todas[entrada.key];
       if (respostas == null || respostas.isEmpty) {
-        problemas.add('${entrada.key}: nenhuma resposta gravada (o contrato não exercitou esta rota)');
+        problemas.add(
+          '${entrada.key}: nenhuma resposta gravada (o contrato não exercitou esta rota)',
+        );
         continue;
       }
       final vistos = <String>{};
@@ -460,10 +465,17 @@ void main() {
         vistos.addAll(allPaths(resposta));
         lidos.addAll(pathsRead(resposta, entrada.value));
       }
-      final semLeitor = vistos.difference(lidos)..removeAll(camposIgnorados[entrada.key] ?? const {});
+      final semLeitor = vistos.difference(lidos)
+        ..removeAll(camposIgnorados[entrada.key] ?? const {});
       final semServidor = lidos.difference(vistos);
-      if (semLeitor.isNotEmpty) problemas.add('${entrada.key}: o servidor manda e o pacote não lê: ${semLeitor.toList()..sort()}');
-      if (semServidor.isNotEmpty) problemas.add('${entrada.key}: o pacote lê e o servidor não mandou: ${semServidor.toList()..sort()}');
+      if (semLeitor.isNotEmpty)
+        problemas.add(
+          '${entrada.key}: o servidor manda e o pacote não lê: ${semLeitor.toList()..sort()}',
+        );
+      if (semServidor.isNotEmpty)
+        problemas.add(
+          '${entrada.key}: o pacote lê e o servidor não mandou: ${semServidor.toList()..sort()}',
+        );
     }
     expect(problemas, isEmpty, reason: problemas.join('\n'));
   });

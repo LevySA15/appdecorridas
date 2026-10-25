@@ -6,11 +6,13 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-String _join(String prefix, String key) => prefix.isEmpty ? key : '$prefix.$key';
+String _join(String prefix, String key) =>
+    prefix.isEmpty ? key : '$prefix.$key';
 
 Object? _wrap(Object? value, String prefix, Set<String> read) {
   if (value is Map<String, Object?>) return RecordingMap(value, prefix, read);
-  if (value is List) return [for (final e in value) _wrap(e, '$prefix[]', read)];
+  if (value is List)
+    return [for (final e in value) _wrap(e, '$prefix[]', read)];
   return value;
 }
 
@@ -31,7 +33,8 @@ class RecordingMap extends MapBase<String, Object?> {
   }
 
   @override
-  void operator []=(String key, Object? value) => throw UnsupportedError('somente leitura');
+  void operator []=(String key, Object? value) =>
+      throw UnsupportedError('somente leitura');
 
   @override
   void clear() => throw UnsupportedError('somente leitura');
@@ -71,7 +74,8 @@ Set<String> pathsRead(Object? raw, void Function(Map<String, Object?>) parse) {
 
 final _idSegment = RegExp(r'^(ride|ch|bal|wd|fee)-[\w-]+$|^\d+$');
 
-String normalizePath(String path) => path.split('/').map((s) => _idSegment.hasMatch(s) ? '{id}' : s).join('/');
+String normalizePath(String path) =>
+    path.split('/').map((s) => _idSegment.hasMatch(s) ? '{id}' : s).join('/');
 
 /// Cliente HTTP que guarda as respostas JSON de sucesso, por rota.
 class RecordingClient extends http.BaseClient {
@@ -84,9 +88,16 @@ class RecordingClient extends http.BaseClient {
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final streamed = await _inner.send(request);
     final bytes = await streamed.stream.toBytes();
-    if (streamed.statusCode >= 200 && streamed.statusCode < 300 && bytes.isNotEmpty) {
+    if (streamed.statusCode >= 200 &&
+        streamed.statusCode < 300 &&
+        bytes.isNotEmpty) {
       try {
-        responses.putIfAbsent('${request.method} ${normalizePath(request.url.path)}', () => []).add(jsonDecode(utf8.decode(bytes)));
+        responses
+            .putIfAbsent(
+              '${request.method} ${normalizePath(request.url.path)}',
+              () => [],
+            )
+            .add(jsonDecode(utf8.decode(bytes)));
       } on FormatException {
         // não era JSON
       }

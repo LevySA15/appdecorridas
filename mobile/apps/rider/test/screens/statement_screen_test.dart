@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:corrida_core/corrida_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +14,7 @@ StatementRide _corrida({
   int preco = 700,
   int taxa = 100,
   int metros = 2300,
+  bool confirmada = true,
 }) => StatementRide(
   rideId: id,
   completedAt: em ?? DateTime(2026, 10, 25, 9, 5).millisecondsSinceEpoch / 1000,
@@ -20,6 +23,7 @@ StatementRide _corrida({
   netCents: preco - taxa,
   method: metodo,
   distanceM: metros,
+  confirmed: confirmada,
 );
 
 RiderStatement _extrato(
@@ -28,6 +32,7 @@ RiderStatement _extrato(
   int? proxima = 3,
   int? taxaProxima = 100,
   int divida = 0,
+  int aReceber = 0,
 }) => RiderStatement(
   date: data,
   completedCount: corridas.length,
@@ -44,6 +49,7 @@ RiderStatement _extrato(
   nextRideNumber: proxima,
   nextFeeCents: taxaProxima,
   cashDebtCents: divida,
+  pendingCents: aReceber,
 );
 
 Future<void> _pump(
@@ -186,6 +192,48 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Sem internet.'), findsNothing);
+    expect(find.text('Corridas: 0'), findsOneWidget);
+  });
+
+  testWidgets('dinheiro ainda nao recebido aparece como a receber', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      (_) async => _extrato(
+        '2026-10-25',
+        corridas: [_corrida(metodo: 'cash', confirmada: false)],
+        aReceber: 700,
+      ),
+    );
+
+    expect(find.text('A receber (dinheiro): R\$ 7,00'), findsOneWidget);
+    expect(
+      find.text('09:05 · R\$ 7,00 · Dinheiro · a receber'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('trocar de dia nao deixa os numeros do dia anterior na tela', (
+    tester,
+  ) async {
+    final segundo = Completer<RiderStatement>();
+    await _pump(tester, (dia) {
+      if (dia == DateTime(2026, 10, 25)) {
+        return Future.value(_extrato('2026-10-25', corridas: [_corrida()]));
+      }
+      return segundo.future;
+    });
+    expect(find.text('Corridas: 1'), findsOneWidget);
+
+    await tester.tap(find.text('Dia anterior'));
+    await tester.pump();
+
+    expect(find.text('24/10/2026'), findsOneWidget);
+    expect(find.text('Corridas: 1'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    segundo.complete(_extrato('2026-10-24', proxima: null, taxaProxima: null));
+    await tester.pumpAndSettle();
     expect(find.text('Corridas: 0'), findsOneWidget);
   });
 }

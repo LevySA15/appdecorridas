@@ -275,6 +275,7 @@ class StatementRide {
     required this.netCents,
     required this.method,
     required this.distanceM,
+    this.confirmed = true,
   });
 
   final String rideId;
@@ -285,6 +286,9 @@ class StatementRide {
   final String method; // pix | cash
   final int distanceM;
 
+  /// Pix, ou dinheiro que o motoqueiro já confirmou. Dinheiro não confirmado é "a receber" e fica fora dos totais.
+  final bool confirmed;
+
   factory StatementRide.fromJson(Json json) => StatementRide(
     rideId: asString(json['ride_id']),
     completedAt: asDouble(json['completed_at']),
@@ -293,6 +297,7 @@ class StatementRide {
     netCents: asInt(json['net_cents']),
     method: asString(json['method']),
     distanceM: asInt(json['distance_m']),
+    confirmed: asBool(json['confirmed'], true),
   );
 }
 
@@ -310,6 +315,7 @@ class RiderStatement {
     this.nextRideNumber,
     this.nextFeeCents,
     this.cashDebtCents = 0,
+    this.pendingCents = 0,
   });
 
   final String date; // AAAA-MM-DD
@@ -324,7 +330,11 @@ class RiderStatement {
   /// A próxima faixa de taxa (só para o dia de hoje; em outro dia vêm nulos).
   final int? nextRideNumber;
   final int? nextFeeCents;
-  final int cashDebtCents;
+  final int
+  cashDebtCents; // só vem para o dia de hoje (em dia passado, nulo vira 0)
+
+  /// Corridas em dinheiro terminadas que o motoqueiro ainda não confirmou ter recebido.
+  final int pendingCents;
 
   factory RiderStatement.fromJson(Json json) => RiderStatement(
     date: asString(json['date']),
@@ -338,5 +348,6 @@ class RiderStatement {
     nextRideNumber: asIntOrNull(json['next_ride_number']),
     nextFeeCents: asIntOrNull(json['next_fee_cents']),
     cashDebtCents: asInt(json['cash_debt_cents']),
+    pendingCents: asInt(json['pending_cents']),
   );
 }

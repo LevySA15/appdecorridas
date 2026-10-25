@@ -60,6 +60,8 @@ class _StatementScreenState extends State<StatementScreen> {
 
   void _go(int days) {
     _day = DateTime(_day.year, _day.month, _day.day + days);
+    _statement =
+        null; // não deixa os números do dia anterior embaixo da data nova
     _load();
   }
 
@@ -88,6 +90,8 @@ class _StatementScreenState extends State<StatementScreen> {
           'No Pix: ${brl(statement.pixCents)} · '
           'Em dinheiro: ${brl(statement.cashCents)}',
         ),
+        if (statement.pendingCents > 0)
+          Text('A receber (dinheiro): ${brl(statement.pendingCents)}'),
         if (statement.cashDebtCents > 0)
           Text('Taxas devidas: ${brl(statement.cashDebtCents)}'),
         if (next != null && nextFee != null)
@@ -99,7 +103,8 @@ class _StatementScreenState extends State<StatementScreen> {
             contentPadding: EdgeInsets.zero,
             title: Text(
               '${_time(ride.completedAt)} · ${brl(ride.priceCents)} · '
-              '${ride.method == 'cash' ? 'Dinheiro' : 'Pix'}',
+              '${ride.method == 'cash' ? 'Dinheiro' : 'Pix'}'
+              '${ride.confirmed ? '' : ' · a receber'}',
             ),
             subtitle: Text(
               'Ganho ${brl(ride.netCents)} (taxa ${brl(ride.feeCents)}) · '
