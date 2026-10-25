@@ -261,4 +261,25 @@ void main() {
     );
     expect(m.chamadas.single.body, {'stars': 4});
   });
+
+  test('charge le a cobranca pelo caminho comum aos dois lados', () async {
+    final m = mundo(
+      (_) => json({
+        'charge_id': 'c9',
+        'purpose': 'end',
+        'ride_id': 'ride-1',
+        'amount_cents': 750,
+        'paid': false,
+        'br_code': '000201...',
+      }),
+    );
+
+    final charge = await m.api.charge('c9');
+
+    expect(m.chamadas.single.method, 'GET');
+    expect(m.chamadas.single.path, '/v1/charges/c9');
+    expect(charge.chargeId, 'c9');
+    expect(charge.amountCents, 750);
+    expect(charge.brCode, '000201...');
+  });
 }

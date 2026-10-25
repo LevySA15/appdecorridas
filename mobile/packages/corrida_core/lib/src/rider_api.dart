@@ -74,6 +74,11 @@ class RiderApi {
   Future<Charge> debtCharge() async =>
       Charge.fromJson(_map(await client.post('/v1/rider/debt-charge')));
 
+  /// Lê uma cobrança (a mesma rota `GET /v1/charges/{id}` que o passageiro usa): o QR do fim da corrida
+  /// em dinheiro, a entrada, a dívida.
+  Future<Charge> charge(String chargeId) async =>
+      Charge.fromJson(_map(await client.get('/v1/charges/${_id(chargeId)}')));
+
   /// Envia a foto crua (JPEG, PNG ou WebP, até 8 MB; maior que isso o servidor responde 413 `file_too_large`).
   Future<UploadedDocument> uploadDocument(
     DocKind kind,

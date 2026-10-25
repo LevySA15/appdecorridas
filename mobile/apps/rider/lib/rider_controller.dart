@@ -69,6 +69,51 @@ class RiderController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Faz uma ação no servidor e relê o estado. Se o servidor recusar (a oferta venceu, a corrida mudou),
+  /// relê o estado mesmo assim antes de repassar o erro: a tela não pode ficar com a oferta velha.
+  Future<T> _act<T>(Future<T> Function() call) async {
+    final T result;
+    try {
+      result = await call();
+    } on ApiException {
+      await _quietRefresh();
+      rethrow;
+    }
+    await refreshState();
+    return result;
+  }
+
+  Future<void> goOnline() => _act(api.goOnline);
+
+  Future<void> goOffline() => _act(api.goOffline);
+
+  Future<RiderRide> accept(String rideId) => _act(() => api.accept(rideId));
+
+  Future<void> decline(String rideId) => _act(() => api.decline(rideId));
+
+  Future<void> arrive(String rideId) => _act(() => api.arrive(rideId));
+
+  Future<void> confirmHelmet(String rideId) =>
+      _act(() => api.confirmHelmet(rideId));
+
+  Future<void> startTrip(String rideId, String pin) =>
+      _act(() => api.start(rideId, pin));
+
+  Future<void> completeTrip(String rideId) => _act(() => api.complete(rideId));
+
+  Future<void> cashReceived(String rideId) =>
+      _act(() => api.cashReceived(rideId));
+
+  /// Avalia o passageiro. Não relê o estado: a corrida terminada já saiu dele.
+  Future<void> rate({required String rideId, required int stars}) =>
+      api.rate(rideId, stars);
+
+  Future<Charge> entryCharge() => api.entryCharge();
+
+  Future<Charge> debtCharge() => api.debtCharge();
+
+  Future<Charge> loadCharge(String chargeId) => api.charge(chargeId);
+
   void _connectRealtime() {
     final realtime = RealtimeClient(
       baseUrl: realtimeBaseUrl,
