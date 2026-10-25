@@ -316,13 +316,57 @@ def test_renovar_documentos_libera_quem_foi_bloqueado_por_documento_vencido(serv
     bloqueado_por_documento_vencido(service, session, events)
     service.renew_documents(
         session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1),
-        today=dt.date(2027, 1, 1),
+        today=dt.date(2027, 1, 1), crlv_key="m2.jpg",
     )
     perfil = session.get(RiderProfileRow, "r1")
     assert (perfil.status, perfil.rejected_reason, perfil.online) == ("approved", None, False)
+    assert perfil.crlv_key == "m2.jpg"
     assert [e.type for e in events.events] == ["rider_unblocked"]
     service.go_online(session, "r1", dt.date(2027, 1, 1))
     assert session.get(RiderProfileRow, "r1").online is True
+
+
+def test_renovar_sem_a_foto_do_documento_que_venceu_nao_libera(service, session, events):
+    bloqueado_por_documento_vencido(service, session, events)      # venceu o documento da moto
+    with pytest.raises(RegistrationError, match="foto do documento da moto"):
+        service.renew_documents(
+            session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1),
+            today=dt.date(2027, 1, 1),
+        )
+    perfil = session.get(RiderProfileRow, "r1")
+    assert (perfil.status, perfil.rejected_reason) == ("blocked", "documento vencido")
+    assert perfil.crlv_expires_on == dt.date(2026, 12, 31)          # nada foi gravado
+    assert not events.events
+    # a foto de outro documento (a CNH, que não venceu) não vale pelo que venceu
+    with pytest.raises(RegistrationError, match="foto do documento da moto"):
+        service.renew_documents(
+            session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1),
+            today=dt.date(2027, 1, 1), cnh_photo_key="c2.jpg",
+        )
+
+
+def test_renovar_com_os_dois_documentos_vencidos_pede_as_duas_fotos(service, session, events):
+    aprovado(service, session, "r1", cnh_expires_on=dt.date(2026, 12, 30), crlv_expires_on=dt.date(2026, 12, 31))
+    service.block_expired_documents(session, dt.date(2027, 1, 1))
+    events.drain()
+    with pytest.raises(RegistrationError, match="foto da CNH"):
+        service.renew_documents(
+            session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1),
+            today=dt.date(2027, 1, 1), crlv_key="m2.jpg",
+        )
+    service.renew_documents(
+        session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1),
+        today=dt.date(2027, 1, 1), cnh_photo_key="c2.jpg", crlv_key="m2.jpg",
+    )
+    assert session.get(RiderProfileRow, "r1").status == "approved"
+
+
+def test_renovar_antes_de_vencer_nao_exige_foto(service, session):
+    aprovado(service, session, "r1")
+    service.renew_documents(
+        session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE,
+    )
+    assert session.get(RiderProfileRow, "r1").cnh_expires_on == dt.date(2032, 1, 1)
 
 
 def test_renovar_documentos_nao_libera_o_bloqueio_do_administrador(service, session, events):

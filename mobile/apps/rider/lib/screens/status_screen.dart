@@ -40,7 +40,7 @@ class StatusScreen extends StatelessWidget {
       RegistrationStatus.blocked => [
         'Conta bloqueada',
         if (reason != null && reason.isNotEmpty) reason,
-        if (onRenewDocuments != null) 'Se o bloqueio foi por documento vencido, envie o documento novo e a conta é liberada na hora.',
+        if (onRenewDocuments != null) 'Se o bloqueio foi por documento vencido, envie o documento novo, com a foto, e a conta é liberada na hora.',
       ],
       _ => ['Não conseguimos ler o seu cadastro. Toque em atualizar.'],
     };

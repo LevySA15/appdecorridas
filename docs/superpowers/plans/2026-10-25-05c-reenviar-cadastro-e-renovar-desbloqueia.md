@@ -13,7 +13,7 @@
 ## Decisões deste plano (minhas, dentro das respostas do Levy)
 
 1. **O que conta como "bloqueado por documento vencido":** `status == "blocked"`, `rejected_reason == "documento vencido"` **e** `UserRow.is_blocked == False`. A varredura de documentos vencidos (`block_expired_documents`) marca o motivo mas **não** liga `is_blocked`; já o bloqueio do administrador (`block()`) liga `is_blocked` e escreve o motivo que ele digitou. Assim, um bloqueio do administrador nunca sai por renovar documentos, nem se o texto do motivo for igual. O texto vira uma constante usada nos dois lugares.
-2. **Renovar só desbloqueia se as duas datas novas valem** (a regra de hoje já recusa data vencida com `RegistrationError`; nada muda nisso).
+2. **Renovar só desbloqueia se as duas datas novas valem** (a regra de hoje já recusa data vencida com `RegistrationError`) **e se vier a foto nova de cada documento que estava vencido** (achado Important da revisão: só datas digitadas não provam nada). Sem a foto, 422 e a conta continua bloqueada, nada é gravado.
 3. **Reenviar o cadastro recusado reaproveita a mesma linha** (mesmo `user_id`): atualiza dados, fotos e validades, volta para `pending` e apaga o motivo. CPF, CNH e placa continuam únicos entre motoqueiros, mas não colidem com o próprio cadastro.
 4. **Contato de suporte:** o Levy vai comprar um número e criar um e-mail na hospedagem quando abrir o CNPJ. Até lá o app **não mostra** "fale com o suporte" (some da tela de recusa, que agora é o formulário). Fica no roteiro para pôr o contato nas telas de bloqueio quando existir.
 

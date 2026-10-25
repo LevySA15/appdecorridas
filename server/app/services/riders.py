@@ -223,18 +223,25 @@ class RiderService:
         if cnh_expires_on < today or crlv_expires_on < today:
             raise RegistrationError("As novas datas já estão vencidas.")
         profile = self._profile(session, rider_id)
+        user = session.get(UserRow, rider_id)
+        unblocks = (
+            profile.status == "blocked"
+            and profile.rejected_reason == EXPIRED_DOCUMENTS_REASON
+            and not user.is_blocked
+        )
+        if unblocks:
+            # Só datas digitadas não bastam para liberar: quem venceu precisa mandar a foto do documento novo.
+            if profile.cnh_expires_on is not None and profile.cnh_expires_on < today and cnh_photo_key is None:
+                raise RegistrationError("Envie a foto da CNH nova para liberar a sua conta.")
+            if profile.crlv_expires_on is not None and profile.crlv_expires_on < today and crlv_key is None:
+                raise RegistrationError("Envie a foto do documento da moto novo para liberar a sua conta.")
         profile.cnh_expires_on = cnh_expires_on
         profile.crlv_expires_on = crlv_expires_on
         if cnh_photo_key is not None:
             profile.cnh_photo_key = cnh_photo_key
         if crlv_key is not None:
             profile.crlv_key = crlv_key
-        user = session.get(UserRow, rider_id)
-        if (
-            profile.status == "blocked"
-            and profile.rejected_reason == EXPIRED_DOCUMENTS_REASON
-            and not user.is_blocked
-        ):
+        if unblocks:
             profile.status = "approved"
             profile.rejected_reason = None
             self.events.add(rider_id, "rider_unblocked")

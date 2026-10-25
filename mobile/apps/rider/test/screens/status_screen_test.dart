@@ -90,7 +90,7 @@ void main() {
 
     expect(
       find.text(
-        'Se o bloqueio foi por documento vencido, envie o documento novo e a conta é liberada na hora.',
+        'Se o bloqueio foi por documento vencido, envie o documento novo, com a foto, e a conta é liberada na hora.',
       ),
       findsOneWidget,
     );
