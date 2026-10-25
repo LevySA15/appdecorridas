@@ -4,6 +4,7 @@ import pytest
 
 from app.db import repositories as repo
 from app.db.models import RiderProfileRow, UserRow
+from app.domain.clock import local_date
 from tests.api.helpers import login, online_rider, rider_phone
 from tests.helpers import ORIGIN, pt
 
@@ -296,3 +297,82 @@ def test_motoqueiro_marcado_como_parado_continua_rastreado_enquanto_a_corrida_an
         client.post("/v1/rider/position", json={"lat": parado.lat, "lng": parado.lng}, headers=rider.headers)
     assert avisos.types.count("rider_position") == 50 and avisos.types.count("safety_check") == 1
     assert client.get("/v1/passenger/state", headers=pax.headers).json()["ride"]["rider_position"] is not None
+
+
+# --- extrato do dia -------------------------------------------------------------------------------------
+
+
+def corrida_pix_ate_o_fim(client, pax, rider, runtime, session):
+    corrida = pedir(client, pax)
+    rid = corrida["ride_id"]
+    aceitar(client, rider, rid)
+    acao(client, rider, rid, "arrive")
+    acao(client, rider, rid, "helmet")
+    pagar_pix(runtime, session, rid)
+    assert acao(client, rider, rid, "start", pin=corrida["pin"]).status_code == 200
+    assert acao(client, rider, rid, "complete").status_code == 200
+    return corrida
+
+
+def test_extrato_do_dia_soma_corridas_ganhos_e_diz_a_proxima_taxa(client, pax, rider, runtime, session, clock):
+    corrida = corrida_pix_ate_o_fim(client, pax, rider, runtime, session)
+
+    extrato = client.get("/v1/rider/statement", headers=rider.headers)
+
+    assert extrato.status_code == 200, extrato.text
+    dados = extrato.json()
+    preco = corrida["price_cents"]
+    assert dados["date"] == str(local_date(clock.now))
+    assert (dados["completed_count"], dados["gross_cents"], dados["fee_cents"]) == (1, preco, 100)
+    assert (dados["net_cents"], dados["pix_cents"], dados["cash_cents"]) == (preco - 100, preco, 0)
+    [item] = dados["rides"]
+    assert item["ride_id"] == corrida["ride_id"] and item["method"] == "pix"
+    assert (item["price_cents"], item["fee_cents"], item["net_cents"]) == (preco, 100, preco - 100)
+    assert item["completed_at"] > 0 and item["distance_m"] > 0
+    assert (dados["next_ride_number"], dados["next_fee_cents"]) == (2, 100)
+    assert dados["cash_debt_cents"] == 0
+
+
+def test_extrato_separa_o_que_foi_em_dinheiro(client, pax, rider, runtime, session):
+    corrida = pedir(client, pax, "cash")
+    rid = corrida["ride_id"]
+    aceitar(client, rider, rid)
+    acao(client, rider, rid, "arrive")
+    acao(client, rider, rid, "helmet")
+    acao(client, rider, rid, "start", pin=corrida["pin"])
+    acao(client, rider, rid, "complete")
+    assert acao(client, rider, rid, "cash-received").status_code == 204      # aqui a taxa vira dívida
+
+    dados = client.get("/v1/rider/statement", headers=rider.headers).json()
+
+    assert (dados["cash_cents"], dados["pix_cents"]) == (corrida["price_cents"], 0)
+    assert dados["rides"][0]["method"] == "cash"
+    assert dados["cash_debt_cents"] > 0
+
+
+def test_extrato_de_outro_dia_vem_vazio_e_sem_proxima_taxa(client, pax, rider, runtime, session, clock):
+    corrida_pix_ate_o_fim(client, pax, rider, runtime, session)
+    ontem = local_date(clock.now) - dt.timedelta(days=1)
+
+    dados = client.get("/v1/rider/statement", params={"date": str(ontem)}, headers=rider.headers).json()
+
+    assert dados["date"] == str(ontem)
+    assert (dados["completed_count"], dados["gross_cents"], dados["net_cents"], dados["rides"]) == (0, 0, 0, [])
+    assert dados["next_ride_number"] is None and dados["next_fee_cents"] is None
+
+
+def test_extrato_nao_mostra_corrida_de_outro_motoqueiro(client, pax, rider, runtime, session, clock):
+    corrida_pix_ate_o_fim(client, pax, rider, runtime, session)
+    online_rider(session, runtime, clock, 2)
+    outro = login(client, runtime, rider_phone(2), "rider")
+
+    dados = client.get("/v1/rider/statement", headers=outro.headers).json()
+
+    assert (dados["completed_count"], dados["rides"]) == (0, [])
+
+
+def test_extrato_so_para_motoqueiro_e_com_data_valida(client, pax, rider):
+    assert client.get("/v1/rider/statement", headers=pax.headers).status_code == 403
+    assert client.get("/v1/rider/statement").status_code == 401
+    assert client.get("/v1/rider/statement", params={"date": "ontem"}, headers=rider.headers).status_code == 422
+

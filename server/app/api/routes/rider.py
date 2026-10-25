@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.api.body import read_limited
 from app.api.deps import get_runtime, rider_user
-from app.api.views import rider_ride_view, rider_state
+from app.api.views import rider_ride_view, rider_state, rider_statement
 from app.db import queries
 from app.domain.clock import local_date
 from app.domain.geo import GeoPoint
@@ -118,6 +118,12 @@ def renew_documents(body: RenewIn, request: Request, user: AuthUser = Depends(ri
 @router.get("/state")
 def state(request: Request, user: AuthUser = Depends(rider_user)) -> dict:
     return get_runtime(request).run(lambda unit: rider_state(unit, user.user_id))
+
+
+@router.get("/statement")
+def statement(request: Request, date: dt.date | None = None, user: AuthUser = Depends(rider_user)) -> dict:
+    """Extrato do dia (hoje, ou o dia de `?date=AAAA-MM-DD`): corridas, ganhos, taxa e a próxima faixa."""
+    return get_runtime(request).run(lambda unit: rider_statement(unit, user.user_id, date))
 
 
 @router.post("/online", status_code=204)

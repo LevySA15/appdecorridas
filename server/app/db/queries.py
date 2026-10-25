@@ -199,6 +199,22 @@ def completed_rides_since(session: Session, rider_id: str, since: float) -> int:
 
 
 
+def completed_rides_between(session: Session, rider_id: str, start: float, end: float) -> list[RideRow]:
+    """As corridas que o motoqueiro terminou no intervalo [start, end), da mais antiga para a mais nova."""
+    return list(
+        session.execute(
+            select(RideRow)
+            .where(
+                RideRow.rider_id == rider_id,
+                RideRow.state == RideState.COMPLETED.value,
+                RideRow.completed_at >= start,
+                RideRow.completed_at < end,
+            )
+            .order_by(RideRow.completed_at, RideRow.id)
+        ).scalars()
+    )
+
+
 def queued_ride_id_of_rider(session: Session, rider_id: str) -> str | None:
     return session.execute(
         select(RideRow.id).where(RideRow.rider_id == rider_id, RideRow.state == RideState.QUEUED.value).limit(1)

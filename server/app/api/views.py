@@ -4,7 +4,10 @@ from __future__ import annotations
 from app.db import queries
 from app.db import repositories as repo
 from app.db.models import RiderProfileRow, UserRow
-from app.domain.fees import debt_to_pay_cents, offer_block_reason
+import datetime as dt
+
+from app.domain.clock import LOCAL_TZ, local_date, local_day_start
+from app.domain.fees import debt_to_pay_cents, fee_for_ride, offer_block_reason
 from app.domain.rides import Ride, RideState
 from app.domain.types import PaymentMethod
 from app.runtime import Unit
@@ -211,3 +214,42 @@ def rider_state(unit: Unit, rider_id: str) -> dict:
         "queued_ride": rider_ride_view(unit, queued_id) if queued_id else None,
         "awaiting_payment": rider_ride_view(unit, unpaid_id) if unpaid_id else None,
     }
+
+
+def rider_statement(unit: Unit, rider_id: str, day: dt.date | None) -> dict:
+    """O extrato do dia do motoqueiro: corridas terminadas, o que entrou, a taxa e a próxima faixa.
+
+    Ganho = preço da corrida menos a taxa do app (a taxa já fica gravada na corrida, na hora do aceite).
+    A próxima faixa só faz sentido para o dia de hoje (a conta recomeça a cada dia).
+    """
+    today = local_date(unit.now)
+    day = day or today
+    noon = dt.datetime(day.year, day.month, day.day, 12, tzinfo=LOCAL_TZ).timestamp()
+    start = local_day_start(noon)
+    end = local_day_start(noon + 86_400)
+    rides = queries.completed_rides_between(unit.session, rider_id, start, end)
+    items = []
+    for ride in rides:
+        fee = ride.fee_cents or 0
+        details = repo.get_ride_details(unit.session, ride.id)
+        items.append({
+            "ride_id": ride.id, "completed_at": ride.completed_at, "price_cents": ride.price_cents,
+            "fee_cents": fee, "net_cents": ride.price_cents - fee, "method": ride.payment_method,
+            "distance_m": details.distance_m,
+        })
+    gross = sum(i["price_cents"] for i in items)
+    fees = sum(i["fee_cents"] for i in items)
+    account = repo.get_rider_account(unit.session, rider_id)
+    is_today = day == today
+    next_number = len(items) + 1
+    return {
+        "date": str(day), "completed_count": len(items), "gross_cents": gross, "fee_cents": fees,
+        "net_cents": gross - fees,
+        "cash_cents": sum(i["price_cents"] for i in items if i["method"] == "cash"),
+        "pix_cents": sum(i["price_cents"] for i in items if i["method"] != "cash"),
+        "rides": items,
+        "next_ride_number": next_number if is_today else None,
+        "next_fee_cents": fee_for_ride(next_number, unit.cfg.fees) if is_today else None,
+        "cash_debt_cents": account.cash_debt_cents,
+    }
+
