@@ -1,6 +1,7 @@
 import 'package:corrida_core/corrida_core.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:rider/photo_source.dart';
 import 'package:rider/rider_controller.dart';
 
 import 'fakes.dart';
@@ -8,7 +9,7 @@ import 'fakes.dart';
 /// Servidor de mentira + controlador do motoqueiro ligados por um `MockClient`. Cada teste muda
 /// `stateJson`/`stateStatus` ou registra uma rota com [on]; `requests` guarda tudo que saiu.
 class Mundo {
-  Mundo() {
+  Mundo({PhotoSource? photos}) {
     api = ApiClient(baseUrl: baseUrl, httpClient: MockClient(_handle));
     final authApi = AuthApi(api);
     session = SessionManager(authApi, store, api);
@@ -17,6 +18,7 @@ class Mundo {
       session: session,
       api: RiderApi(api),
       realtimeBaseUrl: baseUrl,
+      photos: photos,
       realtimeConnector: (uri) {
         final canal = FakeChannel(uri);
         canais.add(canal);

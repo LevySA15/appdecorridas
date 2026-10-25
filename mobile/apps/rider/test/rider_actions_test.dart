@@ -94,9 +94,9 @@ void main() {
     final m = await _logado();
     m.on('POST', '/v1/rider/rides/r1/start', (_) => json(_corrida));
     await m.controller.startTrip('r1', '1234');
-    final corpo =
-        jsonDecode(m.sent('POST', '/v1/rider/rides/r1/start').single.body)
-            as Map<String, Object?>;
+    final corpo = jsonDecode(
+      m.sent('POST', '/v1/rider/rides/r1/start').single.body,
+    ) as Map<String, Object?>;
     expect(corpo, {'pin': '1234'});
   });
 
@@ -104,9 +104,9 @@ void main() {
     final m = await _logado();
     m.on('POST', '/v1/rides/r1/rating', (_) => http.Response('', 204));
     await m.controller.rate(rideId: 'r1', stars: 5);
-    final corpo =
-        jsonDecode(m.sent('POST', '/v1/rides/r1/rating').single.body)
-            as Map<String, Object?>;
+    final corpo = jsonDecode(
+      m.sent('POST', '/v1/rides/r1/rating').single.body,
+    ) as Map<String, Object?>;
     expect(corpo, {'stars': 5});
     expect(_leituras(m), 0);
   });
@@ -135,7 +135,8 @@ void main() {
       await m.controller.start();
       expect(m.controller.state!.offer, isNotNull);
 
-      m.stateJson = _estadoCom(); // a oferta venceu enquanto o motoqueiro tocava
+      m.stateJson =
+          _estadoCom(); // a oferta venceu enquanto o motoqueiro tocava
       m.on(
         'POST',
         '/v1/rider/offers/r1/accept',

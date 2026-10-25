@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:corrida_core/corrida_core.dart';
 import 'package:flutter/foundation.dart';
 
+import 'photo_source.dart';
+import 'registration_data.dart';
+
 /// A ponte única entre as telas e o pacote `corrida_core`: guarda a sessão, o último estado lido do
 /// servidor e a conexão de tempo real. As telas nunca importam `RiderApi`/`RealtimeClient` direto.
 class RiderController extends ChangeNotifier {
@@ -13,7 +16,9 @@ class RiderController extends ChangeNotifier {
     required this.api,
     required this.realtimeBaseUrl,
     this.realtimeConnector,
-  }) : sessionManager = session {
+    PhotoSource? photos,
+  }) : sessionManager = session,
+       photos = photos ?? ImagePickerPhotoSource() {
     _sessionSub = sessionManager.changes.listen(_onSessionChanged);
   }
 
@@ -24,6 +29,7 @@ class RiderController extends ChangeNotifier {
   final RiderApi api;
   final Uri realtimeBaseUrl;
   final WebSocketConnector? realtimeConnector;
+  final PhotoSource photos;
 
   late final StreamSubscription<Session?> _sessionSub;
   final _eventsOut = StreamController<ServerEvent>.broadcast();
@@ -32,6 +38,10 @@ class RiderController extends ChangeNotifier {
   StreamSubscription<void>? _realtimeResyncSub;
 
   var _starting = true;
+
+  /// A chave que o servidor deu a cada foto já enviada, junto com a foto (por identidade): se o cadastro
+  /// falha no meio, o segundo toque não sobe de novo o que já subiu (o servidor limita os envios por hora).
+  final _uploaded = <DocKind, ({Photo photo, String key})>{};
   RiderState? _state;
 
   bool get starting => _starting;
@@ -113,6 +123,69 @@ class RiderController extends ChangeNotifier {
   Future<Charge> debtCharge() => api.debtCharge();
 
   Future<Charge> loadCharge(String chargeId) => api.charge(chargeId);
+
+  Future<Photo?> pickPhoto(DocKind kind) => photos.pick(kind);
+
+  Future<String> _keyFor(DocKind kind, Photo photo) async {
+    final known = _uploaded[kind];
+    if (known != null && identical(known.photo, photo)) return known.key;
+    final uploaded = await api.uploadDocument(
+      kind,
+      photo.bytes,
+      contentType: photo.contentType,
+    );
+    _uploaded[kind] = (photo: photo, key: uploaded.key);
+    return uploaded.key;
+  }
+
+  /// Envia as três fotos (selfie, CNH, documento da moto) e depois o cadastro.
+  Future<void> registerRider(RegistrationData data) async {
+    Photo photoOf(DocKind kind) =>
+        data.photos[kind] ??
+        (throw ArgumentError('falta a foto: ${kind.name}'));
+    final selfieKey = await _keyFor(DocKind.selfie, photoOf(DocKind.selfie));
+    final cnhKey = await _keyFor(DocKind.cnh, photoOf(DocKind.cnh));
+    final crlvKey = await _keyFor(DocKind.crlv, photoOf(DocKind.crlv));
+    await api.register(
+      RiderRegistrationForm(
+        name: data.name,
+        cpf: data.cpf,
+        cnhNumber: data.cnhNumber,
+        plate: data.plate,
+        motoModel: data.motoModel,
+        selfieKey: selfieKey,
+        cnhPhotoKey: cnhKey,
+        crlvKey: crlvKey,
+        cnhExpiresOn: data.cnhExpiresOn,
+        crlvExpiresOn: data.crlvExpiresOn,
+      ),
+    );
+    _uploaded.clear();
+    await refreshState();
+  }
+
+  /// Novas validades e, se houver, as fotos novas (só as dadas são enviadas).
+  Future<void> renewDocuments({
+    required DateTime cnhExpiresOn,
+    required DateTime crlvExpiresOn,
+    Photo? cnhPhoto,
+    Photo? crlvPhoto,
+  }) async {
+    final cnhKey = cnhPhoto == null
+        ? null
+        : await _keyFor(DocKind.cnh, cnhPhoto);
+    final crlvKey = crlvPhoto == null
+        ? null
+        : await _keyFor(DocKind.crlv, crlvPhoto);
+    await api.renewDocuments(
+      cnhExpiresOn: cnhExpiresOn,
+      crlvExpiresOn: crlvExpiresOn,
+      cnhPhotoKey: cnhKey,
+      crlvKey: crlvKey,
+    );
+    _uploaded.clear();
+    await refreshState();
+  }
 
   void _connectRealtime() {
     final realtime = RealtimeClient(

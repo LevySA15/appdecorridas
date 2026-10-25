@@ -35,9 +35,9 @@ void main() {
     final m = Mundo();
     await m.controller.start();
     await m.controller.verify(phone: '75988510824', code: '123456');
-    final corpo =
-        jsonDecode(m.sent('POST', '/v1/auth/verify').single.body)
-            as Map<String, Object?>;
+    final corpo = jsonDecode(
+      m.sent('POST', '/v1/auth/verify').single.body,
+    ) as Map<String, Object?>;
     expect(corpo['role'], 'rider');
     expect(m.controller.session, isNotNull);
     expect(m.controller.state, isNotNull);
@@ -64,10 +64,7 @@ void main() {
     };
     m.canais.single.servidorMandaAviso('algum_aviso', {});
     await deixaRodar();
-    expect(
-      m.controller.state!.registration.status,
-      RegistrationStatus.pending,
-    );
+    expect(m.controller.state!.registration.status, RegistrationStatus.pending);
   });
 
   test('quem assina events recebe os avisos crus', () async {
