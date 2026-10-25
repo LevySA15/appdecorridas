@@ -34,7 +34,7 @@ Place pointFromTap(Offset local, Size size) {
 
 /// O inverso de [pointFromTap]: onde, no quadrado `size`, cai um ponto já marcado — para desenhar o
 /// pino no lugar em que a pessoa tocou.
-Offset _offsetFromPoint(Place place, Size size) {
+Offset offsetFromPlace(Place place, Size size) {
   final side = size.shortestSide;
   final northM = _radians(place.lat - cityCenter.lat) * _earthRadiusM;
   final eastM =
@@ -110,7 +110,7 @@ class _FakeMapPainter extends CustomPainter {
     final pickupAtual = pickup;
     if (pickupAtual != null) {
       canvas.drawCircle(
-        _offsetFromPoint(pickupAtual, size),
+        offsetFromPlace(pickupAtual, size),
         6,
         Paint()..color = const Color(0xFF2E7D32),
       );
@@ -118,7 +118,7 @@ class _FakeMapPainter extends CustomPainter {
     final destinoAtual = destination;
     if (destinoAtual != null) {
       canvas.drawCircle(
-        _offsetFromPoint(destinoAtual, size),
+        offsetFromPlace(destinoAtual, size),
         6,
         Paint()..color = const Color(0xFFC62828),
       );
@@ -128,4 +128,79 @@ class _FakeMapPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _FakeMapPainter oldDelegate) =>
       oldDelegate.pickup != pickup || oldDelegate.destination != destination;
+}
+
+/// Quem aparece no mapa de ver: o próprio motoqueiro (azul), o embarque (verde) e o destino (vermelho).
+enum MarkerKind { me, pickup, destination }
+
+class MapMarker {
+  const MapMarker(this.kind, this.place);
+
+  final MarkerKind kind;
+  final Place place;
+}
+
+Color _markerColor(MarkerKind kind) => switch (kind) {
+  MarkerKind.me => const Color(0xFF1565C0),
+  MarkerKind.pickup => const Color(0xFF2E7D32),
+  MarkerKind.destination => const Color(0xFFC62828),
+};
+
+/// Mapa de mentira sem escolha de origem/destino: desenha os marcadores e, se [onTap] existir, devolve
+/// o ponto tocado (é assim que o motoqueiro "anda" enquanto não há GPS).
+class FakeMapView extends StatelessWidget {
+  const FakeMapView({required this.markers, this.onTap, super.key});
+
+  final List<MapMarker> markers;
+  final ValueChanged<Place>? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final onTapAtual = onTap;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = constraints.biggest;
+        return GestureDetector(
+          onTapDown: onTapAtual == null
+              ? null
+              : (details) =>
+                    onTapAtual(pointFromTap(details.localPosition, size)),
+          child: CustomPaint(
+            size: size,
+            painter: _MarkersPainter(markers),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MarkersPainter extends CustomPainter {
+  _MarkersPainter(this.markers);
+
+  final List<MapMarker> markers;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Paint()..color = const Color(0xFFDDE8DD),
+    );
+    canvas.drawCircle(
+      size.center(Offset.zero),
+      4,
+      Paint()..color = const Color(0xFF888888),
+    );
+    for (final marker in markers) {
+      canvas.drawCircle(
+        offsetFromPlace(marker.place, size),
+        6,
+        Paint()..color = _markerColor(marker.kind),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MarkersPainter oldDelegate) =>
+      oldDelegate.markers != markers;
 }

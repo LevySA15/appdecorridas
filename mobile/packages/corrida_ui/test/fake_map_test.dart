@@ -60,4 +60,64 @@ void main() {
     expect(chamadas[2].$1, chamadas[1].$1);
     expect(chamadas[2].$2, isNot(chamadas[1].$2));
   });
+
+  test('offsetFromPlace e o inverso de pointFromTap', () {
+    const size = Size(300, 300);
+    for (final original in const [
+      Offset(0, 0),
+      Offset(300, 300),
+      Offset(75, 210),
+    ]) {
+      final back = offsetFromPlace(pointFromTap(original, size), size);
+      expect((back.dx - original.dx).abs(), lessThan(1e-6));
+      expect((back.dy - original.dy).abs(), lessThan(1e-6));
+    }
+  });
+
+  testWidgets('toque no mapa de ver entrega o ponto', (tester) async {
+    Place? tocado;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 300,
+            height: 300,
+            child: FakeMapView(
+              markers: const [MapMarker(MarkerKind.me, cityCenter)],
+              onTap: (place) => tocado = place,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tapAt(tester.getCenter(find.byType(FakeMapView)));
+
+    expect(tocado, isNotNull);
+    expect((tocado!.lat - cityCenter.lat).abs(), lessThan(1e-6));
+    expect((tocado!.lng - cityCenter.lng).abs(), lessThan(1e-6));
+  });
+
+  testWidgets('sem onTap o toque nao faz nada', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 300,
+            height: 300,
+            child: FakeMapView(
+              markers: [
+                MapMarker(MarkerKind.me, cityCenter),
+                MapMarker(MarkerKind.pickup, Place(lat: -12.96, lng: -39.25)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tapAt(tester.getCenter(find.byType(FakeMapView)));
+
+    expect(tester.takeException(), isNull);
+  });
 }
