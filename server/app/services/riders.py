@@ -203,7 +203,8 @@ class RiderService:
         profile = self._profile(session, rider_id)
         if profile.status != "blocked":
             raise InvalidState("o cadastro não está bloqueado")
-        profile.status = "approved"
+        # quem foi bloqueado antes de ser aprovado volta a esperar a aprovação, não vira aprovado de graça
+        profile.status = "approved" if profile.approved_at is not None else "pending"
         profile.rejected_reason = None
         session.get(UserRow, rider_id).is_blocked = False
         session.flush()

@@ -226,6 +226,16 @@ def test_aprovar_recusar_bloquear_e_liberar(service, session, events):
     assert [e.type for e in events.events] == ["rider_approved", "rider_blocked", "rider_unblocked"]
 
 
+def test_liberar_quem_nunca_foi_aprovado_nao_o_deixa_aprovado(service, session):
+    novo_usuario(session)
+    cadastrar(service, session)                  # continua pendente: ninguém aprovou
+    service.block(session, "r1", "denúncia")
+    service.unblock(session, "r1")
+    perfil = session.get(RiderProfileRow, "r1")
+    assert (perfil.status, perfil.approved_at) == ("pending", None)
+    assert session.get(UserRow, "r1").is_blocked is False
+
+
 def test_cadastro_recusado_guarda_o_motivo(service, session):
     novo_usuario(session)
     cadastrar(service, session)
