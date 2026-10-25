@@ -46,7 +46,7 @@ class ChargeScreen extends StatelessWidget {
               child: SelectableText(charge.brCode),
             ),
             const SizedBox(height: 16),
-            const Text('Depois de pagar, a tela atualiza sozinha.'),
+            const Text('Depois de pagar, pode fechar esta tela.'),
             if (onDoneAtual != null) ...[
               const SizedBox(height: 24),
               ElevatedButton(

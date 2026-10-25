@@ -157,27 +157,28 @@ class _SignedInShellState extends State<SignedInShell> {
 
   void _onRideCancelled(Json data) {
     final cancelledId = asString(data['ride_id']);
-    final isCurrent = cancelledId == _controller.state?.ride?.rideId;
-    if (!isCurrent) {
+    final state = _controller.state;
+    if (cancelledId == state?.queuedRide?.rideId) {
       // a corrida da fila: a atual segue
       _toast('O passageiro da próxima corrida cancelou.');
       return;
     }
-    _closeRideRoute();
+    // Só fecha a tela se for a corrida aberta. Se a releitura do estado chegou antes do aviso, a tela já
+    // fechou sozinha e só falta a mensagem.
+    if (cancelledId == state?.ride?.rideId) _closeRideRoute();
     final fee = asInt(data['fee_cents']);
     final reason = asStringOrNull(data['reason']);
+    final String message;
     if (asStringOrNull(data['by']) == 'passenger') {
-      _toast(
-        'O passageiro cancelou a corrida.'
-        '${fee > 0 ? ' Taxa de cancelamento: ${brl(fee)}.' : ''}',
-      );
+      message = 'O passageiro cancelou a corrida.';
     } else if (reason == 'pix_expired') {
-      _toast('O passageiro não pagou o Pix a tempo.');
+      message = 'O passageiro não pagou o Pix a tempo.';
     } else if (reason == 'arrival_wait') {
-      _toast('Passou o tempo de espera no ponto de embarque.');
+      message = 'Passou o tempo de espera no ponto de embarque.';
     } else {
-      _toast('A corrida foi cancelada.');
+      message = 'A corrida foi cancelada.';
     }
+    _toast(fee > 0 ? '$message Taxa de cancelamento: ${brl(fee)}.' : message);
   }
 
   void _showCharge(Charge charge) {
@@ -212,7 +213,9 @@ class _SignedInShellState extends State<SignedInShell> {
                 return RideScreen(
                   ride: ride,
                   position: _controller.position,
-                  offer: state?.offer,
+                  offer: (state?.registration.online ?? false)
+                      ? state?.offer
+                      : null,
                   onMove: _controller.moveTo,
                   onArrive: () => _controller.arrive(ride.rideId),
                   onConfirmHelmet: () => _controller.confirmHelmet(ride.rideId),
@@ -237,9 +240,17 @@ class _SignedInShellState extends State<SignedInShell> {
   }
 
   void _openRenew() {
+    final registration = _controller.state?.registration;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    // a validade que ainda vale vem preenchida (quem só trocou um documento não precisa lembrar a do outro)
+    DateTime? stillValid(DateTime? date) =>
+        date != null && !date.isBefore(today) ? date : null;
     _navigatorKey.currentState!.push(
       MaterialPageRoute(
         builder: (_) => RenewDocumentsScreen(
+          initialCnhExpiresOn: stillValid(registration?.cnhExpiresOn),
+          initialCrlvExpiresOn: stillValid(registration?.crlvExpiresOn),
           onPickPhoto: _controller.pickPhoto,
           onSubmit: (cnh, crlv, cnhPhoto, crlvPhoto) async {
             await _controller.renewDocuments(

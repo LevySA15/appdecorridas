@@ -324,4 +324,50 @@ void main() {
 
     expect(aceita, 'r2');
   });
+
+  testWidgets('o mapa da corrida e quadrado (senao distorce a cidade)', (
+    tester,
+  ) async {
+    await _pump(tester, _corrida());
+
+    final tamanho = tester.getSize(find.byType(FakeMapView));
+
+    expect(tamanho.width, tamanho.height);
+  });
+
+  testWidgets('outra corrida no lugar limpa o codigo digitado', (tester) async {
+    await _pump(tester, _corrida(state: RideState.arrived, helmet: true));
+    await tester.enterText(find.byKey(const Key('codigo')), '1234');
+    await tester.pump();
+    expect(_codigoDigitado(tester), '1234');
+
+    // a corrida da fila vira a atual, na mesma tela
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RideScreen(
+          ride: RiderRide(
+            rideId: 'r2',
+            state: RideState.arrived,
+            helmetConfirmed: true,
+            priceCents: 500,
+            method: 'cash',
+            passengerName: 'Bia',
+            pickup: _embarque,
+            destination: _destino,
+          ),
+          position: cityCenter,
+          onMove: (_) {},
+          onArrive: () async {},
+          onConfirmHelmet: () async {},
+          onStart: (_) async {},
+          onComplete: () async {},
+          onAcceptOffer: (_) async {},
+          onDeclineOffer: (_) async {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(_codigoDigitado(tester), '');
+  });
 }

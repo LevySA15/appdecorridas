@@ -149,7 +149,8 @@ class _RideScreenState extends State<RideScreen> {
               child: const Text('Ver Pix'),
             ),
           ],
-          if (endPayment != null) ...[
+          // sem QR ainda (o motoqueiro não pediu) não há o que mostrar
+          if (endPayment != null && endPayment.chargeId != null) ...[
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () => _showCharge(endPayment.chargeId!),

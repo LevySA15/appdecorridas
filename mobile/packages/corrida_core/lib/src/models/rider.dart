@@ -9,16 +9,17 @@ enum RegistrationStatus {
   unknown;
 
   static RegistrationStatus parse(String? value) => switch (value) {
-        'not_registered' => notRegistered,
-        'pending' => pending,
-        'approved' => approved,
-        'rejected' => rejected,
-        'blocked' => blocked,
-        _ => unknown,
-      };
+    'not_registered' => notRegistered,
+    'pending' => pending,
+    'approved' => approved,
+    'rejected' => rejected,
+    'blocked' => blocked,
+    _ => unknown,
+  };
 }
 
-DateTime? _date(Object? value) => value is String ? DateTime.tryParse(value) : null;
+DateTime? _date(Object? value) =>
+    value is String ? DateTime.tryParse(value) : null;
 
 String _day(DateTime date) =>
     '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -44,14 +45,14 @@ class RiderRegistration {
   final DateTime? crlvExpiresOn;
 
   factory RiderRegistration.fromJson(Json json) => RiderRegistration(
-        status: RegistrationStatus.parse(asStringOrNull(json['status'])),
-        online: asBool(json['online']),
-        reason: asStringOrNull(json['reason']),
-        rating: asDoubleOrNull(json['rating']),
-        ratingCount: asInt(json['rating_count']),
-        cnhExpiresOn: _date(json['cnh_expires_on']),
-        crlvExpiresOn: _date(json['crlv_expires_on']),
-      );
+    status: RegistrationStatus.parse(asStringOrNull(json['status'])),
+    online: asBool(json['online']),
+    reason: asStringOrNull(json['reason']),
+    rating: asDoubleOrNull(json['rating']),
+    ratingCount: asInt(json['rating_count']),
+    cnhExpiresOn: _date(json['cnh_expires_on']),
+    crlvExpiresOn: _date(json['crlv_expires_on']),
+  );
 }
 
 /// A conta do motoqueiro: teste, entrada, taxa devida e o que o bloqueia.
@@ -79,16 +80,16 @@ class RiderAccount {
   final int debtToPayCents;
 
   factory RiderAccount.fromJson(Json json) => RiderAccount(
-        completedRides: asInt(json['completed_rides']),
-        trialRides: asInt(json['trial_rides']),
-        entryPaid: asBool(json['entry_paid']),
-        entryFeeCents: asInt(json['entry_fee_cents']),
-        needsEntry: asBool(json['needs_entry']),
-        blockedReason: asStringOrNull(json['blocked_reason']),
-        cashDebtCents: asInt(json['cash_debt_cents']),
-        cashDebtLimitCents: asInt(json['cash_debt_limit_cents']),
-        debtToPayCents: asInt(json['debt_to_pay_cents']),
-      );
+    completedRides: asInt(json['completed_rides']),
+    trialRides: asInt(json['trial_rides']),
+    entryPaid: asBool(json['entry_paid']),
+    entryFeeCents: asInt(json['entry_fee_cents']),
+    needsEntry: asBool(json['needs_entry']),
+    blockedReason: asStringOrNull(json['blocked_reason']),
+    cashDebtCents: asInt(json['cash_debt_cents']),
+    cashDebtLimitCents: asInt(json['cash_debt_limit_cents']),
+    debtToPayCents: asInt(json['debt_to_pay_cents']),
+  );
 }
 
 /// Oferta de corrida (estado do motoqueiro e aviso `offer` do tempo real têm o mesmo formato).
@@ -116,16 +117,16 @@ class Offer {
   final double expiresAt;
 
   factory Offer.fromJson(Json json) => Offer(
-        rideId: asString(json['ride_id']),
-        priceCents: asInt(json['price_cents']),
-        paymentMethod: asString(json['payment_method']),
-        pickup: Place.fromJson(asMap(json['pickup']) ?? const {}),
-        destination: Place.fromJson(asMap(json['destination']) ?? const {}),
-        distanceM: asInt(json['distance_m']),
-        secondsToPickup: asIntOrNull(json['seconds_to_pickup']),
-        willQueue: asBool(json['will_queue']),
-        expiresAt: asDouble(json['expires_at']),
-      );
+    rideId: asString(json['ride_id']),
+    priceCents: asInt(json['price_cents']),
+    paymentMethod: asString(json['payment_method']),
+    pickup: Place.fromJson(asMap(json['pickup']) ?? const {}),
+    destination: Place.fromJson(asMap(json['destination']) ?? const {}),
+    distanceM: asInt(json['distance_m']),
+    secondsToPickup: asIntOrNull(json['seconds_to_pickup']),
+    willQueue: asBool(json['will_queue']),
+    expiresAt: asDouble(json['expires_at']),
+  );
 }
 
 /// A corrida vista pelo motoqueiro (o passageiro aparece só pelo primeiro nome; o código fica com o passageiro).
@@ -161,20 +162,20 @@ class RiderRide {
   final EndPayment? endPayment;
 
   factory RiderRide.fromJson(Json json) => RiderRide(
-        rideId: asString(json['ride_id']),
-        state: RideState.parse(asStringOrNull(json['state'])),
-        queued: asBool(json['queued']),
-        priceCents: asInt(json['price_cents']),
-        feeCents: asIntOrNull(json['fee_cents']),
-        method: asString(json['method']),
-        pixPaid: asBool(json['pix_paid']),
-        helmetConfirmed: asBool(json['helmet_confirmed']),
-        passengerName: asString(asMap(json['passenger'])?['name']),
-        pickup: Place.fromJson(asMap(json['pickup']) ?? const {}),
-        destination: Place.fromJson(asMap(json['destination']) ?? const {}),
-        distanceM: asInt(json['distance_m']),
-        endPayment: mapOrNull(json['end_payment'], EndPayment.fromJson),
-      );
+    rideId: asString(json['ride_id']),
+    state: RideState.parse(asStringOrNull(json['state'])),
+    queued: asBool(json['queued']),
+    priceCents: asInt(json['price_cents']),
+    feeCents: asIntOrNull(json['fee_cents']),
+    method: asString(json['method']),
+    pixPaid: asBool(json['pix_paid']),
+    helmetConfirmed: asBool(json['helmet_confirmed']),
+    passengerName: asString(asMap(json['passenger'])?['name']),
+    pickup: Place.fromJson(asMap(json['pickup']) ?? const {}),
+    destination: Place.fromJson(asMap(json['destination']) ?? const {}),
+    distanceM: asInt(json['distance_m']),
+    endPayment: mapOrNull(json['end_payment'], EndPayment.fromJson),
+  );
 }
 
 /// `GET /v1/rider/state`: tudo o que o app do motoqueiro precisa para desenhar a tela.
@@ -193,24 +194,23 @@ class RiderState {
   final Offer? offer;
   final RiderRide? ride;
   final RiderRide? queuedRide;
-  final RiderRide? awaitingPayment; // corrida em dinheiro que terminou e espera o pagamento
+  final RiderRide?
+  awaitingPayment; // corrida em dinheiro que terminou e espera o pagamento
 
   factory RiderState.fromJson(Json json) => RiderState(
-        registration: RiderRegistration.fromJson(asMap(json['registration']) ?? const {}),
-        account: mapOrNull(json['account'], RiderAccount.fromJson),
-        offer: mapOrNull(json['offer'], Offer.fromJson),
-        ride: mapOrNull(json['ride'], RiderRide.fromJson),
-        queuedRide: mapOrNull(json['queued_ride'], RiderRide.fromJson),
-        awaitingPayment: mapOrNull(json['awaiting_payment'], RiderRide.fromJson),
-      );
+    registration: RiderRegistration.fromJson(
+      asMap(json['registration']) ?? const {},
+    ),
+    account: mapOrNull(json['account'], RiderAccount.fromJson),
+    offer: mapOrNull(json['offer'], Offer.fromJson),
+    ride: mapOrNull(json['ride'], RiderRide.fromJson),
+    queuedRide: mapOrNull(json['queued_ride'], RiderRide.fromJson),
+    awaitingPayment: mapOrNull(json['awaiting_payment'], RiderRide.fromJson),
+  );
 }
 
 /// As três fotos do cadastro.
-enum DocKind {
-  selfie,
-  cnh,
-  crlv;
-}
+enum DocKind { selfie, cnh, crlv }
 
 class UploadedDocument {
   const UploadedDocument({required this.key, required this.bytes});
@@ -249,17 +249,17 @@ class RiderRegistrationForm {
   final DateTime crlvExpiresOn;
 
   Json toJson() => {
-        'name': name,
-        'cpf': cpf,
-        'cnh_number': cnhNumber,
-        'plate': plate,
-        'moto_model': motoModel,
-        'selfie_key': selfieKey,
-        'cnh_photo_key': cnhPhotoKey,
-        'crlv_key': crlvKey,
-        'cnh_expires_on': _day(cnhExpiresOn),
-        'crlv_expires_on': _day(crlvExpiresOn),
-      };
+    'name': name,
+    'cpf': cpf,
+    'cnh_number': cnhNumber,
+    'plate': plate,
+    'moto_model': motoModel,
+    'selfie_key': selfieKey,
+    'cnh_photo_key': cnhPhotoKey,
+    'crlv_key': crlvKey,
+    'cnh_expires_on': _day(cnhExpiresOn),
+    'crlv_expires_on': _day(crlvExpiresOn),
+  };
 }
 
 /// Formato `AAAA-MM-DD` que o servidor espera nas validades.
@@ -340,4 +340,3 @@ class RiderStatement {
     cashDebtCents: asInt(json['cash_debt_cents']),
   );
 }
-

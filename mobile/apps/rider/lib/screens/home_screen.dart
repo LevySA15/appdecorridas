@@ -147,7 +147,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-          if (offer != null)
+          // sem estar rodando a oferta pendente já não vale (aceitar dá 409): não aparece
+          if (offer != null && registration.online)
             OfferCard(
               key: ValueKey(offer.rideId),
               offer: offer,

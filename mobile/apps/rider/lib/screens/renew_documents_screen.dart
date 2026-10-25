@@ -11,6 +11,8 @@ class RenewDocumentsScreen extends StatefulWidget {
   const RenewDocumentsScreen({
     required this.onPickPhoto,
     required this.onSubmit,
+    this.initialCnhExpiresOn,
+    this.initialCrlvExpiresOn,
     super.key,
   });
 
@@ -23,13 +25,25 @@ class RenewDocumentsScreen extends StatefulWidget {
   )
   onSubmit;
 
+  /// As validades que ainda valem, para vir preenchidas (as vencidas ficam em branco).
+  final DateTime? initialCnhExpiresOn;
+  final DateTime? initialCrlvExpiresOn;
+
   @override
   State<RenewDocumentsScreen> createState() => _RenewDocumentsScreenState();
 }
 
 class _RenewDocumentsScreenState extends State<RenewDocumentsScreen> {
-  final _cnh = TextEditingController();
-  final _crlv = TextEditingController();
+  late final _cnh = TextEditingController(
+    text: widget.initialCnhExpiresOn == null
+        ? ''
+        : formatBrDate(widget.initialCnhExpiresOn!),
+  );
+  late final _crlv = TextEditingController(
+    text: widget.initialCrlvExpiresOn == null
+        ? ''
+        : formatBrDate(widget.initialCrlvExpiresOn!),
+  );
   Photo? _cnhPhoto;
   Photo? _crlvPhoto;
   String? _cnhError;

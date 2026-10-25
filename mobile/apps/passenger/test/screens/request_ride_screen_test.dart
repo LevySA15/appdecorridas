@@ -139,4 +139,35 @@ void main() {
       expect(find.byType(FakeMapPicker), findsOneWidget);
     },
   );
+
+  testWidgets('cotacao que falha limpa os pontos para marcar de novo', (
+    tester,
+  ) async {
+    var cotacoes = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RequestRideScreen(
+          onQuote: (pickup, destination) async {
+            cotacoes++;
+            throw ApiException(
+              status: 422,
+              code: 'out_of_area',
+              message: 'Fora da área de atendimento.',
+            );
+          },
+          onConfirm: (_, _) async {},
+        ),
+      ),
+    );
+    await _marcarOsDoisPontos(tester);
+    expect(cotacoes, 1);
+    expect(find.text('Fora da área de atendimento.'), findsOneWidget);
+
+    // um toque só: é a nova origem (se os pontos antigos tivessem ficado, seria um destino novo e outra cotação)
+    final rect = tester.getRect(find.byType(FakeMapPicker));
+    await tester.tapAt(rect.center);
+    await tester.pumpAndSettle();
+
+    expect(cotacoes, 1);
+  });
 }

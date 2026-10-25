@@ -226,21 +226,36 @@ void main() {
     });
 
     expect((extrato.date, extrato.completedCount), ('2026-10-25', 2));
-    expect((extrato.grossCents, extrato.feeCents, extrato.netCents), (1400, 200, 1200));
-    expect((extrato.cashCents, extrato.pixCents, extrato.cashDebtCents), (700, 700, 100));
+    expect(
+      (extrato.grossCents, extrato.feeCents, extrato.netCents),
+      (1400, 200, 1200),
+    );
+    expect(
+      (extrato.cashCents, extrato.pixCents, extrato.cashDebtCents),
+      (700, 700, 100),
+    );
     expect((extrato.nextRideNumber, extrato.nextFeeCents), (3, 100));
     final corrida = extrato.rides.single;
-    expect((corrida.rideId, corrida.priceCents, corrida.feeCents), ('r1', 700, 100));
-    expect((corrida.netCents, corrida.method, corrida.distanceM), (600, 'pix', 2300));
+    expect(
+      (corrida.rideId, corrida.priceCents, corrida.feeCents),
+      ('r1', 700, 100),
+    );
+    expect(
+      (corrida.netCents, corrida.method, corrida.distanceM),
+      (600, 'pix', 2300),
+    );
     expect(corrida.completedAt, 1761400000.5);
   });
 
-  test('extrato de outro dia vem sem proxima faixa e tolera campos que faltam', () {
-    final extrato = RiderStatement.fromJson({'date': '2026-10-24'});
+  test(
+    'extrato de outro dia vem sem proxima faixa e tolera campos que faltam',
+    () {
+      final extrato = RiderStatement.fromJson({'date': '2026-10-24'});
 
-    expect(extrato.completedCount, 0);
-    expect(extrato.rides, isEmpty);
-    expect(extrato.nextRideNumber, isNull);
-    expect(extrato.nextFeeCents, isNull);
-  });
+      expect(extrato.completedCount, 0);
+      expect(extrato.rides, isEmpty);
+      expect(extrato.nextRideNumber, isNull);
+      expect(extrato.nextFeeCents, isNull);
+    },
+  );
 }

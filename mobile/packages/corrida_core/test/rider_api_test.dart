@@ -156,6 +156,8 @@ void main() {
     final divida = await m.api.debtCharge();
     expect((entrada.chargeId, entrada.amountCents), ('c1', 5000));
     expect(divida.brCode, 'x');
+    // as rotas não devolvem o `purpose`; o cliente sabe qual das duas chamou (a tela usa para o título)
+    expect((entrada.purpose, divida.purpose), ('entry', 'debt'));
     expect(m.chamadas.map((c) => c.path).toList(), [
       '/v1/rider/entry-charge',
       '/v1/rider/debt-charge',

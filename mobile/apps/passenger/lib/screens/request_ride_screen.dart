@@ -24,6 +24,7 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
   Quote? _quote;
   String? _method;
   var _loading = false;
+  var _pickerRound = 0; // muda para o mapa recomeçar sem os pontos antigos
 
   String _messageOf(Object error) => switch (error) {
     ApiException(message: final message) => message,
@@ -48,6 +49,8 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
         _method = quote.paymentMethods.first;
       });
     } on Exception catch (error) {
+      if (mounted)
+        setState(() => _pickerRound++); // a cotação falhou: marca tudo de novo
       _showError(_messageOf(error));
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -94,7 +97,10 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
         Expanded(
           child: AspectRatio(
             aspectRatio: 1,
-            child: FakeMapPicker(onChanged: _onPointsChanged),
+            child: FakeMapPicker(
+              key: ValueKey(_pickerRound),
+              onChanged: _onPointsChanged,
+            ),
           ),
         ),
         if (_loading)

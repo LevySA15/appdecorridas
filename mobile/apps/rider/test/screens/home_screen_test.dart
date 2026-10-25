@@ -342,4 +342,12 @@ void main() {
 
     expect(abriu, isTrue);
   });
+
+  testWidgets('oferta pendente nao aparece depois de parar de rodar', (
+    tester,
+  ) async {
+    await _pump(tester, _estado(online: false, offer: _oferta));
+
+    expect(find.byType(OfferCard), findsNothing);
+  });
 }

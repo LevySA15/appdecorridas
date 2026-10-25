@@ -62,4 +62,14 @@ void main() {
     );
     expect(find.text('Pix da dívida'), findsOneWidget);
   });
+
+  testWidgets('avisa que pode fechar a tela depois de pagar', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: ChargeScreen(charge: _charge)),
+    );
+
+    // a tela não se atualiza sozinha: quem muda é a tela de trás (pelo estado)
+    expect(find.text('Depois de pagar, pode fechar esta tela.'), findsOneWidget);
+    expect(find.textContaining('atualiza sozinha'), findsNothing);
+  });
 }

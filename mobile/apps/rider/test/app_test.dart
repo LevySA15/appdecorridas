@@ -53,14 +53,16 @@ Map<String, Object?> _aprovado({
   Map<String, Object?>? offer,
   Map<String, Object?>? ride,
   Map<String, Object?>? awaiting,
+  Map<String, Object?>? queued,
   String? blockedReason,
   String cnhExpiresOn = '2035-01-01',
+  String crlvExpiresOn = '2035-01-01',
 }) => {
   'registration': {
     'status': 'approved',
     'online': online,
     'cnh_expires_on': cnhExpiresOn,
-    'crlv_expires_on': '2035-01-01',
+    'crlv_expires_on': crlvExpiresOn,
   },
   'account': {
     'completed_rides': 3,
@@ -75,7 +77,7 @@ Map<String, Object?> _aprovado({
   },
   'offer': offer,
   'ride': ride,
-  'queued_ride': null,
+  'queued_ride': queued,
   'awaiting_payment': awaiting,
 };
 
@@ -236,7 +238,10 @@ void main() {
     (tester) async {
       final m = await _logado(
         tester,
-        _aprovado(ride: _corrida(state: 'in_progress')),
+        _aprovado(
+          ride: _corrida(state: 'in_progress'),
+          queued: _corrida(id: 'r2', state: 'queued'),
+        ),
       );
       await tester.tap(find.text('Abrir corrida'));
       await tester.pumpAndSettle();
@@ -585,6 +590,85 @@ void main() {
 
       expect(find.byType(WaitingDataScreen), findsNothing);
       expect(find.byType(HomeScreen), findsOneWidget);
+      await _fim(tester, m);
+    },
+  );
+
+  testWidgets('cancelamento por tempo de espera mostra a taxa', (tester) async {
+    final m = await _logado(tester, _aprovado(ride: _corrida()));
+    await tester.tap(find.text('Abrir corrida'));
+    await tester.pumpAndSettle();
+
+    m.stateJson = _aprovado();
+    m.canais.single.servidorMandaAviso('ride_cancelled', {
+      'ride_id': 'r1',
+      'reason': 'arrival_wait',
+      'fee_cents': 500,
+    });
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Passou o tempo de espera no ponto de embarque. Taxa de cancelamento: R\$ 5,00.',
+      ),
+      findsOneWidget,
+    );
+    await _fim(tester, m);
+  });
+
+  testWidgets(
+    'cancelamento que chega depois da releitura do estado nao vira "da proxima corrida"',
+    (tester) async {
+      final m = await _logado(tester, _aprovado(ride: _corrida()));
+      await tester.tap(find.text('Abrir corrida'));
+      await tester.pumpAndSettle();
+
+      // a releitura (disparada por outra coisa) chega antes do aviso: a corrida já saiu do estado
+      m.stateJson = _aprovado();
+      await m.controller.refreshState();
+      await tester.pumpAndSettle();
+      expect(find.byType(RideScreen), findsNothing);
+
+      m.canais.single.servidorMandaAviso('ride_cancelled', {
+        'ride_id': 'r1',
+        'by': 'passenger',
+      });
+      await tester.pumpAndSettle();
+
+      expect(find.text('O passageiro cancelou a corrida.'), findsOneWidget);
+      expect(find.textContaining('próxima corrida'), findsNothing);
+      await _fim(tester, m);
+    },
+  );
+
+  testWidgets(
+    'renovar documentos vem com a validade que ainda vale preenchida',
+    (tester) async {
+      final m = await _logado(
+        tester,
+        _aprovado(
+          cnhExpiresOn: '2035-03-04',
+          crlvExpiresOn: '2020-01-01', // já venceu: o campo fica em branco
+        ),
+      );
+
+      await tester.tap(find.text('Enviar novo'));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('validade_cnh')))
+            .controller!
+            .text,
+        '04/03/2035',
+      );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('validade_crlv')))
+            .controller!
+            .text,
+        '',
+      );
       await _fim(tester, m);
     },
   );

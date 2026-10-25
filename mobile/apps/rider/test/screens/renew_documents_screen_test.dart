@@ -11,8 +11,10 @@ Photo _foto(DocKind kind) =>
 
 Future<void> _pump(
   WidgetTester tester,
-  Future<void> Function(DateTime, DateTime, Photo?, Photo?) onSubmit,
-) async {
+  Future<void> Function(DateTime, DateTime, Photo?, Photo?) onSubmit, {
+  DateTime? initialCnh,
+  DateTime? initialCrlv,
+}) async {
   tester.view.physicalSize = const Size(800, 2000);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -21,6 +23,8 @@ Future<void> _pump(
       home: RenewDocumentsScreen(
         onPickPhoto: (kind) async => _foto(kind),
         onSubmit: onSubmit,
+        initialCnhExpiresOn: initialCnh,
+        initialCrlvExpiresOn: initialCrlv,
       ),
     ),
   );
@@ -88,5 +92,30 @@ void main() {
 
     expect(fotoCnh, isNotNull);
     expect(fotoCnh!.bytes, utf8.encode('cnh'));
+  });
+
+  testWidgets('vem com as validades que ainda valem ja preenchidas', (
+    tester,
+  ) async {
+    DateTime? cnh;
+    await _pump(
+      tester,
+      (a, b, c, d) async => cnh = a,
+      initialCnh: DateTime(2031, 5, 1),
+    );
+
+    String texto(String chave) =>
+        tester.widget<TextField>(find.byKey(Key(chave))).controller!.text;
+    expect(texto('validade_cnh'), '01/05/2031');
+    expect(texto('validade_crlv'), '');
+
+    await tester.enterText(
+      find.byKey(const Key('validade_crlv')),
+      '02/06/2032',
+    );
+    await tester.tap(find.text('Enviar'));
+    await tester.pumpAndSettle();
+
+    expect(cnh, DateTime(2031, 5, 1)); // manteve a CNH que não mudou
   });
 }

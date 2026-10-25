@@ -218,4 +218,22 @@ void main() {
       expect(find.text('Está tudo bem?'), findsNothing);
     },
   );
+
+  testWidgets('pagamento do fim sem QR ainda nao mostra o botao de ver Pix', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(
+        _screen(
+          ride: const PassengerRide(
+            rideId: 'r1',
+            state: RideState.inProgress,
+            endPayment: EndPayment(amountCents: 500),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Ver Pix'), findsNothing);
+  });
 }

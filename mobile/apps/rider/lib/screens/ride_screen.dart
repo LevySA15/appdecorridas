@@ -44,6 +44,16 @@ class _RideScreenState extends State<RideScreen> {
   var _busy = false;
 
   @override
+  void didUpdateWidget(covariant RideScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // a corrida da fila virou a atual na mesma tela: nada herdado da anterior
+    if (oldWidget.ride.rideId != widget.ride.rideId) {
+      _pin.clear();
+      _busy = false;
+    }
+  }
+
+  @override
   void dispose() {
     _pin.dispose();
     super.dispose();
@@ -69,15 +79,22 @@ class _RideScreenState extends State<RideScreen> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Widget _map(RiderRide ride) => SizedBox(
-    height: 240,
-    child: FakeMapView(
-      markers: [
-        MapMarker(MarkerKind.pickup, ride.pickup),
-        MapMarker(MarkerKind.destination, ride.destination),
-        MapMarker(MarkerKind.me, widget.position),
-      ],
-      onTap: widget.onMove,
+  // Quadrado, porque o mapa de mentira usa o mesmo lado nos dois eixos (numa caixa mais larga que alta o
+  // toque da direita cairia fora dos 3 km da cidade).
+  Widget _map(RiderRide ride) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 320),
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: FakeMapView(
+          markers: [
+            MapMarker(MarkerKind.pickup, ride.pickup),
+            MapMarker(MarkerKind.destination, ride.destination),
+            MapMarker(MarkerKind.me, widget.position),
+          ],
+          onTap: widget.onMove,
+        ),
+      ),
     ),
   );
 

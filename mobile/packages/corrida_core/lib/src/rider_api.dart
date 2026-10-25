@@ -79,11 +79,16 @@ class RiderApi {
     );
   }
 
-  Future<Charge> entryCharge() async =>
-      Charge.fromJson(_map(await client.post('/v1/rider/entry-charge')));
+  // As rotas de entrada e dívida não devolvem o `purpose`; ele entra aqui para a tela poder titular o Pix.
+  Future<Charge> entryCharge() async => Charge.fromJson({
+    'purpose': 'entry',
+    ..._map(await client.post('/v1/rider/entry-charge')),
+  });
 
-  Future<Charge> debtCharge() async =>
-      Charge.fromJson(_map(await client.post('/v1/rider/debt-charge')));
+  Future<Charge> debtCharge() async => Charge.fromJson({
+    'purpose': 'debt',
+    ..._map(await client.post('/v1/rider/debt-charge')),
+  });
 
   /// Lê uma cobrança (a mesma rota `GET /v1/charges/{id}` que o passageiro usa): o QR do fim da corrida
   /// em dinheiro, a entrada, a dívida.
