@@ -277,4 +277,30 @@ void main() {
     expect(jsonDecode(m.ratingRequest!.body), {'stars': 1});
     await tester.runAsync(() => m.controller.signOut());
   });
+
+  testWidgets('avaliar com sucesso fecha a tela de avaliar', (tester) async {
+    final m = Mundo();
+    await m.store.save(
+      Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
+    );
+    await m.controller.start();
+    await tester.pumpWidget(PassengerApp(controller: m.controller));
+    await tester.pump();
+
+    m.canais.single.servidorMandaAviso('trip_completed', {
+      'ride_id': 'r1',
+      'price_cents': 500,
+      'method': 'pix',
+    });
+    await tester.pumpAndSettle();
+    expect(find.byType(RateScreen), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.star).first);
+    await tester.pumpAndSettle();
+
+    expect(m.ratingRequest, isNotNull);
+    expect(find.byType(RateScreen), findsNothing);
+    expect(find.byType(HomeScreen), findsOneWidget);
+    await tester.runAsync(() => m.controller.signOut());
+  });
 }

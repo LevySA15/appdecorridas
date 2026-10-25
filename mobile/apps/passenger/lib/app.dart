@@ -99,8 +99,11 @@ class _SignedInShellState extends State<SignedInShell> {
     _navigatorKey.currentState?.push(
       MaterialPageRoute(
         builder: (_) => RateScreen(
-          onRate: (stars) =>
-              widget.controller.rate(rideId: rideId, stars: stars),
+          onRate: (stars) async {
+            await widget.controller.rate(rideId: rideId, stars: stars);
+            final navigator = _navigatorKey.currentState;
+            if (navigator != null && navigator.canPop()) navigator.pop();
+          },
           onSkip: () => _navigatorKey.currentState!.pop(),
         ),
       ),
