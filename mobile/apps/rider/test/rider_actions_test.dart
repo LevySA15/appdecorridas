@@ -174,4 +174,36 @@ void main() {
     expect(_leituras(m), 1);
     expect(m.controller.state, isNotNull);
   });
+
+  test(
+    'aceite que deu certo nao falha se a releitura do estado cair',
+    () async {
+      final m = await _logado();
+      m.on('POST', '/v1/rider/offers/r1/accept', (_) => json(_corrida));
+      m.on(
+        'GET',
+        '/v1/rider/state',
+        (_) => throw http.ClientException('sem rede'),
+      );
+
+      final ride = await m.controller.accept('r1');
+
+      expect(ride.rideId, 'r1');
+    },
+  );
+
+  test(
+    'finalizar que deu certo nao falha se a releitura do estado cair',
+    () async {
+      final m = await _logado();
+      m.on('POST', '/v1/rider/rides/r1/complete', (_) => json(_corrida));
+      m.on(
+        'GET',
+        '/v1/rider/state',
+        (_) => throw http.ClientException('sem rede'),
+      );
+
+      await m.controller.completeTrip('r1');
+    },
+  );
 }

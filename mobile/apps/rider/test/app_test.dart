@@ -465,4 +465,20 @@ void main() {
 
     expect(m.sent('POST', '/v1/rider/position').length, antes);
   });
+
+  testWidgets('bloqueado por documento vencido consegue abrir a renovacao', (
+    tester,
+  ) async {
+    final m = await _logado(tester, {
+      ...estadoNaoCadastrado,
+      'registration': {'status': 'blocked', 'reason': 'documento vencido'},
+    });
+    expect(find.byType(StatusScreen), findsOneWidget);
+
+    await tester.tap(find.text('Enviar documento novo'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RenewDocumentsScreen), findsOneWidget);
+    await _fim(tester, m);
+  });
 }

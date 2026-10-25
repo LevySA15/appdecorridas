@@ -7,12 +7,14 @@ Future<void> _pump(
   WidgetTester tester,
   RiderRegistration registration, {
   Future<void> Function()? onRefresh,
+  VoidCallback? onRenewDocuments,
 }) => tester.pumpWidget(
   MaterialApp(
     home: StatusScreen(
       registration: registration,
       onRefresh: onRefresh ?? () async {},
       onSignOut: () {},
+      onRenewDocuments: onRenewDocuments,
     ),
   ),
 );
@@ -88,5 +90,44 @@ void main() {
     await tester.tap(find.text('Atualizar'));
     await tester.pumpAndSettle();
     expect(find.text('Sem internet.'), findsOneWidget);
+  });
+
+  testWidgets('bloqueado oferece enviar o documento novo', (tester) async {
+    var abriu = false;
+    await _pump(
+      tester,
+      const RiderRegistration(
+        status: RegistrationStatus.blocked,
+        reason: 'documento vencido',
+      ),
+      onRenewDocuments: () => abriu = true,
+    );
+
+    expect(
+      find.text(
+        'Se o bloqueio foi por documento vencido, envie o documento novo e aguarde a liberação.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Enviar documento novo'));
+    expect(abriu, isTrue);
+  });
+
+  testWidgets('em analise e recusado nao oferecem enviar documento', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      const RiderRegistration(status: RegistrationStatus.pending),
+      onRenewDocuments: () {},
+    );
+    expect(find.text('Enviar documento novo'), findsNothing);
+
+    await _pump(
+      tester,
+      const RiderRegistration(status: RegistrationStatus.rejected),
+      onRenewDocuments: () {},
+    );
+    expect(find.text('Enviar documento novo'), findsNothing);
   });
 }

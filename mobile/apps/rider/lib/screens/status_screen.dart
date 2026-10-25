@@ -8,12 +8,16 @@ class StatusScreen extends StatelessWidget {
     required this.registration,
     required this.onRefresh,
     required this.onSignOut,
+    this.onRenewDocuments,
     super.key,
   });
 
   final RiderRegistration registration;
   final Future<void> Function() onRefresh;
   final VoidCallback onSignOut;
+
+  /// Só aparece para a conta bloqueada: o bloqueio por documento vencido só sai com o documento novo.
+  final VoidCallback? onRenewDocuments;
 
   Future<void> _refresh(BuildContext context) async {
     try {
@@ -40,6 +44,7 @@ class StatusScreen extends StatelessWidget {
       RegistrationStatus.blocked => [
         'Conta bloqueada',
         if (reason != null && reason.isNotEmpty) reason,
+        if (onRenewDocuments != null) 'Se o bloqueio foi por documento vencido, envie o documento novo e aguarde a liberação.',
       ],
       _ => ['Não conseguimos ler o seu cadastro. Toque em atualizar.'],
     };
@@ -57,6 +62,12 @@ class StatusScreen extends StatelessWidget {
                 child: Text(line, textAlign: TextAlign.center),
               ),
             const SizedBox(height: 16),
+            if (registration.status == RegistrationStatus.blocked &&
+                onRenewDocuments != null)
+              OutlinedButton(
+                onPressed: onRenewDocuments,
+                child: const Text('Enviar documento novo'),
+              ),
             ElevatedButton(
               onPressed: () => _refresh(context),
               child: const Text('Atualizar'),

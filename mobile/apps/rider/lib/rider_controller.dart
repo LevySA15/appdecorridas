@@ -138,7 +138,9 @@ class RiderController extends ChangeNotifier {
       await _quietRefresh();
       rethrow;
     }
-    await refreshState();
+    // A ação já deu certo no servidor: se só a releitura falhar (rede ruim), não pode parecer que a ação
+    // falhou. O próximo aviso do tempo real traz o estado.
+    await _quietRefresh();
     return result;
   }
 
@@ -210,7 +212,7 @@ class RiderController extends ChangeNotifier {
       ),
     );
     _uploaded.clear();
-    await refreshState();
+    await _quietRefresh();
   }
 
   /// Novas validades e, se houver, as fotos novas (só as dadas são enviadas).
@@ -233,7 +235,7 @@ class RiderController extends ChangeNotifier {
       crlvKey: crlvKey,
     );
     _uploaded.clear();
-    await refreshState();
+    await _quietRefresh();
   }
 
   void _connectRealtime() {

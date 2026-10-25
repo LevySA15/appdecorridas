@@ -181,4 +181,26 @@ void main() {
     expect(corpo.containsKey('crlv_key'), isFalse);
     expect(m.sent('GET', '/v1/rider/state'), hasLength(1));
   });
+
+  test(
+    'cadastro que deu certo nao falha se a releitura do estado cair',
+    () async {
+      final m = await _logado();
+      _rotas(m);
+      m.on(
+        'POST',
+        '/v1/rider/register',
+        (_) => json({'status': 'pending'}, 201),
+      );
+      m.on(
+        'GET',
+        '/v1/rider/state',
+        (_) => throw http.ClientException('sem rede'),
+      );
+
+      await m.controller.registerRider(_dados(_tresFotos()));
+
+      expect(m.sent('POST', '/v1/rider/register'), hasLength(1));
+    },
+  );
 }

@@ -272,6 +272,7 @@ class _SignedInShellState extends State<SignedInShell> {
           registration: state.registration,
           onRefresh: _controller.refreshState,
           onSignOut: _controller.signOut,
+          onRenewDocuments: _openRenew,
         );
     }
   }
