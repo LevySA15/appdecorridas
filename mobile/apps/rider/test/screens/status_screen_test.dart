@@ -31,21 +31,6 @@ void main() {
     );
   });
 
-  testWidgets('recusado mostra o motivo e manda falar com o suporte', (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      const RiderRegistration(
-        status: RegistrationStatus.rejected,
-        reason: 'Foto da CNH ilegível.',
-      ),
-    );
-    expect(find.text('Cadastro recusado'), findsOneWidget);
-    expect(find.text('Foto da CNH ilegível.'), findsOneWidget);
-    expect(find.text('Fale com o suporte.'), findsOneWidget);
-  });
-
   testWidgets('bloqueado mostra o motivo', (tester) async {
     await _pump(
       tester,
@@ -105,7 +90,7 @@ void main() {
 
     expect(
       find.text(
-        'Se o bloqueio foi por documento vencido, envie o documento novo e aguarde a liberação.',
+        'Se o bloqueio foi por documento vencido, envie o documento novo e a conta é liberada na hora.',
       ),
       findsOneWidget,
     );
@@ -113,19 +98,10 @@ void main() {
     expect(abriu, isTrue);
   });
 
-  testWidgets('em analise e recusado nao oferecem enviar documento', (
-    tester,
-  ) async {
+  testWidgets('em analise nao oferece enviar documento', (tester) async {
     await _pump(
       tester,
       const RiderRegistration(status: RegistrationStatus.pending),
-      onRenewDocuments: () {},
-    );
-    expect(find.text('Enviar documento novo'), findsNothing);
-
-    await _pump(
-      tester,
-      const RiderRegistration(status: RegistrationStatus.rejected),
       onRenewDocuments: () {},
     );
     expect(find.text('Enviar documento novo'), findsNothing);

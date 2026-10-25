@@ -2,7 +2,8 @@ import 'package:corrida_core/corrida_core.dart';
 import 'package:corrida_ui/corrida_ui.dart';
 import 'package:flutter/material.dart';
 
-/// Onde o motoqueiro espera quando o cadastro não está aprovado: em análise, recusado ou bloqueado.
+/// Onde o motoqueiro espera quando o cadastro não está aprovado: em análise ou bloqueado. (O recusado volta
+/// ao formulário de cadastro, que ele pode corrigir e reenviar.)
 class StatusScreen extends StatelessWidget {
   const StatusScreen({
     required this.registration,
@@ -36,15 +37,10 @@ class StatusScreen extends StatelessWidget {
       RegistrationStatus.pending => [
         'Cadastro em análise. Avisamos aqui quando for aprovado.',
       ],
-      RegistrationStatus.rejected => [
-        'Cadastro recusado',
-        if (reason != null && reason.isNotEmpty) reason,
-        'Fale com o suporte.',
-      ],
       RegistrationStatus.blocked => [
         'Conta bloqueada',
         if (reason != null && reason.isNotEmpty) reason,
-        if (onRenewDocuments != null) 'Se o bloqueio foi por documento vencido, envie o documento novo e aguarde a liberação.',
+        if (onRenewDocuments != null) 'Se o bloqueio foi por documento vencido, envie o documento novo e a conta é liberada na hora.',
       ],
       _ => ['Não conseguimos ler o seu cadastro. Toque em atualizar.'],
     };

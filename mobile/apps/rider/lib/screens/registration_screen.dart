@@ -14,6 +14,7 @@ class RegistrationScreen extends StatefulWidget {
     required this.onPickPhoto,
     required this.onSubmit,
     required this.onSignOut,
+    this.rejectionReason,
     super.key,
   });
 
@@ -21,8 +22,20 @@ class RegistrationScreen extends StatefulWidget {
   final Future<void> Function(RegistrationData data) onSubmit;
   final VoidCallback onSignOut;
 
+  /// Cadastro recusado que pode ser corrigido e reenviado: o motivo vai no alto (vazio = sem motivo).
+  /// `null` é um cadastro novo.
+  final String? rejectionReason;
+
   @override
   State<RegistrationScreen> createState() => _RegistrationScreenState();
+}
+
+/// O motivo costuma vir com ponto final; tira para a frase não ficar com dois.
+String _rejectionMessage(String reason) {
+  final clean = reason.replaceAll(RegExp(r'[.\s]+$'), '');
+  return clean.isEmpty
+      ? 'Seu cadastro foi recusado. Corrija e envie de novo.'
+      : 'Seu cadastro foi recusado: $clean. Corrija e envie de novo.';
 }
 
 class _RegistrationScreenState extends State<RegistrationScreen> {
@@ -145,6 +158,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (widget.rejectionReason != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                _rejectionMessage(widget.rejectionReason!),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
           const Text('Preencha seus dados para pedir a aprovação.'),
           const SizedBox(height: 16),
           _field('nome', 'Nome completo'),

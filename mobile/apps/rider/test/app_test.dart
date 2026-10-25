@@ -466,19 +466,75 @@ void main() {
     expect(m.sent('POST', '/v1/rider/position').length, antes);
   });
 
-  testWidgets('bloqueado por documento vencido consegue abrir a renovacao', (
-    tester,
-  ) async {
+  testWidgets('recusado cai no formulario com o motivo', (tester) async {
     final m = await _logado(tester, {
       ...estadoNaoCadastrado,
-      'registration': {'status': 'blocked', 'reason': 'documento vencido'},
+      'registration': {'status': 'rejected', 'reason': 'Foto da CNH ilegível.'},
     });
-    expect(find.byType(StatusScreen), findsOneWidget);
 
-    await tester.tap(find.text('Enviar documento novo'));
+    expect(find.byType(RegistrationScreen), findsOneWidget);
+    expect(find.byType(StatusScreen), findsNothing);
+    expect(
+      find.text(
+        'Seu cadastro foi recusado: Foto da CNH ilegível. Corrija e envie de novo.',
+      ),
+      findsOneWidget,
+    );
+    await _fim(tester, m);
+  });
+
+  testWidgets(
+    'renovar de quem esta bloqueado por documento vencido libera a conta',
+    (tester) async {
+      final m = await _logado(tester, {
+        ...estadoNaoCadastrado,
+        'registration': {'status': 'blocked', 'reason': 'documento vencido'},
+      });
+      expect(find.byType(StatusScreen), findsOneWidget);
+      m.on('POST', '/v1/rider/documents/renew', (_) {
+        m.stateJson = _aprovado(); // o servidor desbloqueou ao renovar
+        return http.Response('', 204);
+      });
+
+      await tester.tap(find.text('Enviar documento novo'));
+      await tester.pumpAndSettle();
+      expect(find.byType(RenewDocumentsScreen), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const Key('validade_cnh')),
+        '01/01/2035',
+      );
+      await tester.enterText(
+        find.byKey(const Key('validade_crlv')),
+        '01/01/2036',
+      );
+      await tester.tap(find.text('Enviar'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RenewDocumentsScreen), findsNothing);
+      expect(find.byType(HomeScreen), findsOneWidget);
+      await _fim(tester, m);
+    },
+  );
+
+  testWidgets('avisos do servidor sobre a conta viram mensagem', (
+    tester,
+  ) async {
+    final m = await _logado(tester, _aprovado());
+
+    m.canais.single.servidorMandaAviso('rider_unblocked', {});
+    await tester.pumpAndSettle();
+    expect(find.text('Sua conta foi liberada.'), findsOneWidget);
+    await tester.pump(
+      const Duration(seconds: 6),
+    ); // o primeiro aviso sai da tela
     await tester.pumpAndSettle();
 
-    expect(find.byType(RenewDocumentsScreen), findsOneWidget);
+    m.canais.single.servidorMandaAviso('rider_rejected', {'reason': 'x'});
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Seu cadastro foi recusado. Veja o motivo e envie de novo.'),
+      findsOneWidget,
+    );
     await _fim(tester, m);
   });
 }

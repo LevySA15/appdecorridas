@@ -20,6 +20,7 @@ Future<void> _pump(
   WidgetTester tester, {
   Future<Photo?> Function(DocKind kind)? onPickPhoto,
   Future<void> Function(RegistrationData data)? onSubmit,
+  String? rejectionReason,
 }) async {
   _telaGrande(tester);
   await tester.pumpWidget(
@@ -28,6 +29,7 @@ Future<void> _pump(
         onPickPhoto: onPickPhoto ?? (kind) async => _foto(kind),
         onSubmit: onSubmit ?? (_) async {},
         onSignOut: () {},
+        rejectionReason: rejectionReason,
       ),
     ),
   );
@@ -152,5 +154,31 @@ void main() {
 
     expect(find.text('Tirar foto'), findsNWidgets(3));
     expect(find.textContaining('Foto tirada'), findsNothing);
+  });
+
+  testWidgets('recusado mostra o motivo no alto', (tester) async {
+    await _pump(tester, rejectionReason: 'Foto da CNH ilegível.');
+
+    expect(
+      find.text(
+        'Seu cadastro foi recusado: Foto da CNH ilegível. Corrija e envie de novo.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('recusado sem motivo mostra so o aviso', (tester) async {
+    await _pump(tester, rejectionReason: '');
+
+    expect(
+      find.text('Seu cadastro foi recusado. Corrija e envie de novo.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('cadastro novo nao mostra aviso de recusa', (tester) async {
+    await _pump(tester);
+
+    expect(find.textContaining('recusado'), findsNothing);
   });
 }

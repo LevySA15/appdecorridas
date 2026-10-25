@@ -118,6 +118,16 @@ class _SignedInShellState extends State<SignedInShell> {
         _toast('Sua corrida da fila começou. Toque em abrir corrida.');
       case 'rider_approved':
         _toast('Seu cadastro foi aprovado!');
+      case 'rider_unblocked':
+        _toast('Sua conta foi liberada.');
+      case 'rider_rejected':
+        _toast('Seu cadastro foi recusado. Veja o motivo e envie de novo.');
+      case 'rider_blocked':
+        _toast('Sua conta foi bloqueada.');
+      case 'documents_expired':
+        _toast(
+          'Um documento seu venceu. Envie o novo para voltar a receber corridas.',
+        );
       case 'entry_required':
         _toast('Você precisa pagar a entrada para continuar.');
       case 'debt_required':
@@ -242,11 +252,15 @@ class _SignedInShellState extends State<SignedInShell> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     switch (state.registration.status) {
-      case RegistrationStatus.notRegistered:
+      case RegistrationStatus.notRegistered || RegistrationStatus.rejected:
         return RegistrationScreen(
           onPickPhoto: _controller.pickPhoto,
           onSubmit: _controller.registerRider,
           onSignOut: _controller.signOut,
+          rejectionReason:
+              state.registration.status == RegistrationStatus.rejected
+              ? (state.registration.reason ?? '')
+              : null,
         );
       case RegistrationStatus.approved:
         return HomeScreen(
@@ -265,7 +279,6 @@ class _SignedInShellState extends State<SignedInShell> {
           onSignOut: _controller.signOut,
         );
       case RegistrationStatus.pending ||
-          RegistrationStatus.rejected ||
           RegistrationStatus.blocked ||
           RegistrationStatus.unknown:
         return StatusScreen(
