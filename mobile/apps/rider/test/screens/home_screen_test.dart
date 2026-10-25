@@ -72,6 +72,7 @@ Future<void> _pump(
   void Function(Charge)? onShowCharge,
   Future<void> Function(String)? onCashReceived,
   VoidCallback? onRenewDocuments,
+  VoidCallback? onOpenStatement,
 }) async {
   tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1.0;
@@ -97,6 +98,7 @@ Future<void> _pump(
         onShowCharge: onShowCharge ?? (_) {},
         onCashReceived: onCashReceived ?? (_) async {},
         onRenewDocuments: onRenewDocuments ?? () {},
+        onOpenStatement: onOpenStatement ?? () {},
         onSignOut: () {},
         clock: () => _hoje,
       ),
@@ -330,5 +332,14 @@ void main() {
     expect(find.text('Corridas de teste: 3 de 10'), findsOneWidget);
     expect(find.text('4,8 (12 avaliações)'), findsOneWidget);
     expect(find.text('Taxas devidas: R\$ 0,70'), findsOneWidget);
+  });
+
+  testWidgets('Extrato do dia abre o extrato', (tester) async {
+    var abriu = false;
+    await _pump(tester, _estado(), onOpenStatement: () => abriu = true);
+
+    await tester.tap(find.text('Extrato do dia'));
+
+    expect(abriu, isTrue);
   });
 }

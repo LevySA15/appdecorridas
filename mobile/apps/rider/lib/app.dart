@@ -10,6 +10,7 @@ import 'screens/home_screen.dart';
 import 'screens/registration_screen.dart';
 import 'screens/renew_documents_screen.dart';
 import 'screens/ride_screen.dart';
+import 'screens/statement_screen.dart';
 import 'screens/status_screen.dart';
 
 /// A raiz do app: enquanto `controller.starting`, uma tela de espera; sem sessão, o login; com sessão,
@@ -227,6 +228,14 @@ class _SignedInShellState extends State<SignedInShell> {
         .then((_) => _rideRouteOpen = false);
   }
 
+  void _openStatement() {
+    _navigatorKey.currentState!.push(
+      MaterialPageRoute(
+        builder: (_) => StatementScreen(onLoad: _controller.loadStatement),
+      ),
+    );
+  }
+
   void _openRenew() {
     _navigatorKey.currentState!.push(
       MaterialPageRoute(
@@ -276,6 +285,7 @@ class _SignedInShellState extends State<SignedInShell> {
           onShowCharge: _showCharge,
           onCashReceived: _controller.cashReceived,
           onRenewDocuments: _openRenew,
+          onOpenStatement: _openStatement,
           onSignOut: _controller.signOut,
         );
       case RegistrationStatus.pending ||

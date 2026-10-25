@@ -264,3 +264,80 @@ class RiderRegistrationForm {
 
 /// Formato `AAAA-MM-DD` que o servidor espera nas validades.
 String formatDay(DateTime date) => _day(date);
+
+/// Uma corrida terminada no extrato do dia.
+class StatementRide {
+  const StatementRide({
+    required this.rideId,
+    required this.completedAt,
+    required this.priceCents,
+    required this.feeCents,
+    required this.netCents,
+    required this.method,
+    required this.distanceM,
+  });
+
+  final String rideId;
+  final double completedAt; // segundos desde 1970
+  final int priceCents;
+  final int feeCents; // a taxa do app, gravada no aceite
+  final int netCents; // o que ficou com o motoqueiro: preço menos a taxa
+  final String method; // pix | cash
+  final int distanceM;
+
+  factory StatementRide.fromJson(Json json) => StatementRide(
+    rideId: asString(json['ride_id']),
+    completedAt: asDouble(json['completed_at']),
+    priceCents: asInt(json['price_cents']),
+    feeCents: asInt(json['fee_cents']),
+    netCents: asInt(json['net_cents']),
+    method: asString(json['method']),
+    distanceM: asInt(json['distance_m']),
+  );
+}
+
+/// `GET /v1/rider/statement`: o extrato de um dia (hoje, se não pedir outro).
+class RiderStatement {
+  const RiderStatement({
+    required this.date,
+    this.completedCount = 0,
+    this.grossCents = 0,
+    this.feeCents = 0,
+    this.netCents = 0,
+    this.cashCents = 0,
+    this.pixCents = 0,
+    this.rides = const [],
+    this.nextRideNumber,
+    this.nextFeeCents,
+    this.cashDebtCents = 0,
+  });
+
+  final String date; // AAAA-MM-DD
+  final int completedCount;
+  final int grossCents;
+  final int feeCents;
+  final int netCents;
+  final int cashCents;
+  final int pixCents;
+  final List<StatementRide> rides;
+
+  /// A próxima faixa de taxa (só para o dia de hoje; em outro dia vêm nulos).
+  final int? nextRideNumber;
+  final int? nextFeeCents;
+  final int cashDebtCents;
+
+  factory RiderStatement.fromJson(Json json) => RiderStatement(
+    date: asString(json['date']),
+    completedCount: asInt(json['completed_count']),
+    grossCents: asInt(json['gross_cents']),
+    feeCents: asInt(json['fee_cents']),
+    netCents: asInt(json['net_cents']),
+    cashCents: asInt(json['cash_cents']),
+    pixCents: asInt(json['pix_cents']),
+    rides: mapList(json['rides'], StatementRide.fromJson),
+    nextRideNumber: asIntOrNull(json['next_ride_number']),
+    nextFeeCents: asIntOrNull(json['next_fee_cents']),
+    cashDebtCents: asInt(json['cash_debt_cents']),
+  );
+}
+

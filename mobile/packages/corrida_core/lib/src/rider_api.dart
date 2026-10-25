@@ -15,6 +15,17 @@ class RiderApi {
   Future<RiderState> state() async =>
       RiderState.fromJson(_map(await client.get('/v1/rider/state')));
 
+  /// O extrato do dia: hoje, ou o dia pedido.
+  Future<RiderStatement> statement({DateTime? day}) async =>
+      RiderStatement.fromJson(
+        _map(
+          await client.get(
+            '/v1/rider/statement',
+            query: day == null ? null : {'date': formatDay(day)},
+          ),
+        ),
+      );
+
   /// Fica disponível. Recusado com 409 e um destes códigos: not_approved, blocked, documents_expired,
   /// entry_pending, debt_pending.
   Future<void> goOnline() async {

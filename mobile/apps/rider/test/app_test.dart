@@ -12,6 +12,7 @@ import 'package:rider/screens/offer_card.dart';
 import 'package:rider/screens/registration_screen.dart';
 import 'package:rider/screens/renew_documents_screen.dart';
 import 'package:rider/screens/ride_screen.dart';
+import 'package:rider/screens/statement_screen.dart';
 import 'package:rider/screens/status_screen.dart';
 
 import 'support/fakes.dart';
@@ -535,6 +536,31 @@ void main() {
       find.text('Seu cadastro foi recusado. Veja o motivo e envie de novo.'),
       findsOneWidget,
     );
+    await _fim(tester, m);
+  });
+
+  testWidgets('Extrato do dia abre a tela e carrega o dia de hoje', (
+    tester,
+  ) async {
+    final m = await _logado(tester, _aprovado());
+    m.on(
+      'GET',
+      '/v1/rider/statement',
+      (_) => json({
+        'date': '2026-10-25',
+        'completed_count': 0,
+        'rides': [],
+        'next_ride_number': 1,
+        'next_fee_cents': 100,
+      }),
+    );
+
+    await tester.tap(find.text('Extrato do dia'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(StatementScreen), findsOneWidget);
+    expect(m.sent('GET', '/v1/rider/statement'), hasLength(1));
+    expect(find.text('Nenhuma corrida neste dia.'), findsOneWidget);
     await _fim(tester, m);
   });
 }

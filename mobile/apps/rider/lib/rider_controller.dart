@@ -169,6 +169,9 @@ class RiderController extends ChangeNotifier {
   Future<void> rate({required String rideId, required int stars}) =>
       api.rate(rideId, stars);
 
+  /// O extrato de um dia (a rota tem o dia no formato AAAA-MM-DD).
+  Future<RiderStatement> loadStatement(DateTime day) => api.statement(day: day);
+
   Future<Charge> entryCharge() => api.entryCharge();
 
   Future<Charge> debtCharge() => api.debtCharge();

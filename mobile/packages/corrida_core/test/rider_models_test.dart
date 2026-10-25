@@ -199,4 +199,48 @@ void main() {
     final documento = UploadedDocument.fromJson({'key': 'k1', 'bytes': 2048});
     expect((documento.key, documento.bytes), ('k1', 2048));
   });
+
+  test('extrato do dia', () {
+    final extrato = RiderStatement.fromJson({
+      'date': '2026-10-25',
+      'completed_count': 2,
+      'gross_cents': 1400,
+      'fee_cents': 200,
+      'net_cents': 1200,
+      'cash_cents': 700,
+      'pix_cents': 700,
+      'rides': [
+        {
+          'ride_id': 'r1',
+          'completed_at': 1761400000.5,
+          'price_cents': 700,
+          'fee_cents': 100,
+          'net_cents': 600,
+          'method': 'pix',
+          'distance_m': 2300,
+        },
+      ],
+      'next_ride_number': 3,
+      'next_fee_cents': 100,
+      'cash_debt_cents': 100,
+    });
+
+    expect((extrato.date, extrato.completedCount), ('2026-10-25', 2));
+    expect((extrato.grossCents, extrato.feeCents, extrato.netCents), (1400, 200, 1200));
+    expect((extrato.cashCents, extrato.pixCents, extrato.cashDebtCents), (700, 700, 100));
+    expect((extrato.nextRideNumber, extrato.nextFeeCents), (3, 100));
+    final corrida = extrato.rides.single;
+    expect((corrida.rideId, corrida.priceCents, corrida.feeCents), ('r1', 700, 100));
+    expect((corrida.netCents, corrida.method, corrida.distanceM), (600, 'pix', 2300));
+    expect(corrida.completedAt, 1761400000.5);
+  });
+
+  test('extrato de outro dia vem sem proxima faixa e tolera campos que faltam', () {
+    final extrato = RiderStatement.fromJson({'date': '2026-10-24'});
+
+    expect(extrato.completedCount, 0);
+    expect(extrato.rides, isEmpty);
+    expect(extrato.nextRideNumber, isNull);
+    expect(extrato.nextFeeCents, isNull);
+  });
 }

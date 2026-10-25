@@ -282,4 +282,25 @@ void main() {
     expect(charge.amountCents, 750);
     expect(charge.brCode, '000201...');
   });
+
+  test('statement pede o extrato de hoje ou de um dia', () async {
+    final urls = <Uri>[];
+    final m = mundo((r) {
+      urls.add(r.url);
+      return http.Response(
+        '{"date":"2026-10-24","completed_count":0,"rides":[]}',
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    final hoje = await m.api.statement();
+    final ontem = await m.api.statement(day: DateTime(2026, 10, 24));
+
+    expect(urls.first.path, '/v1/rider/statement');
+    expect(urls.first.queryParameters, isEmpty);
+    expect(urls.last.queryParameters, {'date': '2026-10-24'});
+    expect(ontem.date, '2026-10-24');
+    expect(hoje.rides, isEmpty);
+  });
 }

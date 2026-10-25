@@ -21,6 +21,7 @@ class HomeScreen extends StatefulWidget {
     required this.onShowCharge,
     required this.onCashReceived,
     required this.onRenewDocuments,
+    required this.onOpenStatement,
     required this.onSignOut,
     this.clock,
     super.key,
@@ -38,6 +39,7 @@ class HomeScreen extends StatefulWidget {
   final void Function(Charge) onShowCharge;
   final Future<void> Function(String rideId) onCashReceived;
   final VoidCallback onRenewDocuments;
+  final VoidCallback onOpenStatement;
   final VoidCallback onSignOut;
 
   /// Só para teste.
@@ -220,6 +222,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           if (account != null && account.cashDebtCents > 0)
             Text('Taxas devidas: ${brl(account.cashDebtCents)}'),
+          TextButton(
+            onPressed: widget.onOpenStatement,
+            child: const Text('Extrato do dia'),
+          ),
           TextButton(onPressed: widget.onSignOut, child: const Text('Sair')),
         ],
       ),

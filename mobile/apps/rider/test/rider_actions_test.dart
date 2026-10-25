@@ -206,4 +206,20 @@ void main() {
       await m.controller.completeTrip('r1');
     },
   );
+
+  test('loadStatement pede o extrato do dia escolhido', () async {
+    final m = await _logado();
+    m.on(
+      'GET',
+      '/v1/rider/statement',
+      (_) => json({'date': '2026-10-24', 'completed_count': 0, 'rides': []}),
+    );
+
+    final extrato = await m.controller.loadStatement(DateTime(2026, 10, 24));
+
+    expect(extrato.date, '2026-10-24');
+    expect(m.sent('GET', '/v1/rider/statement').single.url.queryParameters, {
+      'date': '2026-10-24',
+    });
+  });
 }
