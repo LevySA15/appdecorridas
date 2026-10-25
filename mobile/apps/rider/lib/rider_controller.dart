@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:corrida_core/corrida_core.dart';
+import 'package:corrida_ui/corrida_ui.dart' show cityCenter;
 import 'package:flutter/foundation.dart';
 
 import 'photo_source.dart';
@@ -17,6 +18,7 @@ class RiderController extends ChangeNotifier {
     required this.realtimeBaseUrl,
     this.realtimeConnector,
     PhotoSource? photos,
+    this.positionEvery = const Duration(seconds: 4),
   }) : sessionManager = session,
        photos = photos ?? ImagePickerPhotoSource() {
     _sessionSub = sessionManager.changes.listen(_onSessionChanged);
@@ -30,6 +32,7 @@ class RiderController extends ChangeNotifier {
   final Uri realtimeBaseUrl;
   final WebSocketConnector? realtimeConnector;
   final PhotoSource photos;
+  final Duration positionEvery;
 
   late final StreamSubscription<Session?> _sessionSub;
   final _eventsOut = StreamController<ServerEvent>.broadcast();
@@ -38,6 +41,8 @@ class RiderController extends ChangeNotifier {
   StreamSubscription<void>? _realtimeResyncSub;
 
   var _starting = true;
+  var _position = cityCenter;
+  Timer? _positionTimer;
 
   /// A chave que o servidor deu a cada foto já enviada, junto com a foto (por identidade): se o cadastro
   /// falha no meio, o segundo toque não sobe de novo o que já subiu (o servidor limita os envios por hora).
@@ -48,6 +53,15 @@ class RiderController extends ChangeNotifier {
   Session? get session => sessionManager.current;
   RiderState? get state => _state;
   Stream<ServerEvent> get events => _eventsOut.stream;
+
+  /// Onde o motoqueiro está no mapa de mentira (começa no centro da cidade).
+  Place get position => _position;
+
+  /// Muda a posição de mentira; ela vai para o servidor no próximo ciclo de envio.
+  void moveTo(Place place) {
+    _position = place;
+    notifyListeners();
+  }
 
   Future<void> start() async {
     final restored = await sessionManager.restore();
@@ -71,12 +85,47 @@ class RiderController extends ChangeNotifier {
     await _disconnectRealtime();
     await sessionManager.signOut();
     _state = null;
+    _stopPosition();
     notifyListeners();
   }
 
   Future<void> refreshState() async {
     _state = await api.state();
+    _syncPosition();
     notifyListeners();
+  }
+
+  /// Enviar a posição (a cada [positionEvery]) só enquanto o motoqueiro está disponível ou numa corrida:
+  /// parado e sem corrida ele não entra no mapa do servidor.
+  void _syncPosition() {
+    final state = _state;
+    final shouldSend =
+        sessionManager.current != null &&
+        state != null &&
+        (state.registration.online || state.ride != null);
+    if (!shouldSend) {
+      _stopPosition();
+      return;
+    }
+    if (_positionTimer != null) return;
+    unawaited(_sendPosition());
+    _positionTimer = Timer.periodic(
+      positionEvery,
+      (_) => unawaited(_sendPosition()),
+    );
+  }
+
+  void _stopPosition() {
+    _positionTimer?.cancel();
+    _positionTimer = null;
+  }
+
+  Future<void> _sendPosition() async {
+    try {
+      await api.sendPosition(_position.lat, _position.lng);
+    } on Exception {
+      // sem rede ou servidor fora do ar: o próximo ciclo tenta de novo (o 401 o ApiClient já trata)
+    }
   }
 
   /// Faz uma ação no servidor e relê o estado. Se o servidor recusar (a oferta venceu, a corrida mudou),
@@ -228,12 +277,14 @@ class RiderController extends ChangeNotifier {
     if (session == null) {
       unawaited(_disconnectRealtime());
       _state = null;
+      _stopPosition();
       notifyListeners();
     }
   }
 
   @override
   void dispose() {
+    _stopPosition();
     unawaited(_sessionSub.cancel());
     unawaited(_disconnectRealtime());
     unawaited(_eventsOut.close());

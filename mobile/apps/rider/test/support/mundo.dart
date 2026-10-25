@@ -9,7 +9,7 @@ import 'fakes.dart';
 /// Servidor de mentira + controlador do motoqueiro ligados por um `MockClient`. Cada teste muda
 /// `stateJson`/`stateStatus` ou registra uma rota com [on]; `requests` guarda tudo que saiu.
 class Mundo {
-  Mundo({PhotoSource? photos}) {
+  Mundo({PhotoSource? photos, Duration? positionEvery}) {
     api = ApiClient(baseUrl: baseUrl, httpClient: MockClient(_handle));
     final authApi = AuthApi(api);
     session = SessionManager(authApi, store, api);
@@ -19,6 +19,7 @@ class Mundo {
       api: RiderApi(api),
       realtimeBaseUrl: baseUrl,
       photos: photos,
+      positionEvery: positionEvery ?? const Duration(seconds: 4),
       realtimeConnector: (uri) {
         final canal = FakeChannel(uri);
         canais.add(canal);
