@@ -13,10 +13,7 @@ void main() {
   });
 
   test('erro de rede mostra a frase da rede', () {
-    expect(
-      friendlyMessage(NetworkException('Sem internet.')),
-      'Sem internet.',
-    );
+    expect(friendlyMessage(NetworkException('Sem internet.')), 'Sem internet.');
   });
 
   test('qualquer outro erro mostra a frase generica', () {

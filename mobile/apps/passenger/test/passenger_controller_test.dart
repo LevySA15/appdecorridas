@@ -98,6 +98,7 @@ class Mundo {
 
   Map<String, Object?> stateJson = const {};
   int stateStatus = 200;
+  var stateThrows = false; // sem internet
 
   Future<http.Response> _handle(http.Request r) async {
     final path = r.url.path;
@@ -111,6 +112,7 @@ class Mundo {
       });
     }
     if (r.method == 'GET' && path == '/v1/passenger/state') {
+      if (stateThrows) throw http.ClientException('sem rede');
       if (stateStatus != 200) {
         return _json({
           'error': {'code': 'unauthorized', 'message': 'Sessão vencida.'},
@@ -200,10 +202,62 @@ void main() {
     await m.controller.start();
     await m.controller.verify(phone: '75988510824', code: '123456');
     m.stateStatus = 401;
-    await expectLater(m.controller.refreshState(), throwsA(isA<ApiException>()));
+    await expectLater(
+      m.controller.refreshState(),
+      throwsA(isA<ApiException>()),
+    );
     await _deixaRodar();
     expect(m.controller.session, isNull);
     expect(m.controller.state, isNull);
     expect(m.canais.single.sink.fechado, isTrue);
+  });
+
+  test(
+    'abre sem internet com a sessao guardada: termina de iniciar sem estado',
+    () async {
+      final m = Mundo();
+      await m.store.save(
+        Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
+      );
+      m.stateThrows = true;
+
+      await m.controller.start();
+
+      expect(m.controller.starting, isFalse);
+      expect(m.controller.session, isNotNull);
+      expect(m.controller.state, isNull);
+      expect(m.canais.length, 1);
+    },
+  );
+
+  test(
+    'depois de abrir sem internet, tentar de novo carrega o estado',
+    () async {
+      final m = Mundo();
+      await m.store.save(
+        Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
+      );
+      m.stateThrows = true;
+      await m.controller.start();
+      m.stateThrows = false;
+
+      await m.controller.refreshState();
+
+      expect(m.controller.state, isNotNull);
+    },
+  );
+
+  test('entrar com a releitura do estado caindo entra mesmo assim', () async {
+    final m = Mundo();
+    await m.controller.start();
+    m.stateThrows = true;
+    var avisos = 0;
+    m.controller.addListener(() => avisos++);
+
+    await m.controller.verify(phone: '75988510824', code: '123456');
+
+    expect(m.controller.session, isNotNull);
+    expect(m.controller.state, isNull);
+    expect(avisos, greaterThan(0));
   });
 }

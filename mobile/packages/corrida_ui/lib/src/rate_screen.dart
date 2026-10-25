@@ -23,9 +23,8 @@ class _RateScreenState extends State<RateScreen> {
       await widget.onRate(stars);
     } on Exception catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(friendlyMessage(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(friendlyMessage(error))));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

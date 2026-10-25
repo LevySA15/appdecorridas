@@ -24,9 +24,11 @@ RideScreen _screen({
   Future<void> Function(int)? onSafetyOk,
 }) => RideScreen(
   ride: ride,
-  onLoadCharge: onLoadCharge ?? (_) async => const Charge(chargeId: 'c', amountCents: 0),
+  onLoadCharge:
+      onLoadCharge ?? (_) async => const Charge(chargeId: 'c', amountCents: 0),
   onShowCharge: onShowCharge ?? (_) {},
-  onCancel: onCancel ??
+  onCancel:
+      onCancel ??
       () async => const CancelResult(
         refund: false,
         feeCents: 0,
@@ -34,7 +36,8 @@ RideScreen _screen({
         refundTo: null,
         balanceCents: 0,
       ),
-  onSos: onSos ??
+  onSos:
+      onSos ??
       () async => const SosResult(
         alertId: 1,
         contactRegistered: true,
@@ -190,28 +193,29 @@ void main() {
     },
   );
 
-  testWidgets('tocar esta tudo bem chama onSafetyOk com o alert_id e fecha o dialogo', (
-    tester,
-  ) async {
-    int? alertIdRecebido;
-    await tester.pumpWidget(
-      _app(
-        _screen(
-          ride: const PassengerRide(
-            rideId: 'r1',
-            state: RideState.inProgress,
-            safetyAlert: SafetyAlertRef(alertId: 7, kind: 'stopped'),
+  testWidgets(
+    'tocar esta tudo bem chama onSafetyOk com o alert_id e fecha o dialogo',
+    (tester) async {
+      int? alertIdRecebido;
+      await tester.pumpWidget(
+        _app(
+          _screen(
+            ride: const PassengerRide(
+              rideId: 'r1',
+              state: RideState.inProgress,
+              safetyAlert: SafetyAlertRef(alertId: 7, kind: 'stopped'),
+            ),
+            onSafetyOk: (id) async => alertIdRecebido = id,
           ),
-          onSafetyOk: (id) async => alertIdRecebido = id,
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    await tester.tap(find.text('Sim'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Sim'));
+      await tester.pumpAndSettle();
 
-    expect(alertIdRecebido, 7);
-    expect(find.text('Está tudo bem?'), findsNothing);
-  });
+      expect(alertIdRecebido, 7);
+      expect(find.text('Está tudo bem?'), findsNothing);
+    },
+  );
 }

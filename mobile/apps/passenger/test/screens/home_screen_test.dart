@@ -19,10 +19,8 @@ void main() {
           onOpenWallet: () {},
           onSignOut: () {},
           onPayPendingFee: () async => const PayFeeResult(paid: true),
-          onShowPendingCash: (_) async => const Charge(
-            chargeId: 'c1',
-            amountCents: 100,
-          ),
+          onShowPendingCash: (_) async =>
+              const Charge(chargeId: 'c1', amountCents: 100),
           onShowCharge: (_) {},
         ),
       ),
@@ -81,9 +79,7 @@ void main() {
     expect(find.text('Pedir corrida'), findsNothing);
   });
 
-  testWidgets('pendencia de dinheiro mostra banner e ve o pix', (
-    tester,
-  ) async {
+  testWidgets('pendencia de dinheiro mostra banner e ve o pix', (tester) async {
     String? idPedido;
     Charge? mostrado;
     final charge = const Charge(chargeId: 'c9', amountCents: 500);

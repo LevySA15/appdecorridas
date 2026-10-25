@@ -47,9 +47,8 @@ class _WalletScreenState extends State<WalletScreen> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   int _centsFromReais(String text) =>
@@ -122,7 +121,9 @@ class _WalletScreenState extends State<WalletScreen> {
           _centsFromReais(amountController.text),
           keyController.text,
         );
-        _showMessage('Saque feito: ${brl(result.amountCents)} para ${result.key}.');
+        _showMessage(
+          'Saque feito: ${brl(result.amountCents)} para ${result.key}.',
+        );
         return;
       } on Exception catch (error) {
         _showMessage(_messageOf(error));
@@ -192,7 +193,10 @@ class _WalletScreenState extends State<WalletScreen> {
               if (state.topupEnabled && state.withdrawEnabled)
                 const SizedBox(width: 8),
               if (state.withdrawEnabled)
-                ElevatedButton(onPressed: _withdraw, child: const Text('Sacar')),
+                ElevatedButton(
+                  onPressed: _withdraw,
+                  child: const Text('Sacar'),
+                ),
             ],
           ),
           const Divider(height: 32),

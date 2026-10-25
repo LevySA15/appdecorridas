@@ -5,19 +5,13 @@ import 'package:corrida_ui/corrida_ui.dart';
 
 void main() {
   test('toque no centro do quadrado da o centro da cidade', () {
-    final place = pointFromTap(
-      const Offset(50, 50),
-      const Size(100, 100),
-    );
+    final place = pointFromTap(const Offset(50, 50), const Size(100, 100));
     expect((place.lat - cityCenter.lat).abs(), lessThan(1e-6));
     expect((place.lng - cityCenter.lng).abs(), lessThan(1e-6));
   });
 
   test('toque no canto superior direito fica a nordeste', () {
-    final place = pointFromTap(
-      const Offset(100, 0),
-      const Size(100, 100),
-    );
+    final place = pointFromTap(const Offset(100, 0), const Size(100, 100));
     expect(place.lat, greaterThan(cityCenter.lat));
     expect(place.lng, greaterThan(cityCenter.lng));
   });

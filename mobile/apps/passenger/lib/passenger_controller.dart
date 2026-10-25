@@ -43,7 +43,9 @@ class PassengerController extends ChangeNotifier {
     final restored = await sessionManager.restore();
     if (restored != null) {
       _connectRealtime();
-      await refreshState();
+      // Sem internet ao abrir: o app termina de iniciar sem estado (a tela pede para tentar de novo) e o
+      // tempo real traz o estado quando a rede voltar.
+      await _quietRefresh();
     }
     _starting = false;
     notifyListeners();
@@ -54,7 +56,8 @@ class PassengerController extends ChangeNotifier {
   Future<void> verify({required String phone, required String code}) async {
     await sessionManager.signIn(phone: phone, code: code, role: 'passenger');
     _connectRealtime();
-    await refreshState();
+    await _quietRefresh();
+    notifyListeners(); // a tela sai do login mesmo que o estado ainda não tenha vindo
   }
 
   Future<void> signOut() async {
@@ -113,10 +116,7 @@ class PassengerController extends ChangeNotifier {
     required int amountCents,
     required String pixKey,
   }) async {
-    final result = await api.withdraw(
-      amountCents: amountCents,
-      pixKey: pixKey,
-    );
+    final result = await api.withdraw(amountCents: amountCents, pixKey: pixKey);
     await refreshState();
     return result;
   }

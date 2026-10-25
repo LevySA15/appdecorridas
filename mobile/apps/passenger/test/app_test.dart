@@ -100,6 +100,7 @@ class Mundo {
 
   Map<String, Object?> stateJson = const {};
   int stateStatus = 200;
+  var stateThrows = false; // sem internet
   http.Request? ratingRequest;
 
   Future<http.Response> _handle(http.Request r) async {
@@ -117,6 +118,7 @@ class Mundo {
       });
     }
     if (r.method == 'GET' && path == '/v1/passenger/state') {
+      if (stateThrows) throw http.ClientException('sem rede');
       if (stateStatus != 200) {
         return _json({
           'error': {'code': 'unauthorized', 'message': 'Sessão vencida.'},
@@ -175,9 +177,7 @@ void main() {
     // O aviso de tempo real dispara a releitura automática do estado (em segundo plano); fora do
     // relógio de mentira dos testes, para dar tempo real ao fechamento do tempo real (`.timeout`
     // de verdade em `RealtimeClient._closeChannel`) de terminar antes do fim do teste.
-    m.canais.single.servidorMandaAviso('balance_changed', {
-      'balance_cents': 0,
-    });
+    m.canais.single.servidorMandaAviso('balance_changed', {'balance_cents': 0});
     await tester.runAsync(() async {
       await m.controller.refreshState().catchError((_) {});
       await Future<void>.delayed(const Duration(seconds: 3));
@@ -206,9 +206,7 @@ void main() {
       expect(find.byType(RideScreen), findsOneWidget);
 
       m.stateJson = const {};
-      m.canais.single.servidorMandaAviso('ride_cancelled', {
-        'ride_id': 'r1',
-      });
+      m.canais.single.servidorMandaAviso('ride_cancelled', {'ride_id': 'r1'});
       await tester.pumpAndSettle();
 
       expect(find.byType(RideScreen), findsNothing);
@@ -217,38 +215,37 @@ void main() {
     },
   );
 
-  testWidgets(
-    'trip_completed enquanto acompanha mantem a tela de avaliar',
-    (tester) async {
-      final m = Mundo();
-      await m.store.save(
-        Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
-      );
-      m.stateJson = {
-        'ride': {'ride_id': 'r1', 'state': 'in_progress'},
-      };
-      await m.controller.start();
-      await tester.pumpWidget(PassengerApp(controller: m.controller));
-      await tester.pump();
+  testWidgets('trip_completed enquanto acompanha mantem a tela de avaliar', (
+    tester,
+  ) async {
+    final m = Mundo();
+    await m.store.save(
+      Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
+    );
+    m.stateJson = {
+      'ride': {'ride_id': 'r1', 'state': 'in_progress'},
+    };
+    await m.controller.start();
+    await tester.pumpWidget(PassengerApp(controller: m.controller));
+    await tester.pump();
 
-      await tester.tap(find.text('Acompanhar corrida'));
-      await tester.pumpAndSettle();
-      expect(find.byType(RideScreen), findsOneWidget);
+    await tester.tap(find.text('Acompanhar corrida'));
+    await tester.pumpAndSettle();
+    expect(find.byType(RideScreen), findsOneWidget);
 
-      // a corrida some do estado assim que termina (igual ao servidor de verdade: COMPLETED é
-      // terminal e não é "corrida aberta") — ao mesmo tempo que o aviso de tempo real chega.
-      m.stateJson = const {};
-      m.canais.single.servidorMandaAviso('trip_completed', {
-        'ride_id': 'r1',
-        'price_cents': 500,
-        'method': 'pix',
-      });
-      await tester.pumpAndSettle();
+    // a corrida some do estado assim que termina (igual ao servidor de verdade: COMPLETED é
+    // terminal e não é "corrida aberta") — ao mesmo tempo que o aviso de tempo real chega.
+    m.stateJson = const {};
+    m.canais.single.servidorMandaAviso('trip_completed', {
+      'ride_id': 'r1',
+      'price_cents': 500,
+      'method': 'pix',
+    });
+    await tester.pumpAndSettle();
 
-      expect(find.byType(RateScreen), findsOneWidget);
-      await tester.runAsync(() => m.controller.signOut());
-    },
-  );
+    expect(find.byType(RateScreen), findsOneWidget);
+    await tester.runAsync(() => m.controller.signOut());
+  });
 
   testWidgets('trip_completed abre a tela de avaliar com o ride_id certo', (
     tester,
@@ -303,4 +300,27 @@ void main() {
     expect(find.byType(HomeScreen), findsOneWidget);
     await tester.runAsync(() => m.controller.signOut());
   });
+
+  testWidgets(
+    'sessao guardada e sem internet: pede para tentar de novo e depois carrega',
+    (tester) async {
+      final m = Mundo();
+      await m.store.save(
+        Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
+      );
+      m.stateThrows = true;
+      await m.controller.start();
+      await tester.pumpWidget(PassengerApp(controller: m.controller));
+      await tester.pump();
+      expect(find.byType(WaitingDataScreen), findsOneWidget);
+
+      m.stateThrows = false;
+      await tester.tap(find.text('Tentar de novo'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WaitingDataScreen), findsNothing);
+      expect(find.byType(HomeScreen), findsOneWidget);
+      await tester.runAsync(() => m.controller.signOut());
+    },
+  );
 }

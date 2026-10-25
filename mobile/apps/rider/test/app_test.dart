@@ -563,4 +563,29 @@ void main() {
     expect(find.text('Nenhuma corrida neste dia.'), findsOneWidget);
     await _fim(tester, m);
   });
+
+  testWidgets(
+    'sessao guardada e sem internet: pede para tentar de novo e depois carrega',
+    (tester) async {
+      final m = Mundo();
+      await m.store.save(Session(token: 'tok-1', userId: 'u1', role: 'rider'));
+      m.on(
+        'GET',
+        '/v1/rider/state',
+        (_) => throw http.ClientException('sem rede'),
+      );
+      await m.controller.start();
+      await tester.pumpWidget(RiderApp(controller: m.controller));
+      await tester.pump();
+      expect(find.byType(WaitingDataScreen), findsOneWidget);
+
+      m.on('GET', '/v1/rider/state', (_) => json(_aprovado()));
+      await tester.tap(find.text('Tentar de novo'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WaitingDataScreen), findsNothing);
+      expect(find.byType(HomeScreen), findsOneWidget);
+      await _fim(tester, m);
+    },
+  );
 }

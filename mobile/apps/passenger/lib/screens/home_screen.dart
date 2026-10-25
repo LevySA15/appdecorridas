@@ -41,9 +41,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showError(Object error) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(_messageOf(error))));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(_messageOf(error))));
   }
 
   Future<void> _showPendingCash(String chargeId) async {
@@ -103,13 +102,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     : FilledButton(
                         onPressed: _loadingCash
                             ? null
-                            : () =>
-                                  _showPendingCash(state.pendingPayment!.chargeId!),
+                            : () => _showPendingCash(
+                                state.pendingPayment!.chargeId!,
+                              ),
                         child: _loadingCash
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Text('Ver Pix'),
                       ),

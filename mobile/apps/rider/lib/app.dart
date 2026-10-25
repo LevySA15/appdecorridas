@@ -258,7 +258,10 @@ class _SignedInShellState extends State<SignedInShell> {
 
   Widget _root(RiderState? state) {
     if (state == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return WaitingDataScreen(
+        onRetry: _controller.refreshState,
+        onSignOut: _controller.signOut,
+      );
     }
     switch (state.registration.status) {
       case RegistrationStatus.notRegistered || RegistrationStatus.rejected:

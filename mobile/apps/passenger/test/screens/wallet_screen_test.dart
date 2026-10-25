@@ -15,7 +15,8 @@ WalletScreen _screen({
 }) => WalletScreen(
   state: state,
   onTopup: onTopup ?? (_) async => const Charge(chargeId: 'c', amountCents: 0),
-  onWithdraw: onWithdraw ??
+  onWithdraw:
+      onWithdraw ??
       (_, _) async => const Withdrawal(
         withdrawalId: 'w1',
         amountCents: 0,
@@ -95,10 +96,7 @@ void main() {
     await tester.tap(find.text('Sacar'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('valor_saque')), '10');
-    await tester.enterText(
-      find.byKey(const Key('chave_pix')),
-      '52998224725',
-    );
+    await tester.enterText(find.byKey(const Key('chave_pix')), '52998224725');
     await tester.tap(find.text('Confirmar'));
     await tester.pumpAndSettle();
 

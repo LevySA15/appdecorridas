@@ -33,9 +33,8 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _onPointsChanged(Place? pickup, Place? destination) async {
@@ -98,10 +97,11 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
             child: FakeMapPicker(onChanged: _onPointsChanged),
           ),
         ),
-        if (_loading) const Padding(
-          padding: EdgeInsets.all(16),
-          child: CircularProgressIndicator(),
-        ),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: CircularProgressIndicator(),
+          ),
       ],
     );
   }
@@ -120,7 +120,9 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
           const SizedBox(height: 8),
           Text('Distância: ${(quote.distanceM / 1000).toStringAsFixed(1)} km'),
           if (quote.etaSeconds != null)
-            Text('Moto chega em cerca de ${(quote.etaSeconds! / 60).round()} min'),
+            Text(
+              'Moto chega em cerca de ${(quote.etaSeconds! / 60).round()} min',
+            ),
           const SizedBox(height: 16),
           const Text('Forma de pagamento'),
           RadioGroup<String>(

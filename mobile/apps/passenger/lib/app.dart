@@ -176,8 +176,8 @@ class _SignedInShellState extends State<SignedInShell> {
               amountCents: amountCents,
               pixKey: pixKey,
             ),
-            onSetEmergencyContact: (name, phone) => widget.controller
-                .setEmergencyContact(name: name, phone: phone),
+            onSetEmergencyContact: (name, phone) =>
+                widget.controller.setEmergencyContact(name: name, phone: phone),
             onAppealFee: widget.controller.appealFee,
             onShowCharge: _showCharge,
           ),
@@ -193,16 +193,26 @@ class _SignedInShellState extends State<SignedInShell> {
       onGenerateRoute: (settings) => MaterialPageRoute(
         builder: (_) => ListenableBuilder(
           listenable: widget.controller,
-          builder: (context, _) => HomeScreen(
-            state: widget.controller.state!,
-            onRequestRide: _openRequestRide,
-            onOpenRide: _openRide,
-            onOpenWallet: _openWallet,
-            onSignOut: widget.controller.signOut,
-            onPayPendingFee: widget.controller.payPendingFee,
-            onShowPendingCash: widget.controller.loadCharge,
-            onShowCharge: _showCharge,
-          ),
+          builder: (context, _) {
+            final state = widget.controller.state;
+            // logado, mas ainda sem os dados (abriu sem internet): pede para tentar de novo
+            if (state == null) {
+              return WaitingDataScreen(
+                onRetry: widget.controller.refreshState,
+                onSignOut: widget.controller.signOut,
+              );
+            }
+            return HomeScreen(
+              state: state,
+              onRequestRide: _openRequestRide,
+              onOpenRide: _openRide,
+              onOpenWallet: _openWallet,
+              onSignOut: widget.controller.signOut,
+              onPayPendingFee: widget.controller.payPendingFee,
+              onShowPendingCash: widget.controller.loadCharge,
+              onShowCharge: _showCharge,
+            );
+          },
         ),
       ),
     );

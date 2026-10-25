@@ -11,9 +11,7 @@ Widget _app({
 );
 
 void main() {
-  testWidgets('digitar telefone e enviar chama onRequestCode', (
-    tester,
-  ) async {
+  testWidgets('digitar telefone e enviar chama onRequestCode', (tester) async {
     String? telefoneRecebido;
     await tester.pumpWidget(
       _app(
@@ -77,33 +75,29 @@ void main() {
     expect(find.byKey(const Key('codigo')), findsNothing);
   });
 
-  testWidgets(
-    'erro do onVerify mostra a mensagem e deixa tentar de novo',
-    (tester) async {
-      await tester.pumpWidget(
-        _app(
-          onRequestCode: (_) async {},
-          onVerify: (_, _) async => throw ApiException(
-            status: 401,
-            code: 'code_invalid',
-            message: 'Código errado ou vencido.',
-          ),
+  testWidgets('erro do onVerify mostra a mensagem e deixa tentar de novo', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(
+        onRequestCode: (_) async {},
+        onVerify: (_, _) async => throw ApiException(
+          status: 401,
+          code: 'code_invalid',
+          message: 'Código errado ou vencido.',
         ),
-      );
+      ),
+    );
 
-      await tester.enterText(
-        find.byKey(const Key('telefone')),
-        '75988510824',
-      );
-      await tester.tap(find.text('Enviar código'));
-      await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('telefone')), '75988510824');
+    await tester.tap(find.text('Enviar código'));
+    await tester.pumpAndSettle();
 
-      await tester.enterText(find.byKey(const Key('codigo')), '123456');
-      await tester.tap(find.text('Entrar'));
-      await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('codigo')), '123456');
+    await tester.tap(find.text('Entrar'));
+    await tester.pumpAndSettle();
 
-      expect(find.text('Código errado ou vencido.'), findsOneWidget);
-      expect(find.byKey(const Key('codigo')), findsOneWidget);
-    },
-  );
+    expect(find.text('Código errado ou vencido.'), findsOneWidget);
+    expect(find.byKey(const Key('codigo')), findsOneWidget);
+  });
 }

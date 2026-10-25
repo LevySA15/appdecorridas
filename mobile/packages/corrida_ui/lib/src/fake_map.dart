@@ -82,7 +82,10 @@ class _FakeMapPickerState extends State<FakeMapPicker> {
           onTapDown: (details) => _handleTapDown(details, size),
           child: CustomPaint(
             size: size,
-            painter: _FakeMapPainter(pickup: _pickup, destination: _destination),
+            painter: _FakeMapPainter(
+              pickup: _pickup,
+              destination: _destination,
+            ),
           ),
         );
       },
@@ -165,10 +168,7 @@ class FakeMapView extends StatelessWidget {
               ? null
               : (details) =>
                     onTapAtual(pointFromTap(details.localPosition, size)),
-          child: CustomPaint(
-            size: size,
-            painter: _MarkersPainter(markers),
-          ),
+          child: CustomPaint(size: size, painter: _MarkersPainter(markers)),
         );
       },
     );

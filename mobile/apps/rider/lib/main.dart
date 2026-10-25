@@ -1,4 +1,5 @@
 import 'package:corrida_core/corrida_core.dart';
+import 'package:corrida_ui/corrida_ui.dart';
 import 'package:flutter/material.dart';
 
 import 'app.dart';
@@ -10,9 +11,11 @@ import 'rider_controller.dart';
 final _serverUrl = Uri.parse('http://localhost:8000');
 
 void main() {
+  // o armazenamento seguro usa canais de plataforma: o Flutter precisa estar de pé antes do `start()`
+  WidgetsFlutterBinding.ensureInitialized();
   final client = ApiClient(baseUrl: _serverUrl);
   final authApi = AuthApi(client);
-  final session = SessionManager(authApi, MemorySessionStore(), client);
+  final session = SessionManager(authApi, SecureSessionStore(), client);
   final controller = RiderController(
     authApi: authApi,
     session: session,
