@@ -3,6 +3,7 @@ import 'package:corrida_ui/corrida_ui.dart';
 import 'package:flutter/material.dart';
 
 import '../dates.dart';
+import '../location_source.dart';
 import 'offer_card.dart';
 
 /// Tela inicial do motoqueiro aprovado: ficar disponível, oferta, corrida, cobrança em dinheiro, avisos de
@@ -23,6 +24,7 @@ class HomeScreen extends StatefulWidget {
     required this.onRenewDocuments,
     required this.onOpenStatement,
     required this.onSignOut,
+    this.locationProblem,
     this.clock,
     super.key,
   });
@@ -42,6 +44,9 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback onOpenStatement;
   final VoidCallback onSignOut;
 
+  /// Aviso do GPS (sem permissão, sem sinal) enquanto o motoqueiro roda; `null` quando está tudo bem.
+  final String? locationProblem;
+
   /// Só para teste.
   final DateTime Function()? clock;
 
@@ -58,8 +63,11 @@ class _HomeScreenState extends State<HomeScreen> {
       await action();
     } on Exception catch (error) {
       if (!mounted) return;
+      final message = error is LocationUnavailable
+          ? error.message
+          : friendlyMessage(error);
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(friendlyMessage(error))));
+          .showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -109,6 +117,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? null
                 : (on) => _run(on ? widget.onGoOnline : widget.onGoOffline),
           ),
+          if (widget.locationProblem case final problem?)
+            Card(
+              color: Theme.of(context).colorScheme.errorContainer,
+              child: ListTile(
+                leading: const Icon(Icons.location_off),
+                title: Text(problem),
+              ),
+            ),
           if (account?.blockedReason == 'entry_pending')
             Card(
               child: ListTile(

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:rider/app.dart';
+import 'package:rider/location_source.dart';
 import 'package:rider/screens/home_screen.dart';
 import 'package:rider/screens/offer_card.dart';
 import 'package:rider/screens/registration_screen.dart';
@@ -672,4 +673,48 @@ void main() {
       await _fim(tester, m);
     },
   );
+
+  testWidgets('GPS de verdade negado: tocar em Estou rodando mostra o motivo e não chama o servidor', (
+    tester,
+  ) async {
+    final m = Mundo(
+      location: FakeGps(access: LocationAccess.denied),
+      realGps: true,
+    );
+    m.stateJson = _aprovado();
+    await m.store.save(Session(token: 'tok-1', userId: 'u1', role: 'rider'));
+    await m.controller.start();
+    await tester.pumpWidget(RiderApp(controller: m.controller));
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      await tester.tap(find.byType(Switch));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    expect(
+      find.text('Permita a localização do celular para ficar disponível.'),
+      findsOneWidget,
+    );
+    expect(m.sent('POST', '/v1/rider/online'), isEmpty);
+    await _fim(tester, m);
+  });
+
+  testWidgets('GPS de verdade: a tela da corrida não tem os atalhos de andar', (
+    tester,
+  ) async {
+    final m = Mundo(location: FakeGps(), realGps: true);
+    m.stateJson = _aprovado(ride: _corrida(state: 'in_progress'));
+    await m.store.save(Session(token: 'tok-1', userId: 'u1', role: 'rider'));
+    await m.controller.start();
+    await tester.pumpWidget(RiderApp(controller: m.controller));
+    await tester.pump();
+    await tester.tap(find.text('Abrir corrida'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RideScreen), findsOneWidget);
+    expect(find.text('Ir até o destino'), findsNothing);
+    await _fim(tester, m);
+  });
 }

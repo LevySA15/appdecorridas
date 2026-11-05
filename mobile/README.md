@@ -1,7 +1,6 @@
 # Apps do passageiro e do motoqueiro (Flutter)
 
-Planos 5 e 6. Por enquanto só existe a **base compartilhada**, o pacote Dart `corrida_core` (plano 5A); as telas dos dois
-apps vêm nos próximos planos.
+Planos 5 e 6: a base compartilhada (`corrida_core`, `corrida_ui`) e os dois apps Android, `apps/passenger` e `apps/rider`.
 
 ## O que já existe
 
@@ -36,6 +35,20 @@ Android, e isso é uma decisão sua: rode `flutter doctor --android-licenses` e 
 roda uma sequência inteira (cadastro e aprovação do motoqueiro, corrida com Pix, com saldo, cancelada e em dinheiro, dívida,
 saque) pelo cliente Dart e derruba o servidor. Precisa do PostgreSQL, do Redis e da `.venv` do servidor (ver `server/README.md`).
 Se o contrato quebrar, o pacote e o servidor se afastaram: corrija o lado errado e a `docs/api-v1.md`.
+
+## GPS do motoqueiro (plano 5D)
+
+O app do motoqueiro tem dois modos de posição:
+
+| Como gerar | Posição | Quando usar |
+|---|---|---|
+| `flutter run` (depuração) | **de mentira**: toca no mapa para "andar" | teste em casa com os passageiros do simulador |
+| `flutter run --dart-define=GPS=real` ou `flutter build apk --release` | **GPS do celular**, com serviço em primeiro plano (notificação "Recôncavo Motoqueiro") e tela sempre acesa enquanto disponível ou numa corrida | rua de verdade |
+| `--dart-define=GPS=fake` num build de release | de mentira | demonstração |
+
+Com o GPS de verdade o aparelho pede a **permissão de localização** na hora de tocar em "Estou rodando"; sem ela (ou com o GPS
+desligado) o motoqueiro não fica disponível e a tela diz o que fazer. O SOS (nos dois apps) abre o discador com o **190**
+preenchido e a pessoa aperta "ligar".
 
 ## Pastas
 

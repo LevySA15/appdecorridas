@@ -38,6 +38,7 @@ Future<void> _pump(
   Future<void> Function()? onComplete,
   Future<void> Function(String)? onAcceptOffer,
   Future<RiderSosResult> Function()? onSos,
+  bool canMove = true,
 }) async {
   tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1.0;
@@ -48,7 +49,7 @@ Future<void> _pump(
         ride: ride,
         position: cityCenter,
         offer: offer,
-        onMove: onMove ?? (_) {},
+        onMove: canMove ? (onMove ?? (_) {}) : null,
         onArrive: onArrive ?? () async {},
         onConfirmHelmet: onConfirmHelmet ?? () async {},
         onStart: onStart ?? (_) async {},
@@ -475,5 +476,29 @@ void main() {
 
     expect(find.text('SOS'), findsOneWidget);
     expect(tester.getTopLeft(find.text('SOS')).dy, lessThan(kToolbarHeight));
+  });
+
+  for (final estado in [RideState.accepted, RideState.inProgress]) {
+    testWidgets('com GPS de verdade ($estado) não há atalhos de andar', (
+      tester,
+    ) async {
+      await _pump(tester, _corrida(state: estado), canMove: false);
+
+      expect(find.text('Ir até o ponto de embarque'), findsNothing);
+      expect(find.text('Ir até o destino'), findsNothing);
+    });
+  }
+
+  testWidgets('com GPS de verdade o mapa não reage a toque', (tester) async {
+    await _pump(tester, _corrida(state: RideState.inProgress), canMove: false);
+
+    final detector = tester.widget<GestureDetector>(
+      find.descendant(
+        of: find.byType(FakeMapView),
+        matching: find.byType(GestureDetector),
+      ),
+    );
+
+    expect(detector.onTapDown, isNull);
   });
 }

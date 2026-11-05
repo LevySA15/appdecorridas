@@ -42,6 +42,9 @@ void main() {
       'ACCESS_COARSE_LOCATION',
       'FOREGROUND_SERVICE',
       'FOREGROUND_SERVICE_LOCATION',
+      // o serviço do GPS segura um WakeLock (enableWakeLock) e o plugin não declara a permissão: sem ela o
+      // Android derruba o serviço com SecurityException
+      'WAKE_LOCK',
     ]) {
       expect(
         manifest,

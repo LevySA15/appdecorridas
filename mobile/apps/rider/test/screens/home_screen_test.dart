@@ -1,6 +1,7 @@
 import 'package:corrida_core/corrida_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rider/location_source.dart';
 import 'package:rider/screens/home_screen.dart';
 import 'package:rider/screens/offer_card.dart';
 
@@ -73,6 +74,7 @@ Future<void> _pump(
   Future<void> Function(String)? onCashReceived,
   VoidCallback? onRenewDocuments,
   VoidCallback? onOpenStatement,
+  String? locationProblem,
 }) async {
   tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1.0;
@@ -100,6 +102,7 @@ Future<void> _pump(
         onRenewDocuments: onRenewDocuments ?? () {},
         onOpenStatement: onOpenStatement ?? () {},
         onSignOut: () {},
+        locationProblem: locationProblem,
         clock: () => _hoje,
       ),
     ),
@@ -349,5 +352,46 @@ void main() {
     await _pump(tester, _estado(online: false, offer: _oferta));
 
     expect(find.byType(OfferCard), findsNothing);
+  });
+
+  testWidgets('problema com o GPS aparece como aviso na tela inicial', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _estado(online: true),
+      locationProblem: 'Sem sinal de GPS. Você não aparece para os passageiros.',
+    );
+
+    expect(
+      find.text('Sem sinal de GPS. Você não aparece para os passageiros.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('sem problema com o GPS não aparece aviso', (tester) async {
+    await _pump(tester, _estado(online: true));
+
+    expect(find.textContaining('GPS'), findsNothing);
+  });
+
+  testWidgets('ficar disponível sem GPS mostra a mensagem que diz o que fazer', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _estado(),
+      onGoOnline: () async =>
+          throw const LocationUnavailable('Ligue o GPS do celular para ficar disponível.'),
+    );
+
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Ligue o GPS do celular para ficar disponível.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Algo deu errado'), findsNothing);
   });
 }

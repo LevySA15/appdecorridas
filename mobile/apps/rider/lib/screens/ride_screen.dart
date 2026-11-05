@@ -25,7 +25,8 @@ class RideScreen extends StatefulWidget {
 
   final RiderRide ride;
   final Place position;
-  final void Function(Place) onMove;
+  /// Anda no mapa de mentira. `null` com o GPS de verdade: a posição é a do celular, sem atalhos.
+  final void Function(Place)? onMove;
   final Future<void> Function() onArrive;
   final Future<void> Function() onConfirmHelmet;
   final Future<void> Function(String pin) onStart;
@@ -125,10 +126,11 @@ class _RideScreenState extends State<RideScreen> {
     if (ride.pickup.text.isNotEmpty) Text('Embarque: ${ride.pickup.text}'),
     const SizedBox(height: 8),
     _map(ride),
-    OutlinedButton(
-      onPressed: () => widget.onMove(ride.pickup),
-      child: const Text('Ir até o ponto de embarque'),
-    ),
+    if (widget.onMove case final move?)
+      OutlinedButton(
+        onPressed: () => move(ride.pickup),
+        child: const Text('Ir até o ponto de embarque'),
+      ),
     ElevatedButton(
       onPressed: _busy ? null : () => _run(widget.onArrive),
       child: const Text('Cheguei'),
@@ -190,10 +192,11 @@ class _RideScreenState extends State<RideScreen> {
       Text('Destino: ${ride.destination.text}'),
     const SizedBox(height: 8),
     _map(ride),
-    OutlinedButton(
-      onPressed: () => widget.onMove(ride.destination),
-      child: const Text('Ir até o destino'),
-    ),
+    if (widget.onMove case final move?)
+      OutlinedButton(
+        onPressed: () => move(ride.destination),
+        child: const Text('Ir até o destino'),
+      ),
     ElevatedButton(
       onPressed: _busy ? null : () => _run(widget.onComplete),
       child: const Text('Finalizar corrida'),

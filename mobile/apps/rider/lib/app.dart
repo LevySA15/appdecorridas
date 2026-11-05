@@ -216,7 +216,7 @@ class _SignedInShellState extends State<SignedInShell> {
                   offer: (state?.registration.online ?? false)
                       ? state?.offer
                       : null,
-                  onMove: _controller.moveTo,
+                  onMove: _controller.usesRealGps ? null : _controller.moveTo,
                   onArrive: () => _controller.arrive(ride.rideId),
                   onConfirmHelmet: () => _controller.confirmHelmet(ride.rideId),
                   onStart: (pin) => _controller.startTrip(ride.rideId, pin),
@@ -302,6 +302,7 @@ class _SignedInShellState extends State<SignedInShell> {
           onRenewDocuments: _openRenew,
           onOpenStatement: _openStatement,
           onSignOut: _controller.signOut,
+          locationProblem: _controller.locationProblem,
         );
       case RegistrationStatus.pending ||
           RegistrationStatus.blocked ||
