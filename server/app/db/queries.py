@@ -311,6 +311,8 @@ class RiderListItem:
     cnh_expires_on: object
     crlv_expires_on: object
     documents: tuple[str, ...]          # quais fotos existem: selfie, cnh, crlv
+    resubmissions: int = 0              # quantas vezes o cadastro recusado foi reenviado
+    previous_rejection: str | None = None   # o motivo da última recusa, enquanto o reenvio espera
 
 
 def list_riders(session: Session, status: str, limit: int, offset: int) -> list[RiderListItem]:
@@ -330,6 +332,7 @@ def list_riders(session: Session, status: str, limit: int, offset: int) -> list[
             documents=tuple(
                 kind for kind, key in (("selfie", p.selfie_key), ("cnh", p.cnh_photo_key), ("crlv", p.crlv_key)) if key
             ),
+            resubmissions=p.resubmissions, previous_rejection=p.previous_rejection,
         )
         for p, u in rows
     ]

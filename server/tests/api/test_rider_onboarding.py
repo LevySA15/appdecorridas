@@ -214,6 +214,18 @@ def test_motoqueiro_recusado_reenvia_o_cadastro_pela_api(client, rider, admin, h
     assert estado["registration"]["reason"] is None
 
 
+def test_lista_do_administrador_mostra_o_reenvio_e_o_motivo_da_recusa_anterior(client, rider, admin, hoje):
+    cadastro(client, rider, hoje)
+    primeira = client.get("/v1/admin/riders", headers=admin.headers).json()
+    assert [(r["resubmissions"], r["previous_rejection"]) for r in primeira] == [(0, None)]
+
+    client.post(f"/v1/admin/riders/{rider.user_id}/reject", json={"reason": "Foto da CNH ilegível"}, headers=admin.headers)
+    cadastro(client, rider, hoje, name="Carlos Moto Novo")
+
+    (fila,) = client.get("/v1/admin/riders", headers=admin.headers).json()
+    assert (fila["status"], fila["resubmissions"], fila["previous_rejection"]) == ("pending", 1, "Foto da CNH ilegível")
+
+
 def test_decidir_motoqueiro_que_nao_existe_e_404(client, admin):
     assert client.post("/v1/admin/riders/ninguem/approve", headers=admin.headers).status_code == 404
 
@@ -239,6 +251,24 @@ def test_renovar_documentos_troca_datas_e_fotos(client, rider, hoje, session):
     assert client.post("/v1/rider/documents/renew", json=corpo, headers=rider.headers).status_code == 204
     perfil = session.get(RiderProfileRow, rider.user_id)
     assert perfil.cnh_photo_key == nova and perfil.cnh_expires_on == hoje + dt.timedelta(days=900)
+
+
+def test_renovar_que_libera_sozinho_aparece_no_registro_do_painel(client, rider, admin, hoje, session, clock):
+    cadastro(client, rider, hoje)
+    client.post(f"/v1/admin/riders/{rider.user_id}/approve", headers=admin.headers)
+    perfil = session.get(RiderProfileRow, rider.user_id)
+    perfil.status, perfil.rejected_reason, perfil.crlv_expires_on = "blocked", "documento vencido", hoje - dt.timedelta(days=1)
+    session.flush()
+    nova = subir(client, rider, "crlv")
+    corpo = {
+        "cnh_expires_on": str(hoje + dt.timedelta(days=900)), "crlv_expires_on": str(hoje + dt.timedelta(days=400)),
+        "crlv_key": nova,
+    }
+    assert client.post("/v1/rider/documents/renew", json=corpo, headers=rider.headers).status_code == 204
+    session.expire_all()
+    assert session.get(RiderProfileRow, rider.user_id).status == "approved"
+    registro = [a for a in client.get("/v1/admin/actions", headers=admin.headers).json() if a["action"] == "rider.auto_unblock"]
+    assert [(a["target_id"], a["admin_id"], a["at"]) for a in registro] == [(rider.user_id, rider.user_id, clock.now)]
 
 
 def test_renovar_com_data_vencida_ou_foto_alheia_e_recusado(client, runtime, rider, hoje):

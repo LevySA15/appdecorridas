@@ -16,6 +16,7 @@ from app.domain.fees import offer_block_reason
 from app.domain.geo import GeoPoint
 from app.domain.money import brl
 from app.infra.redis_store import PositionStore
+from app.services.admin_log import log_admin_action
 from app.services.events import EventCollector
 
 
@@ -140,7 +141,10 @@ class RiderService:
                     existing.moto_model = moto_model.strip()
                     existing.selfie_key, existing.cnh_photo_key, existing.crlv_key = selfie_key, cnh_photo_key, crlv_key
                     existing.cnh_expires_on, existing.crlv_expires_on = cnh_expires_on, crlv_expires_on
-                    existing.status, existing.rejected_reason = "pending", None
+                    # o motivo da recusa fica guardado para o painel mostrar que isto é um reenvio
+                    existing.previous_rejection = existing.rejected_reason
+                    existing.resubmissions += 1
+                    existing.status, existing.rejected_reason, existing.rejected_at = "pending", None, None
                 session.flush()
         except IntegrityError:
             # Outro cadastro entrou entre a conferência e a gravação (dois toques, duas telas): o banco decide.
@@ -180,12 +184,13 @@ class RiderService:
         session.flush()
         self.events.add(rider_id, "rider_approved")
 
-    def reject(self, session: Session, rider_id: str, reason: str) -> None:
+    def reject(self, session: Session, rider_id: str, reason: str, now: float) -> None:
         profile = self._profile(session, rider_id)
         if profile.status != "pending":
             raise InvalidState(f"o cadastro está {profile.status}, não dá para recusar")
         profile.status = "rejected"
         profile.rejected_reason = reason[:200]
+        profile.rejected_at = now
         session.flush()
         self.events.add(rider_id, "rider_rejected", {"reason": reason})
 
@@ -218,6 +223,7 @@ class RiderService:
         cnh_expires_on: dt.date,
         crlv_expires_on: dt.date,
         today: dt.date,
+        now: float,
         cnh_photo_key: str | None = None,
         crlv_key: str | None = None,
     ) -> None:
@@ -246,6 +252,8 @@ class RiderService:
             profile.status = "approved"
             profile.rejected_reason = None
             self.events.add(rider_id, "rider_unblocked")
+            # sem administrador nessa liberação: o autor registrado é o próprio motoqueiro
+            log_admin_action(session, rider_id, "rider.auto_unblock", "rider", rider_id, "documentos renovados", now)
         session.flush()
 
     # --- disponibilidade ----------------------------------------------------------

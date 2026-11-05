@@ -149,7 +149,7 @@ def test_so_motoqueiro_cadastra_e_so_uma_vez(service, session):
 def test_cadastro_recusado_pode_ser_reenviado(service, session):
     novo_usuario(session)
     cadastrar(service, session)
-    service.reject(session, "r1", "Foto da CNH ilegível")
+    service.reject(session, "r1", "Foto da CNH ilegível", now=100.0)
     cadastrar(
         service, session, name="Carlos Moto Novo", moto_model="Yamaha Factor", selfie_key="s2.jpg",
         cnh_photo_key="c2.jpg", crlv_key="m2.jpg",
@@ -166,7 +166,7 @@ def test_cadastro_recusado_pode_ser_reenviado(service, session):
 def test_reenviar_com_o_mesmo_cpf_e_placa_do_proprio_cadastro_funciona(service, session):
     novo_usuario(session)
     cadastrar(service, session)
-    service.reject(session, "r1", "Foto da CNH ilegível")
+    service.reject(session, "r1", "Foto da CNH ilegível", now=100.0)
     cadastrar(service, session)          # mesmos CPF, CNH e placa: não colide com o próprio cadastro
     assert session.get(RiderProfileRow, "r1").status == "pending"
 
@@ -174,7 +174,7 @@ def test_reenviar_com_o_mesmo_cpf_e_placa_do_proprio_cadastro_funciona(service, 
 def test_reenviar_com_dado_de_outro_motoqueiro_e_recusado(service, session):
     novo_usuario(session)
     cadastrar(service, session)
-    service.reject(session, "r1", "Foto da CNH ilegível")
+    service.reject(session, "r1", "Foto da CNH ilegível", now=100.0)
     aprovado(service, session, "r2", phone="+5575900000003", cpf=CPF2, cnh_number="99999999999", plate="ZZZ9Z99")
     with pytest.raises(DuplicateRegistration) as erro:
         cadastrar(service, session, "r1", cpf=CPF2)
@@ -200,7 +200,7 @@ def test_cadastro_que_nao_foi_recusado_nao_reenvia(service, session, situacao):
 def test_reenvio_com_dado_ruim_continua_recusado_com_a_mensagem(service, session):
     novo_usuario(session)
     cadastrar(service, session)
-    service.reject(session, "r1", "Foto da CNH ilegível")
+    service.reject(session, "r1", "Foto da CNH ilegível", now=100.0)
     with pytest.raises(RegistrationError):
         cadastrar(service, session, cpf="123")
     perfil = session.get(RiderProfileRow, "r1")
@@ -216,7 +216,7 @@ def test_aprovar_recusar_bloquear_e_liberar(service, session, events):
     with pytest.raises(InvalidState):
         service.approve(session, "r1", now=101.0)
     with pytest.raises(InvalidState):
-        service.reject(session, "r1", "motivo")
+        service.reject(session, "r1", "motivo", now=100.0)
     service.block(session, "r1", "denúncia")
     assert session.get(RiderProfileRow, "r1").status == "blocked"
     assert session.get(UserRow, "r1").is_blocked is True
@@ -239,7 +239,7 @@ def test_liberar_quem_nunca_foi_aprovado_nao_o_deixa_aprovado(service, session):
 def test_cadastro_recusado_guarda_o_motivo(service, session):
     novo_usuario(session)
     cadastrar(service, session)
-    service.reject(session, "r1", "Foto da CNH ilegível")
+    service.reject(session, "r1", "Foto da CNH ilegível", now=100.0)
     perfil = session.get(RiderProfileRow, "r1")
     assert (perfil.status, perfil.rejected_reason) == ("rejected", "Foto da CNH ilegível")
 
@@ -309,10 +309,10 @@ def test_documentos_vencidos_bloqueiam_e_tiram_da_disponibilidade(service, sessi
 
 def test_renovar_documentos_atualiza_as_datas(service, session):
     aprovado(service, session)
-    service.renew_documents(session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE)
+    service.renew_documents(session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE, now=1.0)
     assert session.get(RiderProfileRow, "r1").cnh_expires_on == dt.date(2032, 1, 1)
     with pytest.raises(RegistrationError, match="vencid"):
-        service.renew_documents(session, "r1", cnh_expires_on=dt.date(2020, 1, 1), crlv_expires_on=FUTURO, today=HOJE)
+        service.renew_documents(session, "r1", cnh_expires_on=dt.date(2020, 1, 1), crlv_expires_on=FUTURO, today=HOJE, now=1.0)
 
 
 def bloqueado_por_documento_vencido(service, session, events):
@@ -326,7 +326,7 @@ def test_renovar_documentos_libera_quem_foi_bloqueado_por_documento_vencido(serv
     bloqueado_por_documento_vencido(service, session, events)
     service.renew_documents(
         session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1),
-        today=dt.date(2027, 1, 1), crlv_key="m2.jpg",
+        today=dt.date(2027, 1, 1), crlv_key="m2.jpg", now=1.0,
     )
     perfil = session.get(RiderProfileRow, "r1")
     assert (perfil.status, perfil.rejected_reason, perfil.online) == ("approved", None, False)
@@ -341,7 +341,7 @@ def test_renovar_sem_a_foto_do_documento_que_venceu_nao_libera(service, session,
     with pytest.raises(RegistrationError, match="foto do documento da moto"):
         service.renew_documents(
             session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1),
-            today=dt.date(2027, 1, 1),
+            today=dt.date(2027, 1, 1), now=1.0,
         )
     perfil = session.get(RiderProfileRow, "r1")
     assert (perfil.status, perfil.rejected_reason) == ("blocked", "documento vencido")
@@ -351,7 +351,7 @@ def test_renovar_sem_a_foto_do_documento_que_venceu_nao_libera(service, session,
     with pytest.raises(RegistrationError, match="foto do documento da moto"):
         service.renew_documents(
             session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1),
-            today=dt.date(2027, 1, 1), cnh_photo_key="c2.jpg",
+            today=dt.date(2027, 1, 1), cnh_photo_key="c2.jpg", now=1.0,
         )
 
 
@@ -362,11 +362,11 @@ def test_renovar_com_os_dois_documentos_vencidos_pede_as_duas_fotos(service, ses
     with pytest.raises(RegistrationError, match="foto da CNH"):
         service.renew_documents(
             session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1),
-            today=dt.date(2027, 1, 1), crlv_key="m2.jpg",
+            today=dt.date(2027, 1, 1), crlv_key="m2.jpg", now=1.0,
         )
     service.renew_documents(
         session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1),
-        today=dt.date(2027, 1, 1), cnh_photo_key="c2.jpg", crlv_key="m2.jpg",
+        today=dt.date(2027, 1, 1), cnh_photo_key="c2.jpg", crlv_key="m2.jpg", now=1.0,
     )
     assert session.get(RiderProfileRow, "r1").status == "approved"
 
@@ -374,7 +374,7 @@ def test_renovar_com_os_dois_documentos_vencidos_pede_as_duas_fotos(service, ses
 def test_renovar_antes_de_vencer_nao_exige_foto(service, session):
     aprovado(service, session, "r1")
     service.renew_documents(
-        session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE,
+        session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE, now=1.0,
     )
     assert session.get(RiderProfileRow, "r1").cnh_expires_on == dt.date(2032, 1, 1)
 
@@ -384,7 +384,7 @@ def test_renovar_documentos_nao_libera_o_bloqueio_do_administrador(service, sess
     service.block(session, "r1", "documento vencido")     # o mesmo texto da varredura, mas é do administrador
     events.drain()
     service.renew_documents(
-        session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE,
+        session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE, now=1.0,
     )
     assert session.get(RiderProfileRow, "r1").status == "blocked"
     assert session.get(UserRow, "r1").is_blocked is True
@@ -396,7 +396,7 @@ def test_renovar_com_data_vencida_continua_bloqueado(service, session, events):
     with pytest.raises(RegistrationError, match="vencid"):
         service.renew_documents(
             session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2026, 12, 31),
-            today=dt.date(2027, 1, 1),
+            today=dt.date(2027, 1, 1), now=1.0,
         )
     assert session.get(RiderProfileRow, "r1").status == "blocked"
     assert not events.events
@@ -406,7 +406,7 @@ def test_renovar_documentos_de_quem_nao_esta_bloqueado_nao_emite_aviso(service, 
     aprovado(service, session)
     events.drain()
     service.renew_documents(
-        session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE,
+        session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE, now=1.0,
     )
     assert session.get(RiderProfileRow, "r1").status == "approved"
     assert not events.events
@@ -422,3 +422,65 @@ def test_ficha_do_motoqueiro_para_o_passageiro(service, session):
     session.flush()
     ficha = service.rider_card(session, "r1")
     assert ficha.rating == 4.7 and ficha.rating_count == 3
+
+
+# --- plano 4F: recusa, reenvio e rastro da liberação automática -------------------------------------
+
+def test_recusar_grava_a_hora_da_recusa(service, session):
+    novo_usuario(session)
+    cadastrar(service, session)
+    service.reject(session, "r1", "Foto da CNH ilegível", now=500.0)
+    assert session.get(RiderProfileRow, "r1").rejected_at == 500.0
+
+
+def test_reenviar_guarda_o_motivo_anterior_e_conta_o_reenvio(service, session):
+    novo_usuario(session)
+    cadastrar(service, session)
+    service.reject(session, "r1", "Foto da CNH ilegível", now=500.0)
+    cadastrar(service, session)
+    perfil = session.get(RiderProfileRow, "r1")
+    assert (perfil.previous_rejection, perfil.resubmissions, perfil.rejected_reason, perfil.rejected_at) == (
+        "Foto da CNH ilegível", 1, None, None,
+    )
+
+
+def test_reenviar_duas_vezes_conta_dois_e_guarda_o_ultimo_motivo(service, session):
+    novo_usuario(session)
+    cadastrar(service, session)
+    service.reject(session, "r1", "A", now=500.0)
+    cadastrar(service, session)
+    service.reject(session, "r1", "B", now=600.0)
+    cadastrar(service, session)
+    perfil = session.get(RiderProfileRow, "r1")
+    assert (perfil.previous_rejection, perfil.resubmissions) == ("B", 2)
+
+
+def test_cadastro_novo_nao_tem_reenvio(service, session):
+    novo_usuario(session)
+    cadastrar(service, session)
+    perfil = session.get(RiderProfileRow, "r1")
+    assert (perfil.previous_rejection, perfil.resubmissions, perfil.rejected_at) == (None, 0, None)
+
+
+def test_liberacao_automatica_deixa_rastro_no_registro(service, session, events):
+    from app.services.admin_log import list_admin_actions
+
+    bloqueado_por_documento_vencido(service, session, events)
+    service.renew_documents(
+        session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1),
+        today=dt.date(2027, 1, 1), crlv_key="m2.jpg", now=700.0,
+    )
+    (rastro,) = list_admin_actions(session, 10, 0)
+    assert (rastro.action, rastro.target_type, rastro.target_id, rastro.admin_id, rastro.at) == (
+        "rider.auto_unblock", "rider", "r1", "r1", 700.0,
+    )
+
+
+def test_renovar_sem_liberar_nao_deixa_rastro(service, session):
+    from app.services.admin_log import list_admin_actions
+
+    aprovado(service, session, "r1")
+    service.renew_documents(
+        session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE, now=700.0,
+    )
+    assert list_admin_actions(session, 10, 0) == []

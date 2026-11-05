@@ -110,7 +110,7 @@ def renew_documents(body: RenewIn, request: Request, user: AuthUser = Depends(ri
     runtime.run(
         lambda unit: unit.riders.renew_documents(
             unit.session, user.user_id, cnh_expires_on=body.cnh_expires_on, crlv_expires_on=body.crlv_expires_on,
-            today=local_date(unit.now), cnh_photo_key=cnh_key, crlv_key=crlv_key,
+            today=local_date(unit.now), now=unit.now, cnh_photo_key=cnh_key, crlv_key=crlv_key,
         )
     )
     return Response(status_code=204)

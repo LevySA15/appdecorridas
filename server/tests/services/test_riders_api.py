@@ -56,13 +56,13 @@ def test_renovar_documentos_troca_as_fotos_so_quando_vierem_novas(service, sessi
     aprovado(service, session)
     service.renew_documents(
         session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE,
-        cnh_photo_key="nova-cnh.jpg",
+        cnh_photo_key="nova-cnh.jpg", now=1.0,
     )
     perfil = session.get(RiderProfileRow, "r1")
     assert (perfil.cnh_photo_key, perfil.crlv_key) == ("nova-cnh.jpg", "m.jpg")
     service.renew_documents(
         session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE,
-        crlv_key="novo-crlv.jpg",
+        crlv_key="novo-crlv.jpg", now=1.0,
     )
     perfil = session.get(RiderProfileRow, "r1")
     assert (perfil.cnh_photo_key, perfil.crlv_key) == ("nova-cnh.jpg", "novo-crlv.jpg")

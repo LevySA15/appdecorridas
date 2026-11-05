@@ -38,6 +38,7 @@ def _rider_item(item: queries.RiderListItem) -> dict:
         "cnh_expires_on": item.cnh_expires_on.isoformat() if item.cnh_expires_on else None,
         "crlv_expires_on": item.crlv_expires_on.isoformat() if item.crlv_expires_on else None,
         "documents": list(item.documents),
+        "resubmissions": item.resubmissions, "previous_rejection": item.previous_rejection,
     }
 
 
@@ -66,7 +67,7 @@ def approve(rider_id: str, request: Request, admin: AuthUser = Depends(admin_use
 @router.post("/riders/{rider_id}/reject", status_code=204)
 def reject(rider_id: str, body: ReasonIn, request: Request, admin: AuthUser = Depends(admin_user)) -> Response:
     def work(unit):
-        unit.riders.reject(unit.session, rider_id, body.reason)
+        unit.riders.reject(unit.session, rider_id, body.reason, unit.now)
         log_admin_action(unit.session, admin.user_id, "rider.reject", "rider", rider_id, body.reason, unit.now)
 
     get_runtime(request).run(work)
