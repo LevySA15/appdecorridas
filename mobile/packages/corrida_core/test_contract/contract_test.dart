@@ -167,6 +167,11 @@ void main() {
     expect(andando.state, RideState.inProgress);
     await ana.espera('trip_started', rideId: rideId);
     await motoqueiro.sendPosition(motoPerto.lat, motoPerto.lng);
+    // SOS do motoqueiro: avisa só a central; o mesmo SOS repetido logo depois devolve o mesmo alerta
+    final sos = await motoqueiro.sos(rideId);
+    expect((sos.repeated, sos.emergencyNumber), (false, '190'));
+    final repetido = await motoqueiro.sos(rideId);
+    expect((repetido.repeated, repetido.alertId), (true, sos.alertId));
     final fim = await motoqueiro.complete(rideId);
     expect(fim.state, RideState.completed);
     await ana.espera('trip_completed', rideId: rideId);
@@ -439,6 +444,7 @@ void main() {
       'POST /v1/rider/rides/{id}/helmet': RiderRide.fromJson,
       'POST /v1/rider/rides/{id}/start': RiderRide.fromJson,
       'POST /v1/rider/rides/{id}/complete': RiderRide.fromJson,
+      'POST /v1/rider/rides/{id}/sos': RiderSosResult.fromJson,
       'POST /v1/rider/debt-charge': Charge.fromJson,
       'PUT /v1/rider/documents/selfie': UploadedDocument.fromJson,
     };

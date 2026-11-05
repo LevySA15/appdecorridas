@@ -18,6 +18,7 @@ class RideScreen extends StatefulWidget {
     required this.onComplete,
     required this.onAcceptOffer,
     required this.onDeclineOffer,
+    required this.onSos,
     this.offer,
     super.key,
   });
@@ -34,6 +35,9 @@ class RideScreen extends StatefulWidget {
   final Offer? offer;
   final Future<void> Function(String rideId) onAcceptOffer;
   final Future<void> Function(String rideId) onDeclineOffer;
+
+  /// Pede socorro à central (o 190 quem liga é o motoqueiro).
+  final Future<RiderSosResult> Function() onSos;
 
   @override
   State<RideScreen> createState() => _RideScreenState();
@@ -70,6 +74,19 @@ class _RideScreenState extends State<RideScreen> {
       _showMessage(friendlyMessage(error));
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _sos() async {
+    try {
+      final result = await widget.onSos();
+      _showMessage(
+        result.repeated
+            ? 'Você já pediu socorro agora há pouco. Se precisar, ligue ${result.emergencyNumber}.'
+            : 'Pedido de socorro enviado. Ligue ${result.emergencyNumber} agora.',
+      );
+    } on Exception catch (error) {
+      _showMessage('${friendlyMessage(error)} Se estiver em perigo, ligue 190.');
     }
   }
 
@@ -212,6 +229,8 @@ class _RideScreenState extends State<RideScreen> {
           ),
           const SizedBox(height: 8),
           ...body,
+          const SizedBox(height: 24),
+          OutlinedButton(onPressed: _sos, child: const Text('SOS')),
         ],
       ),
     );

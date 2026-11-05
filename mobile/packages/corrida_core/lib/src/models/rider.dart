@@ -351,3 +351,24 @@ class RiderStatement {
     pendingCents: asInt(json['pending_cents']),
   );
 }
+
+/// Resposta do SOS do motoqueiro. Avisa só a central; o app liga para o `emergencyNumber`.
+class RiderSosResult {
+  const RiderSosResult({
+    required this.alertId,
+    required this.repeated,
+    required this.emergencyNumber,
+  });
+
+  final int alertId;
+
+  /// Já tinha pedido socorro há menos de 5 minutos: a central não é avisada de novo.
+  final bool repeated;
+  final String emergencyNumber;
+
+  factory RiderSosResult.fromJson(Json json) => RiderSosResult(
+    alertId: asInt(json['alert_id']),
+    repeated: asBool(json['repeated']),
+    emergencyNumber: asString(json['emergency_number'], '190'),
+  );
+}

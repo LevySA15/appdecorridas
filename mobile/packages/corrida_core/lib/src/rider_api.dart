@@ -71,6 +71,11 @@ class RiderApi {
     await client.post('/v1/rider/rides/${_id(rideId)}/cash-received');
   }
 
+  /// Pede socorro durante a corrida (a caminho, no ponto ou em andamento). Avisa só a central.
+  Future<RiderSosResult> sos(String rideId) async => RiderSosResult.fromJson(
+    _map(await client.post('/v1/rider/rides/${_id(rideId)}/sos')),
+  );
+
   /// Avalia o passageiro depois que a corrida acabou (mesma rota que o passageiro usa para avaliar o motoqueiro).
   Future<void> rate(String rideId, int stars) async {
     await client.post(

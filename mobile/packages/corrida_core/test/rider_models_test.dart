@@ -264,4 +264,18 @@ void main() {
       expect(extrato.cashDebtCents, 0); // a dívida vem nula em dia passado
     },
   );
+
+  test('SOS do motoqueiro', () {
+    final sos = RiderSosResult.fromJson({
+      'alert_id': 7,
+      'repeated': true,
+      'emergency_number': '190',
+    });
+    expect((sos.alertId, sos.repeated, sos.emergencyNumber), (7, true, '190'));
+  });
+
+  test('SOS do motoqueiro tolera campos que faltam', () {
+    final sos = RiderSosResult.fromJson({});
+    expect((sos.alertId, sos.repeated, sos.emergencyNumber), (0, false, '190'));
+  });
 }

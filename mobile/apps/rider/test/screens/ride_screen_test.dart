@@ -37,6 +37,7 @@ Future<void> _pump(
   Future<void> Function(String)? onStart,
   Future<void> Function()? onComplete,
   Future<void> Function(String)? onAcceptOffer,
+  Future<RiderSosResult> Function()? onSos,
 }) async {
   tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1.0;
@@ -53,6 +54,7 @@ Future<void> _pump(
         onStart: onStart ?? (_) async {},
         onComplete: onComplete ?? () async {},
         onAcceptOffer: onAcceptOffer ?? (_) async {},
+        onSos: onSos ?? () async => const RiderSosResult(alertId: 1, repeated: false, emergencyNumber: '190'),
         onDeclineOffer: (_) async {},
       ),
     ),
@@ -363,11 +365,84 @@ void main() {
           onComplete: () async {},
           onAcceptOffer: (_) async {},
           onDeclineOffer: (_) async {},
+          onSos: () async => const RiderSosResult(
+            alertId: 1,
+            repeated: false,
+            emergencyNumber: '190',
+          ),
         ),
       ),
     );
     await tester.pump();
 
     expect(_codigoDigitado(tester), '');
+  });
+
+  for (final estado in [
+    RideState.accepted,
+    RideState.arrived,
+    RideState.inProgress,
+  ]) {
+    testWidgets('SOS aparece e funciona na fase $estado', (tester) async {
+      var chamadas = 0;
+      await _pump(
+        tester,
+        _corrida(state: estado),
+        onSos: () async {
+          chamadas++;
+          return const RiderSosResult(
+            alertId: 1,
+            repeated: false,
+            emergencyNumber: '190',
+          );
+        },
+      );
+
+      await tester.ensureVisible(find.text('SOS'));
+      await tester.tap(find.text('SOS'));
+      await tester.pump();
+
+      expect(chamadas, 1);
+      expect(
+        find.text('Pedido de socorro enviado. Ligue 190 agora.'),
+        findsOneWidget,
+      );
+    });
+  }
+
+  testWidgets('SOS repetido avisa que já foi pedido', (tester) async {
+    await _pump(
+      tester,
+      _corrida(state: RideState.inProgress),
+      onSos: () async => const RiderSosResult(
+        alertId: 1,
+        repeated: true,
+        emergencyNumber: '190',
+      ),
+    );
+
+    await tester.ensureVisible(find.text('SOS'));
+    await tester.tap(find.text('SOS'));
+    await tester.pump();
+
+    expect(
+      find.text('Você já pediu socorro agora há pouco. Se precisar, ligue 190.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('SOS que falha não diz que foi enviado', (tester) async {
+    await _pump(
+      tester,
+      _corrida(state: RideState.inProgress),
+      onSos: () async => throw Exception('sem rede'),
+    );
+
+    await tester.ensureVisible(find.text('SOS'));
+    await tester.tap(find.text('SOS'));
+    await tester.pump();
+
+    expect(find.textContaining('Pedido de socorro enviado'), findsNothing);
+    expect(find.textContaining('ligue 190'), findsOneWidget);
   });
 }

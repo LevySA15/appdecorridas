@@ -223,6 +223,7 @@ class _SignedInShellState extends State<SignedInShell> {
                   onComplete: () => _controller.completeTrip(ride.rideId),
                   onAcceptOffer: _accept,
                   onDeclineOffer: _controller.decline,
+                  onSos: () => _controller.sos(ride.rideId),
                 );
               },
             ),

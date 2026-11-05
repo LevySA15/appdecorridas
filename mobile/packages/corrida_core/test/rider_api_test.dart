@@ -305,4 +305,14 @@ void main() {
     expect(ontem.date, '2026-10-24');
     expect(hoje.rides, isEmpty);
   });
+
+  test('SOS do motoqueiro', () async {
+    final m = mundo(
+      (r) => json({'alert_id': 3, 'repeated': false, 'emergency_number': '190'}),
+    );
+    final sos = await m.api.sos('ride-1');
+    expect(m.chamadas.single.method, 'POST');
+    expect(m.chamadas.single.path, '/v1/rider/rides/ride-1/sos');
+    expect((sos.alertId, sos.repeated, sos.emergencyNumber), (3, false, '190'));
+  });
 }

@@ -222,4 +222,20 @@ void main() {
       'date': '2026-10-24',
     });
   });
+
+  test('sos pede socorro pela rota do motoqueiro e não precisa reler o estado', () async {
+    final m = await _logado();
+    m.on(
+      'POST',
+      '/v1/rider/rides/r1/sos',
+      (_) => json({'alert_id': 9, 'repeated': false, 'emergency_number': '190'}),
+    );
+    final leiturasAntes = _leituras(m);
+
+    final sos = await m.controller.sos('r1');
+
+    expect((sos.alertId, sos.emergencyNumber), (9, '190'));
+    expect(m.sent('POST', '/v1/rider/rides/r1/sos'), hasLength(1));
+    expect(_leituras(m), leiturasAntes);
+  });
 }
