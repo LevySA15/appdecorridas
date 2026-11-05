@@ -20,6 +20,11 @@ class Mundo {
       realtimeBaseUrl: baseUrl,
       photos: photos,
       positionEvery: positionEvery ?? const Duration(seconds: 4),
+      dial: (numero) async {
+        discados.add(numero);
+        if (discadorQuebrado) throw Exception('sem discador');
+        return true;
+      },
       realtimeConnector: (uri) {
         final canal = FakeChannel(uri);
         canais.add(canal);
@@ -34,6 +39,8 @@ class Mundo {
   late final SessionManager session;
   late final RiderController controller;
   final canais = <FakeChannel>[];
+  final discados = <String>[];
+  var discadorQuebrado = false;
   final requests = <http.Request>[];
   final _routes = <String, http.Response Function(http.Request)>{};
 

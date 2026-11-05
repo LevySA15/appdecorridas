@@ -81,6 +81,11 @@ class Mundo {
       session: session,
       api: PassengerApi(api),
       realtimeBaseUrl: baseUrl,
+      dial: (numero) async {
+        discados.add(numero);
+        if (discadorQuebrado) throw Exception('sem discador');
+        return true;
+      },
       realtimeConnector: (uri) {
         final canal = FakeChannel(uri);
         canais.add(canal);
@@ -95,6 +100,9 @@ class Mundo {
   late final SessionManager session;
   late final PassengerController controller;
   final canais = <FakeChannel>[];
+  final discados = <String>[];
+  var discadorQuebrado = false;
+  var sosStatus = 200;
 
   Map<String, Object?> stateJson = const {};
   int stateStatus = 200;
@@ -119,6 +127,20 @@ class Mundo {
         }, stateStatus);
       }
       return _json(stateJson);
+    }
+    if (r.method == 'POST' && path == '/v1/rides/r1/sos') {
+      if (sosStatus != 200) {
+        return _json({
+          'error': {'code': 'server_error', 'message': 'Falhou.'},
+        }, sosStatus);
+      }
+      return _json({
+        'alert_id': 4,
+        'contact_registered': false,
+        'contact_notified': false,
+        'repeated': false,
+        'emergency_number': '190',
+      });
     }
     return http.Response('', 404);
   }
@@ -259,5 +281,36 @@ void main() {
     expect(m.controller.session, isNotNull);
     expect(m.controller.state, isNull);
     expect(avisos, greaterThan(0));
+  });
+
+  test('sos abre o discador com o 190 uma vez e devolve o pedido', () async {
+    final m = Mundo();
+    await m.controller.start();
+    await m.controller.verify(phone: '75988510824', code: '123456');
+
+    final sos = await m.controller.sos('r1');
+
+    expect(m.discados, ['190']);
+    expect(sos.alertId, 4);
+  });
+
+  test('sos abre o discador mesmo quando o servidor falha', () async {
+    final m = Mundo()..sosStatus = 500;
+    await m.controller.start();
+    await m.controller.verify(phone: '75988510824', code: '123456');
+
+    await expectLater(m.controller.sos('r1'), throwsA(isA<ApiException>()));
+
+    expect(m.discados, ['190']);
+  });
+
+  test('discador que quebra não derruba o sos', () async {
+    final m = Mundo()..discadorQuebrado = true;
+    await m.controller.start();
+    await m.controller.verify(phone: '75988510824', code: '123456');
+
+    final sos = await m.controller.sos('r1');
+
+    expect(sos.alertId, 4);
   });
 }

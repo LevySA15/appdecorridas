@@ -238,4 +238,46 @@ void main() {
     expect(m.sent('POST', '/v1/rider/rides/r1/sos'), hasLength(1));
     expect(_leituras(m), leiturasAntes);
   });
+
+  test('sos abre o discador com o 190 uma vez', () async {
+    final m = await _logado();
+    m.on(
+      'POST',
+      '/v1/rider/rides/r1/sos',
+      (_) => json({'alert_id': 9, 'repeated': false, 'emergency_number': '190'}),
+    );
+
+    await m.controller.sos('r1');
+
+    expect(m.discados, ['190']);
+  });
+
+  test('sos abre o discador mesmo quando o servidor falha', () async {
+    final m = await _logado();
+    m.on(
+      'POST',
+      '/v1/rider/rides/r1/sos',
+      (_) => json({
+        'error': {'code': 'server_error', 'message': 'Falhou.'},
+      }, 500),
+    );
+
+    await expectLater(m.controller.sos('r1'), throwsA(isA<ApiException>()));
+
+    expect(m.discados, ['190']);
+  });
+
+  test('discador que quebra não derruba o sos', () async {
+    final m = await _logado();
+    m.discadorQuebrado = true;
+    m.on(
+      'POST',
+      '/v1/rider/rides/r1/sos',
+      (_) => json({'alert_id': 9, 'repeated': false, 'emergency_number': '190'}),
+    );
+
+    final sos = await m.controller.sos('r1');
+
+    expect(sos.alertId, 9);
+  });
 }

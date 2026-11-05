@@ -2,6 +2,7 @@
 library;
 
 export 'src/charge_screen.dart';
+export 'src/emergency_dialer.dart';
 export 'src/fake_map.dart';
 export 'src/login_screen.dart';
 export 'src/messages.dart';

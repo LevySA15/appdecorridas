@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:corrida_core/corrida_core.dart';
+import 'package:corrida_ui/corrida_ui.dart' show Dial, dialNumber, emergencyNumber;
 import 'package:flutter/foundation.dart';
 
 /// A ponte única entre as telas e o pacote `corrida_core`: guarda a sessão, o último estado lido do
@@ -13,6 +14,7 @@ class PassengerController extends ChangeNotifier {
     required this.api,
     required this.realtimeBaseUrl,
     this.realtimeConnector,
+    this.dial = dialNumber,
   }) : sessionManager = session {
     _sessionSub = sessionManager.changes.listen(_onSessionChanged);
   }
@@ -24,6 +26,9 @@ class PassengerController extends ChangeNotifier {
   final PassengerApi api;
   final Uri realtimeBaseUrl;
   final WebSocketConnector? realtimeConnector;
+
+  /// Abre o discador (o SOS chama o 190); nos testes entra um de mentira.
+  final Dial dial;
 
   late final StreamSubscription<Session?> _sessionSub;
   final _eventsOut = StreamController<ServerEvent>.broadcast();
@@ -103,7 +108,20 @@ class PassengerController extends ChangeNotifier {
   Future<void> rate({required String rideId, required int stars}) =>
       api.rate(rideId, stars);
 
-  Future<SosResult> sos(String rideId) => api.sos(rideId);
+  /// Pede socorro à central **e** abre o discador com o 190, os dois ao mesmo tempo: o discador não espera a
+  /// rede e uma falha dele não atrapalha o pedido.
+  Future<SosResult> sos(String rideId) {
+    unawaited(_openDialer());
+    return api.sos(rideId);
+  }
+
+  Future<void> _openDialer() async {
+    try {
+      await dial(emergencyNumber);
+    } on Object {
+      // sem discador: a tela já diz "ligue 190"
+    }
+  }
 
   Future<void> safetyOk(String rideId, int alertId) async {
     await api.safetyOk(rideId, alertId);

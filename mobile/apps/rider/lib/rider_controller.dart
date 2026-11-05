@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:corrida_core/corrida_core.dart';
-import 'package:corrida_ui/corrida_ui.dart' show cityCenter;
+import 'package:corrida_ui/corrida_ui.dart'
+    show Dial, cityCenter, dialNumber, emergencyNumber;
 import 'package:flutter/foundation.dart';
 
 import 'photo_source.dart';
@@ -19,6 +20,7 @@ class RiderController extends ChangeNotifier {
     this.realtimeConnector,
     PhotoSource? photos,
     this.positionEvery = const Duration(seconds: 4),
+    this.dial = dialNumber,
   }) : sessionManager = session,
        photos = photos ?? ImagePickerPhotoSource() {
     _sessionSub = sessionManager.changes.listen(_onSessionChanged);
@@ -33,6 +35,9 @@ class RiderController extends ChangeNotifier {
   final WebSocketConnector? realtimeConnector;
   final PhotoSource photos;
   final Duration positionEvery;
+
+  /// Abre o discador (o SOS chama o 190); nos testes entra um de mentira.
+  final Dial dial;
 
   late final StreamSubscription<Session?> _sessionSub;
   final _eventsOut = StreamController<ServerEvent>.broadcast();
@@ -172,8 +177,20 @@ class RiderController extends ChangeNotifier {
   Future<void> rate({required String rideId, required int stars}) =>
       api.rate(rideId, stars);
 
-  /// Pede socorro à central. Não relê o estado: nada na tela do motoqueiro muda por causa disso.
-  Future<RiderSosResult> sos(String rideId) => api.sos(rideId);
+  /// Pede socorro à central **e** abre o discador com o 190, os dois ao mesmo tempo: o discador não espera a
+  /// rede e uma falha dele não atrapalha o pedido. Não relê o estado: nada na tela muda por causa disso.
+  Future<RiderSosResult> sos(String rideId) {
+    unawaited(_openDialer());
+    return api.sos(rideId);
+  }
+
+  Future<void> _openDialer() async {
+    try {
+      await dial(emergencyNumber);
+    } on Object {
+      // sem discador: a tela já diz "ligue 190"
+    }
+  }
 
   /// O extrato de um dia (a rota tem o dia no formato AAAA-MM-DD).
   Future<RiderStatement> loadStatement(DateTime day) => api.statement(day: day);

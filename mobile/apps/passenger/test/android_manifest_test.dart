@@ -25,4 +25,12 @@ void main() {
 
     expect(manifest, contains('android:allowBackup="false"'));
   });
+
+  test('o manifesto deixa o app achar o discador (tel:), senão o SOS não abre o 190', () {
+    final manifest = File('android/app/src/main/AndroidManifest.xml')
+        .readAsStringSync();
+
+    expect(manifest, contains('android.intent.action.DIAL'));
+    expect(manifest, contains('android:scheme="tel"'));
+  });
 }
