@@ -445,4 +445,35 @@ void main() {
     expect(find.textContaining('Pedido de socorro enviado'), findsNothing);
     expect(find.textContaining('ligue 190'), findsOneWidget);
   });
+
+  testWidgets('SOS fica na barra de cima, visível sem rolar a tela', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RideScreen(
+          ride: _corrida(state: RideState.inProgress),
+          position: cityCenter,
+          onMove: (_) {},
+          onArrive: () async {},
+          onConfirmHelmet: () async {},
+          onStart: (_) async {},
+          onComplete: () async {},
+          onAcceptOffer: (_) async {},
+          onDeclineOffer: (_) async {},
+          onSos: () async => const RiderSosResult(
+            alertId: 1,
+            repeated: false,
+            emergencyNumber: '190',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('SOS'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('SOS')).dy, lessThan(kToolbarHeight));
+  });
 }

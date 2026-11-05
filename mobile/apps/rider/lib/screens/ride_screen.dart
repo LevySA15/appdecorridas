@@ -213,7 +213,19 @@ class _RideScreenState extends State<RideScreen> {
     // Qualquer outro estado (terminada, cancelada...): não há o que mostrar; o `app.dart` fecha a rota.
     if (body == null) return const SizedBox.shrink();
     return Scaffold(
-      appBar: AppBar(title: const Text('Corrida')),
+      appBar: AppBar(
+        title: const Text('Corrida'),
+        // sempre à vista: numa emergência ninguém vai rolar a tela atrás do botão
+        actions: [
+          TextButton(
+            onPressed: _sos,
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('SOS'),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -229,8 +241,6 @@ class _RideScreenState extends State<RideScreen> {
           ),
           const SizedBox(height: 8),
           ...body,
-          const SizedBox(height: 24),
-          OutlinedButton(onPressed: _sos, child: const Text('SOS')),
         ],
       ),
     );
