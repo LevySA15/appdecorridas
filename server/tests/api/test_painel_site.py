@@ -127,3 +127,21 @@ def test_texto_do_tipo_do_alerta(alerta, esperado):
     saida = subprocess.run(["node", "-e", codigo], capture_output=True, text=True)
     assert saida.returncode == 0, saida.stderr
     assert saida.stdout.strip() == esperado
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar as funções do painel")
+@pytest.mark.parametrize(
+    "item, esperado",
+    [
+        ({"documents": ["selfie", "cnh", "crlv"]}, ["selfie", "cnh", "crlv"]),
+        ({"documents": ["cnh"]}, ["cnh"]),            # as outras já foram apagadas (recusado há mais de 30 dias)
+        ({"documents": []}, []),
+    ],
+)
+def test_so_mostra_botao_das_fotos_que_ainda_existem(item, esperado):
+    import json
+
+    codigo = f"const p = require({str(JS)!r}); console.log(JSON.stringify(p.fotosDoCadastro({json.dumps(item)})));"
+    saida = subprocess.run(["node", "-e", codigo], capture_output=True, text=True)
+    assert saida.returncode == 0, saida.stderr
+    assert json.loads(saida.stdout) == esperado

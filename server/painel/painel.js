@@ -100,6 +100,9 @@ function situacaoDoCadastro(r) {
   }
   return r.status + (r.reason ? ": " + r.reason : "");
 }
+function fotosDoCadastro(r) {
+  return r.documents || [];   // fotos de cadastro recusado há mais de 30 dias são apagadas pelo servidor
+}
 function tipoDoAlerta(a) {
   if (a.kind === "sos" && a.raised_by === "rider") return "sos · pelo motoqueiro";
   if (a.kind === "sos" && a.raised_by === "passenger") return "sos · pelo passageiro";
@@ -115,7 +118,7 @@ const VISOES = {
     const linhas = lista.map((r) => [
       esc(r.name), esc(r.phone), esc(r.plate + " · " + r.moto_model), esc(situacaoDoCadastro(r)),
       esc((r.cnh_expires_on || "–") + " / " + (r.crlv_expires_on || "–")),
-      raw(["selfie", "cnh", "crlv"].map((k) => botao("doc", r.rider_id, k, "", `data-kind="${attr(k)}"`)).join(" ")),
+      raw(fotosDoCadastro(r).map((k) => botao("doc", r.rider_id, k, "", `data-kind="${attr(k)}"`)).join(" ")),
       raw([r.status === "pending" ? botao("rider-approve", r.rider_id, "Aprovar", "bom") + botao("rider-reject", r.rider_id, "Recusar", "perigo") : "",
         r.status === "approved" ? botao("rider-block", r.rider_id, "Bloquear", "perigo") : "",
         r.status === "blocked" ? botao("rider-unblock", r.rider_id, "Liberar", "bom") : ""].join(" ")),
@@ -262,4 +265,4 @@ function comecar() {
 }
 
 if (typeof document !== "undefined") comecar();
-if (typeof module !== "undefined") module.exports = { esc, attr, money, when, ACOES, CANCELADO, situacaoDoCadastro, tipoDoAlerta };
+if (typeof module !== "undefined") module.exports = { esc, attr, money, when, ACOES, CANCELADO, situacaoDoCadastro, tipoDoAlerta, fotosDoCadastro };
