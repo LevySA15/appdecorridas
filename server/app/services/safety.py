@@ -43,6 +43,12 @@ class SosResult:
     repeated: bool
 
 
+@dataclass(frozen=True)
+class RiderSosResult:
+    alert_id: int
+    repeated: bool
+
+
 class SafetyService:
     def __init__(
         self,
@@ -158,9 +164,9 @@ class SafetyService:
         contact = repo.get_emergency_contact(session, passenger_id)
         where = self.positions.get(ride.rider_id) if ride.rider_id else None
         if not self.store.claim(f"{ride_id}:sos", now, SOS_REPEAT_S):
-            previous = session.query(SafetyAlertRow).filter_by(ride_id=ride_id, kind="sos").order_by(
-                SafetyAlertRow.id.desc()
-            ).first()
+            previous = session.query(SafetyAlertRow).filter_by(
+                ride_id=ride_id, kind="sos", raised_by="passenger"
+            ).order_by(SafetyAlertRow.id.desc()).first()
             if previous is not None:
                 notified = previous.note == "contato avisado"
                 if contact is not None and not notified:     # o primeiro aviso falhou ou ainda não havia contato
@@ -168,7 +174,7 @@ class SafetyService:
                     session.flush()
                 return SosResult(previous.id, contact is not None, notified, True)
         alert = SafetyAlertRow(
-            ride_id=ride_id, kind="sos", status="sos", lat=where.lat if where else None,
+            ride_id=ride_id, kind="sos", status="sos", raised_by="passenger", lat=where.lat if where else None,
             lng=where.lng if where else None, created_at=now,
         )
         session.add(alert)
@@ -190,10 +196,40 @@ class SafetyService:
             session, "sos",
             {
                 "alert_id": alert.id, "ride_id": ride_id, "passenger_id": passenger_id, "rider_id": ride.rider_id,
-                "lat": alert.lat, "lng": alert.lng, "contact_notified": notified,
+                "lat": alert.lat, "lng": alert.lng, "contact_notified": notified, "raised_by": "passenger",
             },
         )
         return SosResult(alert.id, contact is not None, notified, False)
+
+    def rider_sos(self, session: Session, rider_id: str, ride_id: str, now: float) -> RiderSosResult:
+        """O motoqueiro pede socorro durante a corrida. Avisa só os administradores: o perigo pode ser o passageiro,
+        e o motoqueiro não tem contato de emergência. Os avisos "está tudo bem?" do passageiro ficam como estão."""
+        ride = repo.get_ride(session, ride_id)
+        if ride.rider_id != rider_id:
+            raise NotYourRide("Essa corrida não é sua.")
+        if ride.state not in _ON_THE_MOVE:
+            raise InvalidTransition("O SOS vale só durante a corrida.")
+        if not self.store.claim(f"{ride_id}:sos:rider", now, SOS_REPEAT_S):
+            previous = session.query(SafetyAlertRow).filter_by(
+                ride_id=ride_id, kind="sos", raised_by="rider"
+            ).order_by(SafetyAlertRow.id.desc()).first()
+            if previous is not None:
+                return RiderSosResult(previous.id, True)
+        where = self.positions.get(rider_id)
+        alert = SafetyAlertRow(
+            ride_id=ride_id, kind="sos", status="sos", raised_by="rider", lat=where.lat if where else None,
+            lng=where.lng if where else None, created_at=now,
+        )
+        session.add(alert)
+        session.flush()
+        self._notify_admins(
+            session, "sos",
+            {
+                "alert_id": alert.id, "ride_id": ride_id, "passenger_id": ride.passenger_id, "rider_id": rider_id,
+                "lat": alert.lat, "lng": alert.lng, "contact_notified": False, "raised_by": "rider",
+            },
+        )
+        return RiderSosResult(alert.id, False)
 
     def _notify_contact(self, contact, text: str, alert, ride_id: str) -> bool:
         """Avisa o contato e anota o resultado no alerta. O WhatsApp fora do ar não pode impedir o alerta."""

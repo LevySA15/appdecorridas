@@ -425,6 +425,7 @@ class SafetyAlertItem:
     passenger_name: str
     rider_name: str
     plate: str
+    raised_by: str = "system"           # system (automático), passenger ou rider
 
 
 def list_safety_alerts(session: Session, status: str, limit: int, offset: int) -> list[SafetyAlertItem]:
@@ -443,7 +444,7 @@ def list_safety_alerts(session: Session, status: str, limit: int, offset: int) -
     return [
         SafetyAlertItem(
             a.id, a.ride_id, a.kind, a.status, a.suspected_mock, a.lat, a.lng, a.created_at, a.answered_at,
-            a.resolved_at, a.note, passenger_name, rider_name, plate,
+            a.resolved_at, a.note, passenger_name, rider_name, plate, a.raised_by,
         )
         for a, passenger_name, rider_name, plate in rows
     ]

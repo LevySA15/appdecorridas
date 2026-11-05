@@ -226,6 +226,13 @@ def arrive(ride_id: str, request: Request, user: AuthUser = Depends(rider_user))
     return _step(request, user, ride_id, lambda u: u.trips.arrive(u.session, user.user_id, ride_id, u.now))
 
 
+@router.post("/rides/{ride_id}/sos")
+def sos(ride_id: str, request: Request, user: AuthUser = Depends(rider_user)) -> dict:
+    """Vale durante toda a corrida. Avisa só a central; o app liga para o 190."""
+    result = get_runtime(request).run(lambda unit: unit.safety.rider_sos(unit.session, user.user_id, ride_id, unit.now))
+    return {"alert_id": result.alert_id, "repeated": result.repeated, "emergency_number": "190"}
+
+
 @router.post("/rides/{ride_id}/helmet")
 def confirm_helmet(ride_id: str, request: Request, user: AuthUser = Depends(rider_user)) -> dict:
     return _step(request, user, ride_id, lambda u: u.trips.confirm_helmet(u.session, user.user_id, ride_id, u.now))

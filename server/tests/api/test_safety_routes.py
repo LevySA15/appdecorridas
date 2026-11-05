@@ -146,6 +146,64 @@ def test_sos_fora_da_corrida_ou_de_outra_pessoa(client, runtime, pax, rider):
     assert client.post("/v1/rides/nao-existe/sos", headers=pax.headers).status_code == 404
 
 
+# --- SOS do motoqueiro (plano 4F) -----------------------------------------------------------------
+
+
+def test_sos_do_motoqueiro_avisa_so_a_central_e_aparece_na_lista(client, runtime, pax, rider, admin, listen):
+    client.put("/v1/passenger/emergency-contact", json={"name": "Maria", "phone": "75 98888-7777"}, headers=pax.headers)
+    pedido = corrida(client, pax, rider)
+    posicao(client, rider, pt(700, 20))
+    avisos_pax, avisos_admin = listen(pax.user_id), listen(admin.user_id)
+
+    resposta = client.post(f"/v1/rider/rides/{pedido['ride_id']}/sos", headers=rider.headers)
+    assert resposta.status_code == 200
+    corpo = resposta.json()
+    assert corpo == {"alert_id": corpo["alert_id"], "repeated": False, "emergency_number": "190"}
+    assert avisos_pax.types == [] and runtime.notifier.sent == []
+    assert avisos_admin.types == ["sos"] and avisos_admin.messages[0]["data"]["raised_by"] == "rider"
+
+    lista = client.get("/v1/admin/safety-alerts", params={"status": "sos"}, headers=admin.headers).json()
+    assert [(a["alert_id"], a["kind"], a["raised_by"], a["rider_name"]) for a in lista] == [
+        (corpo["alert_id"], "sos", "rider", lista[0]["rider_name"])
+    ]
+    repetido = client.post(f"/v1/rider/rides/{pedido['ride_id']}/sos", headers=rider.headers).json()
+    assert repetido["repeated"] is True and repetido["alert_id"] == corpo["alert_id"]
+    assert avisos_admin.types == ["sos"]
+
+
+def test_alerta_do_passageiro_e_do_sistema_dizem_quem_pediu(client, pax, rider, admin, clock):
+    pedido = corrida(client, pax, rider)
+    parar_por(client, rider, clock, 200)
+    client.post(f"/v1/rides/{pedido['ride_id']}/sos", headers=pax.headers)
+    sos = client.get("/v1/admin/safety-alerts", params={"status": "sos"}, headers=admin.headers).json()
+    assert {(a["kind"], a["raised_by"]) for a in sos} == {("sos", "passenger"), ("stopped", "system")}
+
+
+def test_sos_do_motoqueiro_ainda_sem_aceitar_nao_vale(client, pax, rider, admin):
+    quote = client.post("/v1/passenger/quotes", json=QUOTE, headers=pax.headers).json()
+    procurando = client.post(
+        "/v1/passenger/rides", json={"quote_id": quote["quote_id"], "method": "cash"}, headers=pax.headers
+    ).json()
+    resposta = client.post(f"/v1/rider/rides/{procurando['ride_id']}/sos", headers=rider.headers)
+    assert resposta.status_code == 403         # a corrida ainda não é dele, só tem uma oferta
+    assert client.get("/v1/admin/safety-alerts", params={"status": "sos"}, headers=admin.headers).json() == []
+
+
+def test_sos_do_motoqueiro_so_do_motoqueiro_da_corrida(client, runtime, pax, rider, admin):
+    pedido = corrida(client, pax, rider)
+    rota = f"/v1/rider/rides/{pedido['ride_id']}/sos"
+    outro = login(client, runtime, "75 99999-0008", "rider")
+    assert client.post(rota, headers=outro.headers).status_code == 403
+    assert client.post(rota, headers=pax.headers).status_code == 403
+    assert client.post("/v1/rider/rides/nao-existe/sos", headers=rider.headers).status_code == 404
+    assert client.post(rota).status_code == 401
+    assert client.get("/v1/admin/safety-alerts", params={"status": "sos"}, headers=admin.headers).json() == []
+    # terminada a corrida, o SOS deixa de valer
+    client.post(f"/v1/rider/rides/{pedido['ride_id']}/complete", headers=rider.headers)
+    final = client.post(rota, headers=rider.headers)
+    assert final.status_code == 409 and final.json()["error"]["code"] == "invalid_state"
+
+
 def test_lista_e_encerramento_de_alertas_sao_so_do_administrador(client, pax, rider):
     for metodo, url in (("get", "/v1/admin/safety-alerts"), ("post", "/v1/admin/safety-alerts/1/resolve")):
         for quem in (pax, rider):

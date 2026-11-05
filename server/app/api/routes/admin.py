@@ -109,6 +109,7 @@ def list_safety_alerts(
             "suspected_mock": i.suspected_mock, "lat": i.lat, "lng": i.lng, "created_at": i.created_at,
             "answered_at": i.answered_at, "resolved_at": i.resolved_at, "note": i.note,
             "passenger_name": i.passenger_name, "rider_name": i.rider_name, "plate": i.plate,
+            "raised_by": i.raised_by,
         }
         for i in items
     ]

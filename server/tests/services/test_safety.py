@@ -222,6 +222,67 @@ def test_sos_so_durante_a_corrida_e_so_do_proprio_passageiro(safety, session, mu
         safety.sos(session, "p1", "ride-1", AGORA)
 
 
+# --- SOS do motoqueiro (plano 4F) -----------------------------------------------------------------
+
+
+def test_sos_do_motoqueiro_avisa_so_os_administradores(safety, session, mundo, positions, notifier, events):
+    com_contato(session)
+    positions.update("r1", pt(700, 20), AGORA)
+    resultado = safety.rider_sos(session, "r1", "ride-1", AGORA + 10)
+    assert resultado.repeated is False
+    alerta = session.execute(select(SafetyAlertRow)).scalar_one()
+    assert (alerta.kind, alerta.status, alerta.raised_by) == ("sos", "sos", "rider") and alerta.id == resultado.alert_id
+    assert (alerta.lat, alerta.lng) == pytest.approx((pt(700, 20).lat, pt(700, 20).lng))
+    assert tipos(events, "adm-1") == ["sos"] and tipos(events, "adm-2") == ["sos"]
+    aviso = next(e for e in events.events if e.user_id == "adm-1")
+    assert aviso.payload["raised_by"] == "rider" and aviso.payload["alert_id"] == alerta.id
+    assert tipos(events, "p1") == [] and notifier.sent == []      # nem o passageiro nem o contato dele
+
+
+def test_sos_do_motoqueiro_repetido_nao_cria_outro_alerta(safety, session, mundo, events):
+    primeiro = safety.rider_sos(session, "r1", "ride-1", AGORA)
+    segundo = safety.rider_sos(session, "r1", "ride-1", AGORA + 60)
+    assert segundo.repeated is True and segundo.alert_id == primeiro.alert_id
+    assert session.query(SafetyAlertRow).count() == 1 and tipos(events, "adm-1") == ["sos"]
+    terceiro = safety.rider_sos(session, "r1", "ride-1", AGORA + 301)
+    assert terceiro.repeated is False and terceiro.alert_id != primeiro.alert_id
+    assert session.query(SafetyAlertRow).count() == 2
+
+
+def test_sos_do_motoqueiro_e_do_passageiro_sao_alertas_separados(safety, session, mundo, events):
+    do_passageiro = safety.sos(session, "p1", "ride-1", AGORA)
+    do_motoqueiro = safety.rider_sos(session, "r1", "ride-1", AGORA + 5)
+    assert do_motoqueiro.repeated is False and do_motoqueiro.alert_id != do_passageiro.alert_id
+    quem = dict(session.execute(select(SafetyAlertRow.id, SafetyAlertRow.raised_by)).all())
+    assert quem == {do_passageiro.alert_id: "passenger", do_motoqueiro.alert_id: "rider"}
+    repetido = safety.sos(session, "p1", "ride-1", AGORA + 10)          # o do passageiro continua o dele
+    assert repetido.repeated is True and repetido.alert_id == do_passageiro.alert_id
+    assert tipos(events, "adm-1") == ["sos", "sos"]
+
+
+def test_sos_do_motoqueiro_nao_mexe_no_aviso_aberto_do_passageiro(safety, session, mundo):
+    aberto = posicoes(safety, session, [pt(500, 3)] * 50)[0]
+    safety.rider_sos(session, "r1", "ride-1", AGORA + 300)
+    session.expire_all()
+    assert session.get(SafetyAlertRow, aberto.id).status == "open"
+
+
+def test_sos_do_motoqueiro_so_na_corrida_e_so_do_proprio_motoqueiro(safety, session, mundo):
+    add_rider(session, "r2", "+5575900000011", cpf="222.222.222-22", cnh="CNH0002", plate="BBB2B22")
+    with pytest.raises(NotYourRide):
+        safety.rider_sos(session, "r2", "ride-1", AGORA)
+    with pytest.raises(NotYourRide):
+        safety.rider_sos(session, "p1", "ride-1", AGORA)
+    with pytest.raises(LookupError):
+        safety.rider_sos(session, "r1", "ride-x", AGORA)
+    ride = repo.get_ride(session, "ride-1", for_update=True)
+    ride.state = type(ride.state).COMPLETED
+    repo.save_ride(session, ride)
+    with pytest.raises(InvalidTransition):
+        safety.rider_sos(session, "r1", "ride-1", AGORA)
+    assert session.query(SafetyAlertRow).count() == 0
+
+
 # --- administrador ----------------------------------------------------------------------------------
 
 
