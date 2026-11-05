@@ -32,4 +32,22 @@ void main() {
     expect(manifest, contains('android.intent.action.DIAL'));
     expect(manifest, contains('android:scheme="tel"'));
   });
+
+  test('o manifesto pede localização e serviço em primeiro plano (o GPS em segundo plano precisa)', () {
+    final manifest = File('android/app/src/main/AndroidManifest.xml')
+        .readAsStringSync();
+
+    for (final permission in [
+      'ACCESS_FINE_LOCATION',
+      'ACCESS_COARSE_LOCATION',
+      'FOREGROUND_SERVICE',
+      'FOREGROUND_SERVICE_LOCATION',
+    ]) {
+      expect(
+        manifest,
+        contains('<uses-permission android:name="android.permission.$permission"'),
+        reason: permission,
+      );
+    }
+  });
 }

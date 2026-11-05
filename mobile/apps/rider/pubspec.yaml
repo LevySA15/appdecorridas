@@ -15,6 +15,8 @@ dependencies:
   corrida_ui:
     path: ../../packages/corrida_ui
   image_picker: ^1.2.4
+  geolocator: ^14.0.1
+  wakelock_plus: ^1.8.2
 
 dev_dependencies:
   fake_async: ^1.3.3
