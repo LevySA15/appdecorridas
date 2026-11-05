@@ -16,6 +16,16 @@ enum LocationAccess {
   serviceOff,
 }
 
+/// O motoqueiro não pode ficar disponível sem GPS. A mensagem já diz o que fazer.
+class LocationUnavailable implements Exception {
+  const LocationUnavailable(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// De onde vem a posição do motoqueiro. Um GPS de verdade em produção; um de mentira (toque no mapa) para
 /// testar em casa. Mesmo molde do `PhotoSource`: as telas e o controlador nunca falam com o plugin.
 abstract class LocationSource {

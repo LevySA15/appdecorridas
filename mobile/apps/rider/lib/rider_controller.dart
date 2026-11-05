@@ -5,8 +5,10 @@ import 'package:corrida_ui/corrida_ui.dart'
     show Dial, cityCenter, dialNumber, emergencyNumber;
 import 'package:flutter/foundation.dart';
 
+import 'location_source.dart';
 import 'photo_source.dart';
 import 'registration_data.dart';
+import 'screen_awake.dart';
 
 /// A ponte única entre as telas e o pacote `corrida_core`: guarda a sessão, o último estado lido do
 /// servidor e a conexão de tempo real. As telas nunca importam `RiderApi`/`RealtimeClient` direto.
@@ -19,10 +21,16 @@ class RiderController extends ChangeNotifier {
     required this.realtimeBaseUrl,
     this.realtimeConnector,
     PhotoSource? photos,
+    LocationSource? location,
+    ScreenAwake? screenAwake,
+    bool realGps = false,
     this.positionEvery = const Duration(seconds: 4),
     this.dial = dialNumber,
   }) : sessionManager = session,
-       photos = photos ?? ImagePickerPhotoSource() {
+       photos = photos ?? ImagePickerPhotoSource(),
+       location = location ?? FakeLocationSource(),
+       screenAwake = screenAwake ?? NoScreenAwake(),
+       usesRealGps = realGps {
     _sessionSub = sessionManager.changes.listen(_onSessionChanged);
   }
 
@@ -34,6 +42,13 @@ class RiderController extends ChangeNotifier {
   final Uri realtimeBaseUrl;
   final WebSocketConnector? realtimeConnector;
   final PhotoSource photos;
+
+  /// De onde vem a posição (GPS de verdade ou o de mentira, por toque no mapa).
+  final LocationSource location;
+  final ScreenAwake screenAwake;
+
+  /// Com o GPS de verdade, a posição vem de [location] e [moveTo] não faz nada.
+  final bool usesRealGps;
   final Duration positionEvery;
 
   /// Abre o discador (o SOS chama o 190); nos testes entra um de mentira.
@@ -48,6 +63,11 @@ class RiderController extends ChangeNotifier {
   var _starting = true;
   var _position = cityCenter;
   Timer? _positionTimer;
+  StreamSubscription<Place>? _locationSub;
+  var _hasFix = false; // com o GPS de verdade: já chegou algum ponto?
+  var _awake = false;
+  var _positionRun = 0; // muda a cada ligar/desligar, para uma resposta atrasada não ligar o GPS à toa
+  String? _locationProblem;
 
   /// A chave que o servidor deu a cada foto já enviada, junto com a foto (por identidade): se o cadastro
   /// falha no meio, o segundo toque não sobe de novo o que já subiu (o servidor limita os envios por hora).
@@ -59,11 +79,17 @@ class RiderController extends ChangeNotifier {
   RiderState? get state => _state;
   Stream<ServerEvent> get events => _eventsOut.stream;
 
-  /// Onde o motoqueiro está no mapa de mentira (começa no centro da cidade).
+  /// Onde o motoqueiro está: o ponto do GPS, ou (no modo de mentira) o último toque no mapa, começando no
+  /// centro da cidade.
   Place get position => _position;
 
-  /// Muda a posição de mentira; ela vai para o servidor no próximo ciclo de envio.
+  /// Um aviso sobre o GPS enquanto o motoqueiro roda (sem permissão, sem sinal); `null` quando está tudo bem.
+  String? get locationProblem => _locationProblem;
+
+  /// Muda a posição de mentira; ela vai para o servidor no próximo ciclo de envio. Com o GPS de verdade
+  /// não faz nada: a posição é a do celular.
   void moveTo(Place place) {
+    if (usesRealGps) return;
     _position = place;
     notifyListeners();
   }
@@ -90,10 +116,10 @@ class RiderController extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    _stopPosition(); // ao tocar em "sair" o GPS e a tela acesa param já, sem esperar a rede
     await _disconnectRealtime();
     await sessionManager.signOut();
     _state = null;
-    _stopPosition();
     notifyListeners();
   }
 
@@ -116,19 +142,88 @@ class RiderController extends ChangeNotifier {
       return;
     }
     if (_positionTimer != null) return;
-    unawaited(_sendPosition());
+    _startPosition();
+  }
+
+  void _startPosition() {
+    _positionRun++;
+    _keepScreenOn(true);
     _positionTimer = Timer.periodic(
       positionEvery,
       (_) => unawaited(_sendPosition()),
     );
+    if (usesRealGps) {
+      unawaited(_startLocation(_positionRun));
+    } else {
+      unawaited(_sendPosition());
+    }
+  }
+
+  /// Pede (se preciso) e liga o GPS. O primeiro ponto é enviado na hora; depois o ciclo de [positionEvery]
+  /// repete o último, mesmo com o motoqueiro parado (o GPS só avisa quando ele anda).
+  Future<void> _startLocation(int run) async {
+    final access = await location.request();
+    if (run != _positionRun) return; // parou (ou recomeçou) enquanto a pessoa decidia
+    if (access != LocationAccess.granted) {
+      _locationProblem = _accessMessage(access);
+      notifyListeners();
+      return;
+    }
+    _locationSub = location.positions().listen(
+      _onFix,
+      onError: (Object _) {
+        _locationProblem = _noSignalMessage;
+        notifyListeners();
+      },
+      cancelOnError: false,
+    );
+  }
+
+  void _onFix(Place place) {
+    _position = place;
+    // o primeiro ponto, ou o primeiro depois de um problema, vai na hora; os outros esperam o ciclo
+    final sendNow = !_hasFix || _locationProblem != null;
+    _locationProblem = null;
+    _hasFix = true;
+    notifyListeners();
+    if (sendNow) unawaited(_sendPosition());
   }
 
   void _stopPosition() {
     _positionTimer?.cancel();
     _positionTimer = null;
+    _positionRun++;
+    unawaited(_locationSub?.cancel());
+    _locationSub = null;
+    _hasFix = false;
+    _locationProblem = null;
+    _keepScreenOn(false);
   }
 
+  void _keepScreenOn(bool on) {
+    if (_awake == on) return;
+    _awake = on;
+    unawaited(
+      screenAwake.keepOn(on).catchError((Object _) {
+        // sem tela acesa o app segue funcionando
+      }),
+    );
+  }
+
+  static const _noSignalMessage =
+      'Sem sinal de GPS. Você não aparece para os passageiros.';
+
+  static String _accessMessage(LocationAccess access) => switch (access) {
+    LocationAccess.denied =>
+      'Permita a localização do celular para ficar disponível.',
+    LocationAccess.deniedForever =>
+      'A localização está bloqueada. Libere nas configurações do celular para ficar disponível.',
+    LocationAccess.serviceOff => 'Ligue o GPS do celular para ficar disponível.',
+    LocationAccess.granted => '',
+  };
+
   Future<void> _sendPosition() async {
+    if (usesRealGps && !_hasFix) return; // nunca manda o centro da cidade no lugar do GPS
     try {
       await api.sendPosition(_position.lat, _position.lng);
     } on Exception {
@@ -152,7 +247,15 @@ class RiderController extends ChangeNotifier {
     return result;
   }
 
-  Future<void> goOnline() => _act(api.goOnline);
+  Future<void> goOnline() async {
+    if (usesRealGps) {
+      final access = await location.request();
+      if (access != LocationAccess.granted) {
+        throw LocationUnavailable(_accessMessage(access));
+      }
+    }
+    await _act(api.goOnline);
+  }
 
   Future<void> goOffline() => _act(api.goOffline);
 

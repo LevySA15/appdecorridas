@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:corrida_core/corrida_core.dart';
 import 'package:http/http.dart' as http;
+import 'package:rider/location_source.dart';
+import 'package:rider/screen_awake.dart';
 import 'package:stream_channel/stream_channel.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -76,3 +79,46 @@ const Map<String, Object?> estadoNaoCadastrado = {
   'queued_ride': null,
   'awaiting_payment': null,
 };
+
+/// GPS controlável: o teste decide a permissão, o que o GPS emite e confere quando foi ligado e desligado.
+class FakeGps implements LocationSource {
+  FakeGps({this.access = LocationAccess.granted});
+
+  LocationAccess access;
+  var requests = 0;
+  var listens = 0;
+  var cancels = 0;
+  StreamController<Place>? _current;
+
+  bool get listening => listens > cancels;
+
+  @override
+  Future<LocationAccess> request() async {
+    requests++;
+    return access;
+  }
+
+  @override
+  Stream<Place> positions() {
+    final controller = StreamController<Place>(
+      onListen: () => listens++,
+      onCancel: () => cancels++,
+    );
+    _current = controller;
+    return controller.stream;
+  }
+
+  void emit(Place place) => _current!.add(place);
+
+  void emitError(Object error) => _current!.addError(error);
+}
+
+/// Anota cada `keepOn` para o teste conferir quando a tela foi segurada e solta.
+class FakeScreenAwake implements ScreenAwake {
+  final calls = <bool>[];
+
+  bool? get last => calls.isEmpty ? null : calls.last;
+
+  @override
+  Future<void> keepOn(bool on) async => calls.add(on);
+}

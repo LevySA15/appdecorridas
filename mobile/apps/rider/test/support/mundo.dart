@@ -1,15 +1,23 @@
 import 'package:corrida_core/corrida_core.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:rider/location_source.dart';
 import 'package:rider/photo_source.dart';
 import 'package:rider/rider_controller.dart';
+import 'package:rider/screen_awake.dart';
 
 import 'fakes.dart';
 
 /// Servidor de mentira + controlador do motoqueiro ligados por um `MockClient`. Cada teste muda
 /// `stateJson`/`stateStatus` ou registra uma rota com [on]; `requests` guarda tudo que saiu.
 class Mundo {
-  Mundo({PhotoSource? photos, Duration? positionEvery}) {
+  Mundo({
+    PhotoSource? photos,
+    Duration? positionEvery,
+    LocationSource? location,
+    ScreenAwake? screenAwake,
+    bool realGps = false,
+  }) {
     api = ApiClient(baseUrl: baseUrl, httpClient: MockClient(_handle));
     final authApi = AuthApi(api);
     session = SessionManager(authApi, store, api);
@@ -19,6 +27,9 @@ class Mundo {
       api: RiderApi(api),
       realtimeBaseUrl: baseUrl,
       photos: photos,
+      location: location,
+      screenAwake: screenAwake,
+      realGps: realGps,
       positionEvery: positionEvery ?? const Duration(seconds: 4),
       dial: (numero) async {
         discados.add(numero);
