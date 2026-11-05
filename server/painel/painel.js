@@ -93,6 +93,19 @@ async function entrar() {
   } catch (erro) { aviso(erro.message); }
 }
 
+// Textos puros (quem usa passa por esc()): ficam em funções para dar para testar sem abrir o painel.
+function situacaoDoCadastro(r) {
+  if (r.status === "pending" && r.resubmissions > 0) {
+    return "pending · reenvio nº " + r.resubmissions + (r.previous_rejection ? " (recusado antes: " + r.previous_rejection + ")" : "");
+  }
+  return r.status + (r.reason ? ": " + r.reason : "");
+}
+function tipoDoAlerta(a) {
+  if (a.kind === "sos" && a.raised_by === "rider") return "sos · pelo motoqueiro";
+  if (a.kind === "sos" && a.raised_by === "passenger") return "sos · pelo passageiro";
+  return a.kind + (a.suspected_mock ? " (localização suspeita)" : "");
+}
+
 // ---------- telas ----------
 const VISOES = {
   async cadastros() {
@@ -100,7 +113,7 @@ const VISOES = {
     const lista = await api("/v1/admin/riders?status=" + encodeURIComponent(estado) + "&limit=100");
     const opcoes = ["pending", "approved", "blocked", "rejected"].map((s) => `<option value="${attr(s)}" ${raw(s === estado ? "selected" : "")}>${esc(s)}</option>`).join("");
     const linhas = lista.map((r) => [
-      esc(r.name), esc(r.phone), esc(r.plate + " · " + r.moto_model), esc(r.status + (r.reason ? ": " + r.reason : "")),
+      esc(r.name), esc(r.phone), esc(r.plate + " · " + r.moto_model), esc(situacaoDoCadastro(r)),
       esc((r.cnh_expires_on || "–") + " / " + (r.crlv_expires_on || "–")),
       raw(["selfie", "cnh", "crlv"].map((k) => botao("doc", r.rider_id, k, "", `data-kind="${attr(k)}"`)).join(" ")),
       raw([r.status === "pending" ? botao("rider-approve", r.rider_id, "Aprovar", "bom") + botao("rider-reject", r.rider_id, "Recusar", "perigo") : "",
@@ -156,7 +169,7 @@ const VISOES = {
     const abertos = await Promise.all(["open", "ok", "sos"].map((s) => api("/v1/admin/safety-alerts?limit=100&status=" + s)));
     const lista = abertos.flat();
     return tabela(["Quando", "Tipo", "Situação", "Passageiro", "Motoqueiro", "Placa", "Local", "Ações"], lista.map((a) => [
-      esc(when(a.created_at)), esc(a.kind + (a.suspected_mock ? " (localização suspeita)" : "")), esc(a.status), esc(a.passenger_name),
+      esc(when(a.created_at)), esc(tipoDoAlerta(a)), esc(a.status), esc(a.passenger_name),
       esc(a.rider_name), esc(a.plate), esc(a.lat == null ? "–" : a.lat.toFixed(5) + ", " + a.lng.toFixed(5)),
       raw(botao("alert-resolve", String(a.alert_id), "Resolver", "bom")),
     ]));
@@ -249,4 +262,4 @@ function comecar() {
 }
 
 if (typeof document !== "undefined") comecar();
-if (typeof module !== "undefined") module.exports = { esc, attr, money, when, ACOES, CANCELADO };
+if (typeof module !== "undefined") module.exports = { esc, attr, money, when, ACOES, CANCELADO, situacaoDoCadastro, tipoDoAlerta };

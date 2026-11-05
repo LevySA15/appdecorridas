@@ -117,6 +117,7 @@ a entrada, só o motoqueiro; a recarga, só o passageiro dono.
 | `POST /v1/rider/rides/{id}/arrive` · `/helmet` · `/complete` | | a corrida |
 | `POST /v1/rider/rides/{id}/start` | `{"pin": "1234"}` | a corrida. 422 `wrong_pin`; depois de 5 erros em 10 min, 429. |
 | `POST /v1/rider/rides/{id}/cash-received` | | 204 (recebi o dinheiro na mão) |
+| `POST /v1/rider/rides/{id}/sos` | | `{"alert_id","repeated","emergency_number": "190"}`. Vale com a corrida aceita, no ponto ou em andamento; 403 se a corrida não é dele, 409 `invalid_state` fora da corrida. Avisa **só os administradores** (o passageiro não é avisado: o perigo pode ser ele). Repetir em 5 minutos devolve o mesmo alerta com `repeated: true`. O app liga para o 190. |
 
 **Corrida (visão do motoqueiro):** `ride_id, state, queued, price_cents, fee_cents, method, pix_paid, helmet_confirmed,
 passenger` (`{"name"}`, só o primeiro nome), `pickup, destination, distance_m` e `end_payment`
@@ -136,13 +137,13 @@ motoqueiro. O passageiro vê só a `selfie`, de um motoqueiro que já aceitou um
 
 | Rota | |
 |---|---|
-| `GET /v1/admin/riders?status=pending\|approved\|blocked\|rejected&limit&offset` | fila de cadastros |
+| `GET /v1/admin/riders?status=pending\|approved\|blocked\|rejected&limit&offset` | fila de cadastros: `rider_id, name, phone, cpf, plate, moto_model, status, reason, cnh_expires_on, crlv_expires_on, documents, resubmissions, previous_rejection` (`resubmissions` = quantas vezes o cadastro recusado foi reenviado; `previous_rejection` = o motivo da última recusa, enquanto o reenvio espera). Fotos de cadastro recusado há mais de 30 dias são apagadas: `documents` deixa de listá-las. |
 | `POST /v1/admin/riders/{id}/approve` · `/unblock` | 204 |
 | `POST /v1/admin/riders/{id}/reject` · `/block` | `{"reason"}` → 204 |
 | `GET /v1/admin/withdrawals?limit&offset` | saques de saldo por Pix, o mais novo primeiro: `withdrawal_id, passenger_id, passenger_name, amount_cents, key_kind, key_masked, created_at` (nunca a chave inteira) |
 | `GET /v1/admin/appeals?status=open\|accepted\|rejected&limit&offset` | recursos da taxa de cancelamento, o mais antigo primeiro: `ride_id, passenger_id, passenger_name, rider_name, fee_cents, reason, created_at, appeal_state, appeal_text, appealed_at, decided_at, decision_note` |
 | `POST /v1/admin/appeals/{ride_id}/decide` | `{"decision": "accept"\|"reject", "note"?}` → 204. 409 `appeal_not_allowed` se não está aberto |
-| `GET /v1/admin/safety-alerts?status=open\|ok\|sos\|resolved` | alertas com nomes, placa e posição |
+| `GET /v1/admin/safety-alerts?status=open\|ok\|sos\|resolved` | alertas com nomes, placa e posição; `raised_by`: `system` (aviso automático), `passenger` ou `rider` (SOS) |
 | `POST /v1/admin/safety-alerts/{id}/resolve` | `{"note"?}` → 204 |
 
 ### Rotas do painel do dono (plano 4A)
@@ -156,7 +157,8 @@ pending_fees_cents, rides_by_state, ledger_balanced`), `GET /v1/admin/config` (t
 Escritas: `POST /v1/admin/passengers/{id}/block` (`{"reason"}`) e `/unblock` → 204; `PUT /v1/admin/config/{key}` (o objeto da chave) → 204, 422 `invalid`
 com a frase do erro se o valor não faz sentido, 404 se a chave não existe; vale na hora neste processo. **Toda escrita do administrador** (aprovar,
 recusar, bloquear e liberar motoqueiro e passageiro, resolver alerta, decidir recurso, gravar parâmetro) grava uma linha em `admin_actions` na mesma
-transação. O site fica em `GET /painel` (HTML e JavaScript, sem dado; os dados vêm destas rotas, com o token do administrador).
+transação. A liberação **automática** por documento renovado também entra nesse registro, como `rider.auto_unblock`, tendo o próprio
+motoqueiro como autor (`admin_id`/`admin_name`), porque não há administrador nessa ação. O site fica em `GET /painel` (HTML e JavaScript, sem dado; os dados vêm destas rotas, com o token do administrador).
 
 ## Aviso do provedor de pagamento
 
@@ -217,7 +219,7 @@ Com **4408**, reconecte e peça o estado. Com **4401** o token não vale: entre 
 | `rider_approved` · `rider_rejected` · `rider_blocked` · `rider_unblocked` · `documents_expired` | motoqueiro | `reason` quando houver |
 | `safety_check` | passageiro | `ride_id, alert_id, kind` (`stopped`, `off_route` ou `no_signal`): "está tudo bem?" |
 | `sos_sent` | passageiro | `alert_id, contact_registered, contact_notified` |
-| `safety_alert` · `safety_ok` · `sos` · `mock_location_suspected` | administradores | dados do alerta e da corrida (`kind`: `stopped`, `off_route`, `no_signal` ou `sos`) |
+| `safety_alert` · `safety_ok` · `sos` · `mock_location_suspected` | administradores | dados do alerta e da corrida (`kind`: `stopped`, `off_route`, `no_signal` ou `sos`; o `sos` traz `raised_by`: `passenger` ou `rider`) |
 
 ## Códigos de erro
 

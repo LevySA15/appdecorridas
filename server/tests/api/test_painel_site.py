@@ -82,3 +82,48 @@ const p = require({str(JS)!r});
 
 def test_sair_encerra_a_sessao_no_servidor():
     assert "/v1/auth/logout" in JS.read_text(encoding="utf-8")
+
+
+def test_painel_mostra_o_reenvio_do_cadastro_e_quem_pediu_o_alerta():
+    fonte = JS.read_text(encoding="utf-8")
+    assert "previous_rejection" in fonte and "resubmissions" in fonte and "raised_by" in fonte
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar as funções do painel")
+@pytest.mark.parametrize(
+    "item, esperado",
+    [
+        ({"status": "pending", "reason": None, "resubmissions": 0, "previous_rejection": None}, "pending"),
+        (
+            {"status": "pending", "reason": None, "resubmissions": 2, "previous_rejection": "Foto <b>ruim</b>"},
+            "pending · reenvio nº 2 (recusado antes: Foto <b>ruim</b>)",
+        ),
+        ({"status": "rejected", "reason": "CNH vencida", "resubmissions": 1, "previous_rejection": None}, "rejected: CNH vencida"),
+    ],
+)
+def test_texto_da_situacao_do_cadastro(item, esperado):
+    import json
+
+    codigo = f"const p = require({str(JS)!r}); console.log(p.situacaoDoCadastro({json.dumps(item)}));"
+    saida = subprocess.run(["node", "-e", codigo], capture_output=True, text=True)
+    assert saida.returncode == 0, saida.stderr
+    assert saida.stdout.strip() == esperado
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar as funções do painel")
+@pytest.mark.parametrize(
+    "alerta, esperado",
+    [
+        ({"kind": "stopped", "suspected_mock": False, "raised_by": "system"}, "stopped"),
+        ({"kind": "stopped", "suspected_mock": True, "raised_by": "system"}, "stopped (localização suspeita)"),
+        ({"kind": "sos", "suspected_mock": False, "raised_by": "passenger"}, "sos · pelo passageiro"),
+        ({"kind": "sos", "suspected_mock": False, "raised_by": "rider"}, "sos · pelo motoqueiro"),
+    ],
+)
+def test_texto_do_tipo_do_alerta(alerta, esperado):
+    import json
+
+    codigo = f"const p = require({str(JS)!r}); console.log(p.tipoDoAlerta({json.dumps(alerta)}));"
+    saida = subprocess.run(["node", "-e", codigo], capture_output=True, text=True)
+    assert saida.returncode == 0, saida.stderr
+    assert saida.stdout.strip() == esperado
