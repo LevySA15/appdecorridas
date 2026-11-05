@@ -1,15 +1,24 @@
 import asyncio
 import datetime as dt
 import logging
+import os
 import time
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app import scheduler as scheduler_module
 from app.api.app import create_app
 from app.db.models import RiderProfileRow
 from app.domain.clock import local_date
-from app.scheduler import POSITION_MAX_AGE_S, Scheduler, prune_positions, run_daily_jobs, sweep_once
+from app.scheduler import (
+    POSITION_MAX_AGE_S,
+    Scheduler,
+    prune_positions,
+    run_daily_jobs,
+    run_daily_purge,
+    sweep_once,
+)
 from app.services.payments import PaymentService
 from app.services.riders import RiderService
 from tests.api.helpers import login, online_rider, rider_phone
@@ -116,6 +125,94 @@ def test_limpeza_tira_do_mapa_quem_some_sem_avisar(runtime, clock):
     assert runtime.positions.get("sumiu") is None and runtime.positions.get("firme") is not None
 
 
+# --- limpeza diária das fotos (plano 4F) ------------------------------------------------------------------
+
+JPEG = b"\xff\xd8\xff\xe0" + b"0" * 64
+
+
+def recusado_antigo(session, runtime, clock, dias=31):
+    """Um cadastro recusado há `dias` dias, com as três fotos no disco, gravado no banco."""
+    rider_id = online_rider(session, runtime, clock, 1)
+    perfil = session.get(RiderProfileRow, rider_id)
+    perfil.status, perfil.online, perfil.rejected_at = "rejected", False, clock.now - dias * 86_400
+    perfil.selfie_key = runtime.documents.save(rider_id, "selfie", JPEG)
+    perfil.cnh_photo_key = runtime.documents.save(rider_id, "cnh", JPEG)
+    perfil.crlv_key = runtime.documents.save(rider_id, "crlv", JPEG)
+    session.commit()
+    return perfil
+
+
+def envelhecer(runtime, chave, clock, segundos):
+    caminho = runtime.documents.root / chave
+    os.utime(caminho, (clock.now - segundos, clock.now - segundos))
+
+
+def test_limpeza_diaria_apaga_foto_de_recusado_antigo_e_arquivo_sem_dono_uma_vez_por_dia(runtime, session, clock):
+    perfil = recusado_antigo(session, runtime, clock)
+    fotos = [perfil.selfie_key, perfil.cnh_photo_key, perfil.crlv_key]
+    orfao = runtime.documents.save("ninguem", "selfie", JPEG)
+    envelhecer(runtime, orfao, clock, 2 * 86_400)
+    for chave in fotos:
+        envelhecer(runtime, chave, clock, 40 * 86_400)
+    relatorio = run_daily_purge(runtime)
+    assert (relatorio.rejected, relatorio.orphans) == (3, 1)
+    assert [item.key for item in runtime.documents.list_all()] == []
+    session.expire_all()
+    assert session.get(RiderProfileRow, perfil.user_id).selfie_key is None
+    assert run_daily_purge(runtime) is None                         # já rodou hoje
+    clock.advance(86_400)
+    relatorio = run_daily_purge(runtime)
+    assert (relatorio.rejected, relatorio.orphans) == (0, 0)
+
+
+def test_limpeza_diaria_nao_mexe_em_cadastro_recusado_recente(runtime, session, clock):
+    perfil = recusado_antigo(session, runtime, clock, dias=5)
+    relatorio = run_daily_purge(runtime)
+    assert (relatorio.rejected, relatorio.orphans) == (0, 0)
+    assert runtime.documents.exists(perfil.selfie_key)
+
+
+def test_se_a_limpeza_diaria_falhar_ela_tenta_de_novo_na_proxima_volta(runtime, session, clock, monkeypatch):
+    recusado_antigo(session, runtime, clock)
+    chamadas = []
+    original = scheduler_module.release_rejected_photos
+
+    def falha_na_primeira(*args, **kwargs):
+        chamadas.append(1)
+        if len(chamadas) == 1:
+            raise RuntimeError("banco caiu")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(scheduler_module, "release_rejected_photos", falha_na_primeira)
+    with pytest.raises(RuntimeError):
+        run_daily_purge(runtime)
+    assert run_daily_purge(runtime).rejected == 3
+
+
+def test_arquivo_que_nao_apaga_nao_derruba_a_limpeza_e_sai_no_dia_seguinte(runtime, session, clock, monkeypatch):
+    perfil = recusado_antigo(session, runtime, clock)
+    for chave in (perfil.selfie_key, perfil.cnh_photo_key, perfil.crlv_key):
+        envelhecer(runtime, chave, clock, 40 * 86_400)
+    real = runtime.documents.delete
+    quebrou = []
+    disco_travado = [True]
+
+    def delete_que_falha_no_primeiro_arquivo(chave):
+        if not quebrou:
+            quebrou.append(chave)
+        if chave == quebrou[0] and disco_travado[0]:
+            raise OSError("sem permissão")
+        real(chave)
+
+    monkeypatch.setattr(runtime.documents, "delete", delete_que_falha_no_primeiro_arquivo)
+    relatorio = run_daily_purge(runtime)
+    assert (relatorio.rejected, relatorio.orphans) == (2, 0)
+    assert [item.key for item in runtime.documents.list_all()] == quebrou        # só o que falhou ficou no disco
+    disco_travado[0] = False
+    clock.advance(86_400)
+    assert run_daily_purge(runtime).orphans == 1 and runtime.documents.list_all() == []
+
+
 # --- o agendador ----------------------------------------------------------------------------------------
 
 
@@ -123,6 +220,7 @@ def test_cada_volta_varre_e_a_manutencao_so_roda_de_minuto_em_minuto(runtime, cl
     chamadas = []
     monkeypatch.setattr("app.scheduler.sweep_once", lambda rt: chamadas.append("varre"))
     monkeypatch.setattr("app.scheduler.run_daily_jobs", lambda rt: chamadas.append("diaria"))
+    monkeypatch.setattr("app.scheduler.run_daily_purge", lambda rt: chamadas.append("fotos"))
     monkeypatch.setattr("app.scheduler.prune_positions", lambda rt: chamadas.append("limpa"))
     agendador = Scheduler(runtime)
     agendador.tick()
@@ -130,7 +228,7 @@ def test_cada_volta_varre_e_a_manutencao_so_roda_de_minuto_em_minuto(runtime, cl
     agendador.tick()
     clock.advance(58)
     agendador.tick()
-    assert chamadas == ["varre", "diaria", "limpa", "varre", "varre", "diaria", "limpa"]
+    assert chamadas == ["varre", "diaria", "fotos", "limpa", "varre", "varre", "diaria", "fotos", "limpa"]
 
 
 def test_uma_volta_que_estoura_nao_derruba_o_agendador(runtime, caplog):

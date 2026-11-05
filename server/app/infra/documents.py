@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import re
 import secrets
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -43,12 +44,24 @@ def sniff_image(data: bytes) -> tuple[str, str]:
     raise UploadError(415, "not_an_image", "Envie uma foto (JPEG, PNG ou WebP).")
 
 
+@dataclass(frozen=True)
+class StoredDocument:
+    key: str
+    modified_at: float      # época Unix da última mudança do arquivo
+
+
 class DocumentStore(Protocol):
     def save(self, owner_id: str, kind: str, data: bytes) -> str: ...
 
     def read(self, key: str) -> tuple[bytes, str]: ...
 
     def exists(self, key: str) -> bool: ...
+
+    def list_all(self) -> list[StoredDocument]:
+        """Todas as fotos guardadas (só as nossas: envio pela metade e arquivos estranhos ficam de fora)."""
+
+    def delete(self, key: str) -> None:
+        """Apaga a foto. Chave inexistente ou inválida não dá erro e não toca em nada."""
 
 
 class LocalDocumentStore:
@@ -85,3 +98,21 @@ class LocalDocumentStore:
         if path is None or not path.is_file():
             raise LookupError(f"documento {key} não encontrado")
         return path.read_bytes(), _MEDIA[path.suffix[1:]]
+
+    def list_all(self) -> list[StoredDocument]:
+        found: list[StoredDocument] = []
+        if not self.root.is_dir():
+            return found
+        for owner in sorted(self.root.iterdir()):
+            if not owner.is_dir():
+                continue
+            for path in sorted(owner.iterdir()):
+                key = f"{owner.name}/{path.name}"
+                if _KEY.fullmatch(key) and path.is_file():
+                    found.append(StoredDocument(key, path.stat().st_mtime))
+        return found
+
+    def delete(self, key: str) -> None:
+        path = self._path(key)
+        if path is not None:
+            path.unlink(missing_ok=True)

@@ -59,3 +59,45 @@ def test_dono_e_tipo_invalidos_sao_recusados(tmp_path):
         loja.save("../fora", "selfie", JPEG)
     with pytest.raises(ValueError):
         loja.save("rider-1", "senha", JPEG)
+
+
+# --- plano 4F: listar e apagar -----------------------------------------------------------------
+
+
+def test_lista_os_arquivos_com_a_hora_da_ultima_mudanca(tmp_path):
+    loja = LocalDocumentStore(tmp_path)
+    a = loja.save("rider-1", "selfie", JPEG)
+    b = loja.save("rider-2", "cnh", PNG)
+    os.utime(tmp_path / a, (1_000.0, 1_000.0))
+    achados = {item.key: item.modified_at for item in loja.list_all()}
+    assert achados.keys() == {a, b} and achados[a] == 1_000.0 and achados[b] > 1_000.0
+
+
+def test_lista_ignora_o_que_nao_e_foto_nossa(tmp_path):
+    loja = LocalDocumentStore(tmp_path)
+    chave = loja.save("rider-1", "selfie", JPEG)
+    (tmp_path / "rider-1" / "selfie-0123456789abcdef.jpg.part").write_bytes(b"x")     # envio pela metade
+    (tmp_path / "rider-1" / "anotacao.txt").write_text("oi")
+    (tmp_path / "solto.jpg").write_bytes(JPEG)                                         # fora de uma pasta de dono
+    assert [item.key for item in loja.list_all()] == [chave]
+
+
+def test_lista_de_pasta_que_nao_existe_e_vazia(tmp_path):
+    assert LocalDocumentStore(tmp_path / "nada").list_all() == []
+
+
+def test_apaga_o_arquivo_e_apagar_de_novo_nao_da_erro(tmp_path):
+    loja = LocalDocumentStore(tmp_path)
+    chave = loja.save("rider-1", "selfie", JPEG)
+    loja.delete(chave)
+    assert loja.exists(chave) is False
+    loja.delete(chave)
+
+
+@pytest.mark.parametrize("chave", ["../segredo", "rider-1/../../etc/passwd", "/etc/passwd", "", "a/b/c.jpg"])
+def test_apagar_chave_estranha_nao_toca_em_nada(tmp_path, chave):
+    (tmp_path / "importante.txt").write_text("fica")
+    loja = LocalDocumentStore(tmp_path / "docs")
+    loja.save("rider-1", "selfie", JPEG)
+    loja.delete(chave)
+    assert (tmp_path / "importante.txt").read_text() == "fica" and len(loja.list_all()) == 1

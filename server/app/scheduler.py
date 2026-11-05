@@ -7,12 +7,19 @@ from collections.abc import Callable
 
 from app.domain.clock import local_date
 from app.runtime import Runtime
+from app.services.document_cleanup import (
+    PurgeReport,
+    delete_unreferenced,
+    referenced_keys,
+    release_rejected_photos,
+)
 from app.services.sweeps import SweepReport
 
 log = logging.getLogger("app.scheduler")
 
 POSITION_MAX_AGE_S = 600.0          # motoqueiro sem mandar posição há 10 minutos sai do mapa
 DAILY_DOCS_MARK = "docs"
+DAILY_PURGE_MARK = "purge"
 
 
 def sweep_once(runtime: Runtime) -> SweepReport:
@@ -44,6 +51,32 @@ def run_daily_jobs(runtime: Runtime) -> int | None:
     return len(blocked)
 
 
+def run_daily_purge(runtime: Runtime) -> PurgeReport | None:
+    """Apaga as fotos de documentos sem uso (cadastro recusado há 30 dias e arquivos sem dono), uma vez por dia.
+
+    O banco grava primeiro e os arquivos são apagados depois do commit: se algo falhar no meio, sobra arquivo
+    (que sai no dia seguinte como "sem dono"), nunca cadastro apontando para foto que sumiu."""
+    today = local_date(runtime.clock())
+    if runtime.job_marks.get(DAILY_PURGE_MARK) == today.isoformat():
+        return None
+
+    def work(unit):
+        released = release_rejected_photos(unit.session, unit.now)
+        return released, referenced_keys(unit.session), unit.now
+
+    released, referenced, now = runtime.run(work)
+    rejected = 0
+    for key in released:
+        try:
+            runtime.documents.delete(key)
+            rejected += 1
+        except Exception:
+            log.warning("não consegui apagar %s; tento de novo amanhã", key, exc_info=True)
+    report = PurgeReport(rejected, delete_unreferenced(runtime.documents, referenced, now))
+    runtime.job_marks.set(DAILY_PURGE_MARK, today.isoformat())
+    return report
+
+
 def prune_positions(runtime: Runtime) -> int:
     return runtime.positions.prune(runtime.clock(), POSITION_MAX_AGE_S)
 
@@ -69,6 +102,7 @@ class Scheduler:
         if self._last_maintenance is None or now - self._last_maintenance >= self.maintenance_every_s:
             self._last_maintenance = now
             self._safely("tarefa diária", lambda: run_daily_jobs(self.runtime))
+            self._safely("limpeza de fotos", lambda: run_daily_purge(self.runtime))
             self._safely("limpeza de posições", lambda: prune_positions(self.runtime))
 
     async def run(self) -> None:
