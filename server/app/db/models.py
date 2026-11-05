@@ -64,6 +64,9 @@ class RiderProfileRow(Base):
     approved_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     online: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     rejected_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    rejected_at: Mapped[float | None] = mapped_column(Float(53), nullable=True)
+    previous_rejection: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    resubmissions: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     selfie_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
     cnh_photo_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
     crlv_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -346,6 +349,7 @@ class SafetyAlertRow(Base):
     __table_args__ = (
         CheckConstraint("kind IN ('stopped','off_route','sos','no_signal')", name="alert_kind_valid"),
         CheckConstraint("status IN ('open','ok','sos','resolved')", name="alert_status_valid"),
+        CheckConstraint("raised_by IN ('system','passenger','rider')", name="alert_raised_by_valid"),
         Index("ix_safety_alerts_status", "status"),
         Index("ix_safety_alerts_ride_id", "ride_id"),
     )
@@ -355,6 +359,7 @@ class SafetyAlertRow(Base):
     kind: Mapped[str] = mapped_column(String(10))
     status: Mapped[str] = mapped_column(String(10), default="open", server_default="open")
     suspected_mock: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    raised_by: Mapped[str] = mapped_column(String(10), default="system", server_default="system")
     lat: Mapped[float | None] = mapped_column(Float(53), nullable=True)
     lng: Mapped[float | None] = mapped_column(Float(53), nullable=True)
     created_at: Mapped[float] = mapped_column(Float(53))
