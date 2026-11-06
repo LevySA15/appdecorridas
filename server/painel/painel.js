@@ -15,7 +15,7 @@ function when(segundos) { return segundos ? new Date(segundos * 1000).toLocaleSt
 const CANCELADO = Symbol("cancelado");   // o administrador desistiu no prompt: nada foi feito
 
 const TELAS = {
-  cadastros: "Cadastros", corridas: "Corridas", passageiros: "Passageiros", dinheiro: "Dinheiro",
+  cadastros: "Cadastros", corridas: "Corridas", passageiros: "Passageiros", dinheiro: "Dinheiro", saques: "Saques",
   devedores: "Devedores", recursos: "Recursos", alertas: "Alertas", parametros: "Parâmetros", registro: "Registro",
 };
 let telaAtual = "cadastros";
@@ -156,6 +156,12 @@ const VISOES = {
       cartao("...das quais taxas de cancelamento", money(d.pending_fees_cents)), cartao("Livro-caixa fecha", d.ledger_balanced ? "sim" : "NÃO"),
     ].join(""))}</div><h3>Corridas por estado</h3><pre>${esc(JSON.stringify(d.rides_by_state, null, 2))}</pre>`;
   },
+  async saques() {
+    const lista = await api("/v1/admin/withdrawals?limit=100");
+    return tabela(["Quando", "Passageiro", "Valor", "Chave"], lista.map((s) => [
+      esc(when(s.created_at)), esc(s.passenger_name), esc(money(s.amount_cents)), esc(s.key_kind + " " + s.key_masked),
+    ]));
+  },
   async devedores() {
     const d = await api("/v1/admin/debtors");
     return "<h3>Motoqueiros</h3>" + tabela(["Nome", "Telefone", "Deve", "Reservado"], d.riders.map((r) => [esc(r.name), esc(r.phone), esc(money(r.cash_debt_cents)), esc(money(r.debt_reserved_cents))])) +
@@ -265,4 +271,4 @@ function comecar() {
 }
 
 if (typeof document !== "undefined") comecar();
-if (typeof module !== "undefined") module.exports = { esc, attr, money, when, ACOES, CANCELADO, situacaoDoCadastro, tipoDoAlerta, fotosDoCadastro };
+if (typeof module !== "undefined") module.exports = { esc, attr, money, when, ACOES, CANCELADO, TELAS, VISOES, situacaoDoCadastro, tipoDoAlerta, fotosDoCadastro };

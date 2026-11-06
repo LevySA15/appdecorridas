@@ -1,4 +1,5 @@
 """O site do painel: servido sem login, sem dado nenhum, e coerente com a API que ele chama."""
+import json
 import re
 import shutil
 import subprocess
@@ -145,3 +146,34 @@ def test_so_mostra_botao_das_fotos_que_ainda_existem(item, esperado):
     saida = subprocess.run(["node", "-e", codigo], capture_output=True, text=True)
     assert saida.returncode == 0, saida.stderr
     assert json.loads(saida.stdout) == esperado
+
+
+def _rodar_node(codigo: str) -> str:
+    saida = subprocess.run(["node", "-e", codigo], capture_output=True, text=True)
+    assert saida.returncode == 0, saida.stderr
+    return saida.stdout.strip()
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar as telas")
+def test_tela_de_saques_mostra_valor_e_chave_mascarada_sem_deixar_texto_virar_html():
+    codigo = f"""
+global.document = undefined;
+global.sessionStorage = {{ getItem: () => 't', setItem() {{}}, removeItem() {{}} }};
+const lista = [{{ withdrawal_id: 'w1', passenger_id: 'p1', passenger_name: '<b>Ana</b>', amount_cents: 2500,
+                  key_kind: 'phone', key_masked: '***-0001', created_at: 1800000000 }}];
+let chamado = null;
+global.fetch = async (url) => {{ chamado = url; return {{ status: 200, ok: true, json: async () => lista }}; }};
+const p = require({str(JS)!r});
+(async () => {{
+  const html = await p.VISOES.saques();
+  lista.length = 0;
+  const vazio = await p.VISOES.saques();
+  console.log(JSON.stringify({{ chamado, html, vazio, telas: Object.keys(p.TELAS) }}));
+}})();
+"""
+    r = json.loads(_rodar_node(codigo))
+    assert r["chamado"].startswith("/v1/admin/withdrawals")
+    assert "R$ 25,00" in r["html"] and "***-0001" in r["html"] and "Chave" in r["html"]
+    assert "&lt;b&gt;Ana&lt;/b&gt;" in r["html"] and "<b>Ana</b>" not in r["html"]
+    assert "Nada por aqui." in r["vazio"]
+    assert r["telas"].index("saques") == r["telas"].index("dinheiro") + 1
