@@ -97,6 +97,7 @@ class RideRow(Base):
         Index("ix_rides_state", "state"),
         Index("ix_rides_passenger_state", "passenger_id", "state"),
         Index("ix_rides_rider_state", "rider_id", "state"),
+        Index("ix_rides_created_at", "created_at"),                 # listas do painel, da mais antiga à mais nova
         Index(
             "ride_one_open_per_passenger", "passenger_id", unique=True,
             postgresql_where=text("state NOT IN ('completed','cancelled','no_rider')"),
@@ -336,6 +337,7 @@ class RideOfferRow(Base):
 
 class RideEventRow(Base):
     __tablename__ = "ride_events"
+    __table_args__ = (Index("ix_ride_events_kind_ride", "kind", "ride_id"),)     # varredura de "sem sinal", a cada 3 s
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     ride_id: Mapped[str] = mapped_column(String(40), ForeignKey("rides.id"), index=True)
