@@ -165,6 +165,16 @@ def test_limpeza_diaria_apaga_foto_de_recusado_antigo_e_arquivo_sem_dono_uma_vez
     assert (relatorio.rejected, relatorio.orphans) == (0, 0)
 
 
+def test_limpeza_diaria_apaga_envio_de_foto_pela_metade_parado_ha_horas(runtime, session, clock):
+    dono = runtime.documents.root / "r9"
+    dono.mkdir(parents=True)
+    velho = dono / "selfie-cccccccccccccccc.jpg.part"
+    velho.write_bytes(b"x")
+    os.utime(velho, (clock.now - 7200, clock.now - 7200))
+    relatorio = run_daily_purge(runtime)
+    assert relatorio.partials == 1 and not velho.exists()
+
+
 def test_limpeza_diaria_nao_mexe_em_cadastro_recusado_recente(runtime, session, clock):
     perfil = recusado_antigo(session, runtime, clock, dias=5)
     relatorio = run_daily_purge(runtime)

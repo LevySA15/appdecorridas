@@ -101,3 +101,33 @@ def test_apagar_chave_estranha_nao_toca_em_nada(tmp_path, chave):
     loja.save("rider-1", "selfie", JPEG)
     loja.delete(chave)
     assert (tmp_path / "importante.txt").read_text() == "fica" and len(loja.list_all()) == 1
+
+
+def test_apaga_so_os_envios_pela_metade_parados_ha_mais_de_uma_hora(tmp_path):
+    agora = 1_800_000_000.0
+    store = LocalDocumentStore(tmp_path)
+    boa = store.save("r1", "selfie", JPEG)
+    pasta = tmp_path / "r1"
+    velho = pasta / "cnh-aaaaaaaaaaaaaaaa.jpg.part"
+    novo = pasta / "crlv-bbbbbbbbbbbbbbbb.jpg.part"
+    notas = pasta / "notas.txt"
+    for arquivo, idade in ((velho, 7200), (novo, 600), (notas, 7200)):
+        arquivo.write_bytes(b"x")
+        os.utime(arquivo, (agora - idade, agora - idade))
+    assert store.delete_stale_partials(agora) == 1
+    assert not velho.exists() and novo.exists() and notas.exists() and store.exists(boa)
+
+
+def test_envios_pela_metade_sem_pasta_ou_em_pasta_estranha_nao_dao_erro_nem_sao_tocados(tmp_path):
+    agora = 1_800_000_000.0
+    assert LocalDocumentStore(tmp_path / "nao-existe").delete_stale_partials(agora) == 0
+    estranha = tmp_path / "pasta com espaço"
+    estranha.mkdir()
+    solta = estranha / "x.jpg.part"
+    solta.write_bytes(b"x")
+    os.utime(solta, (agora - 7200, agora - 7200))
+    na_raiz = tmp_path / "y.jpg.part"
+    na_raiz.write_bytes(b"x")
+    os.utime(na_raiz, (agora - 7200, agora - 7200))
+    assert LocalDocumentStore(tmp_path).delete_stale_partials(agora) == 0
+    assert solta.exists() and na_raiz.exists()

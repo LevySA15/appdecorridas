@@ -28,6 +28,7 @@ _PHOTO_COLUMNS = ("selfie_key", "cnh_photo_key", "crlv_key")
 class PurgeReport:
     rejected: int       # fotos de cadastro recusado apagadas
     orphans: int        # fotos sem dono apagadas
+    partials: int = 0   # envios pela metade (arquivos .part parados há mais de 1 hora) apagados
 
 
 def release_rejected_photos(session: Session, now: float) -> list[str]:

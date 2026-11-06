@@ -72,7 +72,13 @@ def run_daily_purge(runtime: Runtime) -> PurgeReport | None:
             rejected += 1
         except Exception:
             log.warning("não consegui apagar %s; tento de novo amanhã", key, exc_info=True)
-    report = PurgeReport(rejected, delete_unreferenced(runtime.documents, referenced, now))
+    orphans = delete_unreferenced(runtime.documents, referenced, now)
+    try:
+        partials = runtime.documents.delete_stale_partials(now)
+    except Exception:
+        log.warning("não consegui limpar os envios pela metade; tento de novo amanhã", exc_info=True)
+        partials = 0
+    report = PurgeReport(rejected, orphans, partials)
     runtime.job_marks.set(DAILY_PURGE_MARK, today.isoformat())
     return report
 

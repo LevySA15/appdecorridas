@@ -63,6 +63,10 @@ class DocumentStore(Protocol):
     def delete(self, key: str) -> None:
         """Apaga a foto. Chave inexistente ou inválida não dá erro e não toca em nada."""
 
+    def delete_stale_partials(self, now: float, older_than_s: float = 3600.0) -> int:
+        """Apaga os envios pela metade (`*.part`) parados há mais de `older_than_s` e devolve quantos. Só olha as
+        pastas de dono válidas; envio recente fica (pode estar sendo gravado agora)."""
+
 
 class LocalDocumentStore:
     def __init__(self, root: Path) -> None:
@@ -116,3 +120,19 @@ class LocalDocumentStore:
         path = self._path(key)
         if path is not None:
             path.unlink(missing_ok=True)
+
+    def delete_stale_partials(self, now: float, older_than_s: float = 3600.0) -> int:
+        deleted = 0
+        if not self.root.is_dir():
+            return deleted
+        for owner in sorted(self.root.iterdir()):
+            if not owner.is_dir() or not _OWNER.fullmatch(owner.name):
+                continue
+            for path in sorted(owner.glob("*.part")):
+                try:
+                    if path.is_file() and path.stat().st_mtime <= now - older_than_s:
+                        path.unlink(missing_ok=True)
+                        deleted += 1
+                except OSError:
+                    continue            # um arquivo teimoso não impede os outros; amanhã tem outra volta
+        return deleted
