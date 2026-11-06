@@ -285,3 +285,73 @@ global.document = {{ title: 'Painel do dono', getElementById: (id) => caixas[id]
     assert "urgente" in r["classeDepoisDoSegundo"]
     assert r["recarregou"] is True and r["naoRecarregouOutraTela"] is True
     assert r["depois"] == {"escondida": True, "titulo": "Painel do dono"}
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar o formulário de parâmetros")
+@pytest.mark.parametrize(
+    "tipo, valor, texto",
+    [("cents", 150, "1,50"), ("cents", 5000, "50,00"), ("cents", 0, "0,00"), ("int", 120, "120"),
+     ("float", 0.8, "0,8"), ("float", 30.0, "30"), ("bool", True, "sim"), ("bool", False, "nao")],
+)
+def test_valor_do_servidor_vira_texto_do_campo(tipo, valor, texto):
+    codigo = f"global.document = undefined; const p = require({str(JS)!r}); console.log(p.paraCampo({json.dumps(tipo)}, {json.dumps(valor)}));"
+    assert _rodar_node(codigo) == texto
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar o formulário de parâmetros")
+@pytest.mark.parametrize(
+    "tipo, texto, esperado",
+    [("cents", "1,5", 150), ("cents", "1.50", 150), ("cents", "0,005", 1), ("cents", " 50 ", 5000),
+     ("int", " 120 ", 120), ("float", "0,8", 0.8), ("float", "30", 30), ("bool", "nao", False), ("bool", "sim", True)],
+)
+def test_texto_do_campo_vira_valor_para_o_servidor(tipo, texto, esperado):
+    codigo = f"global.document = undefined; const p = require({str(JS)!r}); console.log(JSON.stringify(p.doCampo({json.dumps(tipo)}, {json.dumps(texto)}, 'x')));"
+    assert json.loads(_rodar_node(codigo)) == esperado
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar o formulário de parâmetros")
+@pytest.mark.parametrize("tipo, texto", [("cents", ""), ("cents", "abc"), ("int", "3,5"), ("int", ""), ("float", "1,2,3"), ("json", "{quebrado")])
+def test_texto_ruim_no_campo_e_recusado_com_o_nome_do_campo(tipo, texto):
+    codigo = (
+        f"global.document = undefined; const p = require({str(JS)!r});"
+        f"try {{ p.doCampo({json.dumps(tipo)}, {json.dumps(texto)}, 'Bandeirada'); console.log('passou'); }} catch (e) {{ console.log(e.message); }}"
+    )
+    saida = _rodar_node(codigo)
+    assert saida != "passou" and "Bandeirada" in saida
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar o formulário de parâmetros")
+def test_bloco_do_formulario_manda_todos_os_campos_convertidos_e_para_no_primeiro_erro():
+    campos = [
+        {"campo": "base_fare_cents", "tipo": "cents", "rotulo": "Bandeirada", "texto": "3,50"},
+        {"campo": "factor_min", "tipo": "float", "rotulo": "Fator mínimo", "texto": "0,8"},
+        {"campo": "campo_novo_sem_rotulo", "tipo": "int", "rotulo": "campo_novo_sem_rotulo", "texto": "7"},
+    ]
+    codigo = (
+        f"global.document = undefined; const p = require({str(JS)!r});"
+        f"const campos = {json.dumps(campos)};"
+        "const ok = p.coletarBloco(campos); campos[1].texto = 'x';"
+        "let erro = null; try { p.coletarBloco(campos); } catch (e) { erro = e.message; }"
+        "console.log(JSON.stringify({ ok, erro }));"
+    )
+    r = json.loads(_rodar_node(codigo))
+    assert r["ok"] == {"base_fare_cents": 350, "factor_min": 0.8, "campo_novo_sem_rotulo": 7}
+    assert "Fator mínimo" in r["erro"]
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para ler a tabela de parâmetros")
+def test_todo_campo_de_configuracao_tem_nome_em_portugues_no_painel():
+    """Se o servidor ganhar (ou perder) um número ajustável, este teste lembra de mexer em PARAMETROS (painel.js)."""
+    import dataclasses
+
+    from app.db.config_store import _TYPES
+
+    saida = _rodar_node(f"global.document = undefined; const p = require({str(JS)!r}); console.log(JSON.stringify(p.PARAMETROS));")
+    tabela = json.loads(saida)
+    assert set(tabela) == set(_TYPES)
+    for chave, tipo in _TYPES.items():
+        campos = {f.name for f in dataclasses.fields(tipo)}
+        assert set(tabela[chave]["campos"]) == campos, chave
+        assert tabela[chave]["titulo"]
+        assert all(c["rotulo"] and c["tipo"] in {"cents", "int", "float", "bool", "json"} for c in tabela[chave]["campos"].values())
+    assert tabela["fees"]["campos"]["tiers"]["tipo"] == "json"

@@ -110,6 +110,117 @@ function tipoDoAlerta(a) {
   return a.kind + (a.suspected_mock ? " (localização suspeita)" : "");
 }
 
+// ---------- parâmetros (formulário) ----------
+// Cada número ajustável do servidor, com nome em português. Tipos: cents (mostra reais, grava centavos), int, float,
+// bool (sim/não) e json (só as faixas de taxa). Campo que o servidor tiver e não estiver aqui aparece com o nome cru;
+// um teste do servidor falha para lembrar de dar nome a ele.
+const PARAMETROS = {
+  pricing: { titulo: "Preço da corrida", campos: {
+    base_fare_cents: { rotulo: "Bandeirada (R$)", tipo: "cents" },
+    per_km_cents: { rotulo: "Preço por quilômetro (R$)", tipo: "cents" },
+    min_price_cents: { rotulo: "Preço mínimo da corrida (R$)", tipo: "cents" },
+    round_to_cents: { rotulo: "Arredondar o preço para (R$)", tipo: "cents" },
+    factor_min: { rotulo: "Fator de preço mínimo (1 = preço normal)", tipo: "float" },
+    factor_max: { rotulo: "Fator de preço máximo", tipo: "float" },
+    max_factor_step: { rotulo: "Quanto o fator pode mudar por atualização", tipo: "float" },
+    factor_interval_s: { rotulo: "Tempo entre duas atualizações do fator (segundos)", tipo: "float" },
+  } },
+  fees: { titulo: "Taxa do app e entrada do motoqueiro", campos: {
+    tiers: { rotulo: "Faixas da taxa por corrida do dia (JSON: from_ride, to_ride, fee_cents)", tipo: "json" },
+    min_fee_cents: { rotulo: "Taxa mínima do app (R$)", tipo: "cents" },
+    trial_rides: { rotulo: "Corridas de teste antes de pagar a entrada", tipo: "int" },
+    entry_fee_cents: { rotulo: "Entrada do motoqueiro (R$, paga uma vez)", tipo: "cents" },
+    cash_debt_limit_cents: { rotulo: "Dívida de taxa em dinheiro que bloqueia o motoqueiro (R$)", tipo: "cents" },
+    max_debt_share: { rotulo: "Parte do ganho de uma corrida Pix que abate dívida (0,5 = metade)", tipo: "float" },
+  } },
+  rides: { titulo: "Corridas e cancelamento", campos: {
+    pix_window_s: { rotulo: "Tempo para o passageiro pagar o Pix (segundos)", tipo: "int" },
+    free_cancel_after_accept_s: { rotulo: "Cancelamento grátis depois que a moto aceita (segundos)", tipo: "int" },
+    cancel_fee_min_cents: { rotulo: "Taxa de cancelamento tardio, mínima (R$)", tipo: "cents" },
+    cancel_fee_max_cents: { rotulo: "Taxa de cancelamento tardio, máxima (R$)", tipo: "cents" },
+    cancel_fee_round_cents: { rotulo: "Arredondar a taxa de cancelamento para (R$)", tipo: "cents" },
+    cancel_fee_free_m: { rotulo: "Moto que andou menos que isso não gera taxa (metros)", tipo: "int" },
+    cancel_fee_full_m: { rotulo: "Metros andados para a taxa chegar ao máximo", tipo: "int" },
+    appeal_window_s: { rotulo: "Prazo para o passageiro pedir revisão da taxa (segundos)", tipo: "int" },
+    max_wait_at_arrival_s: { rotulo: "Espera da moto no ponto de embarque (segundos)", tipo: "int" },
+    queue_max_wait_s: { rotulo: "Espera máxima na fila da moto (segundos)", tipo: "int" },
+    search_give_up_s: { rotulo: "Desistir de procurar moto depois de (segundos)", tipo: "int" },
+    cash_pay_wait_s: { rotulo: "Espera pelo pagamento em dinheiro no fim da corrida (segundos)", tipo: "int" },
+    quote_ttl_s: { rotulo: "Validade do preço mostrado ao passageiro (segundos)", tipo: "int" },
+    min_trip_m: { rotulo: "Corrida mais curta (metros)", tipo: "int" },
+    max_trip_m: { rotulo: "Corrida mais longa (metros, em linha reta)", tipo: "int" },
+  } },
+  dispatch: { titulo: "Busca de moto", campos: {
+    offer_timeout_s: { rotulo: "Tempo que a moto tem para aceitar a oferta (segundos)", tipo: "int" },
+    max_candidates_routed: { rotulo: "Quantas motos entram na comparação do trajeto", tipo: "int" },
+    finishing_max_s: { rotulo: "Moto terminando uma corrida: no máximo (segundos)", tipo: "int" },
+    finishing_max_m: { rotulo: "Moto terminando uma corrida: no máximo (metros)", tipo: "int" },
+    search_radius_m: { rotulo: "Raio da busca de motos (metros)", tipo: "float" },
+    position_max_age_s: { rotulo: "Posição mais velha que isso não conta (segundos)", tipo: "float" },
+  } },
+  safety: { titulo: "Segurança", campos: {
+    stopped_after_s: { rotulo: "Moto parada: avisar depois de (segundos)", tipo: "int" },
+    stopped_radius_m: { rotulo: "Moto parada: dentro de um raio de (metros)", tipo: "float" },
+    off_route_m: { rotulo: "Fora da rota: distância da rota (metros)", tipo: "float" },
+    off_route_confirmations: { rotulo: "Fora da rota: confirmações antes de avisar", tipo: "int" },
+    max_plausible_speed_kmh: { rotulo: "Velocidade máxima que faz sentido (km/h)", tipo: "float" },
+    reanchor_after_rejects: { rotulo: "Posições recusadas seguidas até recomeçar a conta", tipo: "int" },
+    mock_location_jumps: { rotulo: "Saltos de posição até suspeitar de localização falsa", tipo: "int" },
+    alert_cooldown_s: { rotulo: "Espera antes de repetir o mesmo tipo de aviso (segundos)", tipo: "int" },
+    no_signal_short_m: { rotulo: "Sem sinal: corrida curta vai até (metros)", tipo: "int" },
+    no_signal_long_m: { rotulo: "Sem sinal: corrida média vai até (metros)", tipo: "int" },
+    no_signal_short_s: { rotulo: "Sem sinal em corrida curta: avisar depois de (segundos)", tipo: "int" },
+    no_signal_mid_s: { rotulo: "Sem sinal em corrida média: avisar depois de (segundos)", tipo: "int" },
+    no_signal_long_s: { rotulo: "Sem sinal em corrida longa: avisar depois de (segundos)", tipo: "int" },
+    max_samples: { rotulo: "Posições guardadas por corrida", tipo: "int" },
+  } },
+  auth: { titulo: "Login", campos: {
+    otp_digits: { rotulo: "Dígitos do código de login", tipo: "int" },
+    otp_ttl_s: { rotulo: "Validade do código de login (segundos)", tipo: "int" },
+    otp_max_attempts: { rotulo: "Tentativas de código antes de travar", tipo: "int" },
+    otp_requests_per_hour: { rotulo: "Pedidos de código por número, por hora", tipo: "int" },
+    otp_requests_per_ip_hour: { rotulo: "Pedidos de código por aparelho/rede, por hora", tipo: "int" },
+    session_days: { rotulo: "Dias que o login dura", tipo: "int" },
+  } },
+  balance: { titulo: "Saldo do passageiro", campos: {
+    topup_enabled: { rotulo: "Recarga de saldo ligada", tipo: "bool" },
+    topup_min_cents: { rotulo: "Recarga mínima (R$)", tipo: "cents" },
+    topup_max_cents: { rotulo: "Recarga máxima (R$)", tipo: "cents" },
+    pay_rides_enabled: { rotulo: "O saldo paga a corrida", tipo: "bool" },
+    withdraw_enabled: { rotulo: "Saque do saldo por Pix ligado", tipo: "bool" },
+    withdraw_min_cents: { rotulo: "Saque mínimo (R$)", tipo: "cents" },
+    withdraw_max_cents: { rotulo: "Saque máximo (R$)", tipo: "cents" },
+  } },
+};
+
+// O que o servidor mandou -> texto do campo. Dinheiro aparece em reais, com vírgula.
+function paraCampo(tipo, valor) {
+  if (tipo === "cents") return (Number(valor) / 100).toFixed(2).replace(".", ",");
+  if (tipo === "bool") return valor ? "sim" : "nao";
+  if (tipo === "json") return JSON.stringify(valor, null, 2);
+  return String(valor).replace(".", ",");
+}
+
+// Texto do campo -> o que o servidor espera. Erro já vem com o nome do campo.
+function doCampo(tipo, texto, rotulo) {
+  const limpo = String(texto).trim();
+  if (tipo === "bool") return limpo === "sim";
+  if (tipo === "json") {
+    try { return JSON.parse(limpo); } catch (erro) { throw new Error(rotulo + ": o texto não é um JSON válido."); }
+  }
+  const numero = limpo === "" ? NaN : Number(limpo.replace(",", "."));
+  if (!Number.isFinite(numero)) throw new Error(rotulo + ": informe um número.");
+  if (tipo === "cents") return Math.round(numero * 100);
+  if (tipo === "int" && !Number.isInteger(numero)) throw new Error(rotulo + ": use um número inteiro, sem vírgula.");
+  return numero;
+}
+
+function coletarBloco(campos) {
+  const corpo = {};
+  for (const c of campos) corpo[c.campo] = doCampo(c.tipo, c.texto, c.rotulo);
+  return corpo;
+}
+
 // ---------- telas ----------
 const VISOES = {
   async cadastros() {
@@ -373,4 +484,4 @@ function comecar() {
 }
 
 if (typeof document !== "undefined") comecar();
-if (typeof module !== "undefined") module.exports = { esc, attr, money, when, ACOES, CANCELADO, TELAS, VISOES, mostrar, descreverAviso, conectarAvisos, aoAviso, limparAviso, situacaoDoCadastro, tipoDoAlerta, fotosDoCadastro };
+if (typeof module !== "undefined") module.exports = { esc, attr, money, when, ACOES, CANCELADO, TELAS, VISOES, PARAMETROS, paraCampo, doCampo, coletarBloco, mostrar, descreverAviso, conectarAvisos, aoAviso, limparAviso, situacaoDoCadastro, tipoDoAlerta, fotosDoCadastro };
