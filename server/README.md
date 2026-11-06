@@ -40,6 +40,13 @@ apague com `DROP SCHEMA "t_..." CASCADE`. O Redis dos testes é o banco número 
 - O agendador roda dentro do servidor: varredura de tempo a cada 3 s, checagem diária de documentos vencidos e limpeza
   das posições que sumiram (a cada minuto).
 
+## Colocar no ar (teste fechado)
+
+O passo a passo para instalar o servidor numa máquina na internet (HTTPS com Caddy, serviço que reinicia sozinho, backup diário e ensaio de
+restauração) está em `docs/instalacao.md`; os modelos que ele manda copiar ficam em `server/deploy/` (`deploy/` aqui):
+`app-corrida.service`, `app-corrida-backup.service`/`.timer`, `Caddyfile`, `app.env.example`, `backup.sh` e `restore.sh`.
+Enquanto o plano 7 não existe o servidor só roda em modo de teste (`APP_MODE=dev`); com `DEV_ROUTES=off` ele esconde `/v1/dev/*`, `/docs` e `/openapi.json`.
+
 ## Simulador
 
 Motoqueiros e passageiros de mentira que fazem corridas inteiras pela API (guia completo em `docs/simulador.md`):
