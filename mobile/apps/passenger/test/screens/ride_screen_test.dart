@@ -144,6 +144,26 @@ void main() {
     expect(find.textContaining('R\$ 3,00'), findsOneWidget);
   });
 
+  testWidgets('o botao SOS fica na barra de cima, sempre a vista', (tester) async {
+    // numa emergência ninguém vai rolar a tela atrás do botão (o do motoqueiro já é assim)
+    await tester.pumpWidget(
+      _app(
+        _screen(
+          ride: const PassengerRide(rideId: 'r1', state: RideState.accepted),
+        ),
+      ),
+    );
+
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('SOS')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: find.byType(ListView), matching: find.text('SOS')),
+      findsNothing,
+    );
+  });
+
   testWidgets('sos chama onSos e mostra o numero de emergencia', (
     tester,
   ) async {

@@ -128,7 +128,19 @@ class _RideScreenState extends State<RideScreen> {
     final rider = ride.rider;
     final endPayment = ride.endPayment;
     return Scaffold(
-      appBar: AppBar(title: const Text('Sua corrida')),
+      appBar: AppBar(
+        title: const Text('Sua corrida'),
+        // sempre à vista: numa emergência ninguém vai rolar a tela atrás do botão
+        actions: [
+          TextButton(
+            onPressed: _sos,
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('SOS'),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -159,8 +171,6 @@ class _RideScreenState extends State<RideScreen> {
           ],
           const SizedBox(height: 24),
           OutlinedButton(onPressed: _cancel, child: const Text('Cancelar')),
-          const SizedBox(height: 8),
-          OutlinedButton(onPressed: _sos, child: const Text('SOS')),
         ],
       ),
     );

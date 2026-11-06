@@ -33,4 +33,11 @@ void main() {
     expect(manifest, contains('android.intent.action.DIAL'));
     expect(manifest, contains('android:scheme="tel"'));
   });
+
+  test('o app tem nome de gente no celular, não o nome da pasta', () {
+    final manifest = File('android/app/src/main/AndroidManifest.xml')
+        .readAsStringSync();
+
+    expect(manifest, contains('android:label="Recôncavo Passageiro"'));
+  });
 }
