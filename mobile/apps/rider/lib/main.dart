@@ -11,7 +11,9 @@ import 'screen_awake.dart';
 /// Celular de verdade ligado por USB: `adb reverse tcp:8000 tcp:8000` faz o "localhost" do celular
 /// chegar ao servidor do computador pelo cabo, sem precisar da mesma rede Wi-Fi. (Num emulador
 /// Android, o endereço seria `10.0.2.2` em vez de `localhost`.)
-final _serverUrl = Uri.parse('http://localhost:8000');
+/// Servidor de verdade: `--dart-define=API_URL=https://corrida.exemplo.com.br` (ver `mobile/README.md`).
+const _apiUrl = String.fromEnvironment('API_URL');
+final _serverUrl = serverUrlFrom(_apiUrl, isRelease: kReleaseMode);
 
 /// `--dart-define=GPS=real` usa o GPS do celular, `--dart-define=GPS=fake` deixa "andar" tocando no mapa.
 /// Sem a opção: o app de release usa o GPS de verdade e o de depuração (`flutter run`) o de mentira.

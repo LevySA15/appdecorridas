@@ -50,6 +50,17 @@ Com o GPS de verdade o aparelho pede a **permissão de localização** na hora d
 desligado) o motoqueiro não fica disponível e a tela diz o que fazer. O SOS (nos dois apps) abre o discador com o **190**
 preenchido e a pessoa aperta "ligar".
 
+## Apontar os apps para um servidor (plano 4G)
+
+Sem opção nenhuma os apps falam com `http://localhost:8000` (celular ligado por USB, com `adb reverse`). Para um servidor de verdade,
+diga o endereço **completo** na hora de gerar o app:
+
+    flutter build apk --release --dart-define=API_URL=https://corrida.exemplo.com.br      # em cada app (passenger e rider)
+    flutter run --dart-define=API_URL=http://10.0.2.2:8000                                # depuração: HTTP é aceito
+
+O app de **release só aceita `https://`** (o Android bloqueia HTTP sem criptografia): com `http://` ele para na partida com a
+mensagem "API_URL inválida". A instalação do servidor está em `docs/instalacao.md`.
+
 ## Pastas
 
 | Pasta | O que é |

@@ -11,4 +11,5 @@ export 'src/money.dart';
 export 'src/passenger_api.dart';
 export 'src/realtime.dart';
 export 'src/rider_api.dart';
+export 'src/server_url.dart';
 export 'src/session.dart';
