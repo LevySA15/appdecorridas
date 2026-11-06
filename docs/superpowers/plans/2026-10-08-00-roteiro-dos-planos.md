@@ -169,6 +169,8 @@ Feito em 06/11/2026 (`2026-11-06-04h-robustez-do-servidor.md`; o Levy mandou "fa
 
 **Deixei de fora de propósito:** (1) o WebSocket continua aberto depois de logout ou bloqueio — só entrega os avisos do próprio usuário, e mexer na reconexão dos apps tem risco maior que o ganho; (2) `ValueError` genérico devolve o texto do erro ao app — vários serviços levantam `ValueError` com frase pronta para a pessoa, então trocar sem um levantamento completo quebraria mensagens; (3) "cheguei" sem conferir a distância — regra do GPS do plano 7 (o simulador teletransporta); (4) oferta pendente que sobrevive ao bloqueio por dívida, duas cobranças Pix abertas da dívida e `go_online` sem trava — dependem de regra de dívida que é do Levy; (5) cobrança de entrada pendente "não reaparece": já é idempotente no servidor (`start_entry_charge` devolve a aberta), falta só o app pedir de novo ao reabrir.
 
+**Achado pelo simulador depois do 4H (corrigido, com teste):** quando a corrida da fila estoura o tempo, volta para a busca e é aceita por outra moto ocupada, a oferta da primeira moto continua "aceita" no histórico e `queue_info` esperava uma só: o aceite dava 500 e o estado do passageiro também. Foi o `simulator demo --fast`, que não terminava nas sessões anteriores, que mostrou. Depois da correção ele fecha com "Tudo certo" (46 corridas completas, livro-caixa fecha, saldos batem).
+
 
 ## Itens que sobraram do plano 4I
 
