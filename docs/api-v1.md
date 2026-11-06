@@ -197,7 +197,7 @@ Com **4408**, reconecte e peça o estado. Com **4401** o token não vale: entre 
 | `rider_position` | passageiro | `ride_id, lat, lng` |
 | `trip_completed` | os dois | `ride_id, price_cents, method, pay` |
 | `no_rider` | passageiro | `ride_id` |
-| `queue_released` | passageiro | `ride_id, refunded` |
+| `queue_released` | passageiro e motoqueiro | `ride_id, refunded` |
 | `pix_confirmed` | passageiro | `ride_id, amount_cents` |
 | `payment_received` | motoqueiro | `ride_id, late` (corrida) ou `ride_id, amount_cents, kind: "cancel_fee"` (taxa de cancelamento paga depois) |
 | `payment_refunded` | passageiro | `ride_id, amount_cents, to: "pix"\|"balance"` (e `balance_cents` quando foi para o saldo) |

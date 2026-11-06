@@ -105,11 +105,14 @@ class SweepService:
             ride = repo.get_ride(session, ride_id)
             if not queue_wait_expired(ride, now, rides):
                 return False
+            rider_id = ride.rider_id        # a liberação desfaz a ligação com o motoqueiro: guarda antes
             refunded = self.payments.release_queued_ride(session, ride_id, now)
             repo.log_ride_event(
                 session, ride_id, "queue_released", {"reason": "queue_timeout", "refunded": refunded}, now
             )
             self.events.add(ride.passenger_id, "queue_released", {"ride_id": ride_id, "refunded": refunded})
+            if rider_id is not None:        # sem o aviso, "Próxima na fila" ficava velho na tela dele
+                self.events.add(rider_id, "queue_released", {"ride_id": ride_id, "refunded": refunded})
             self.dispatcher.offer_next(session, ride_id, now)
             return True
 

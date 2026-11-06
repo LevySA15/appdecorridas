@@ -127,6 +127,27 @@ def test_fila_que_passa_de_8_minutos_volta_para_a_busca_com_outra_moto(w, sessio
     assert queries.get_pending_offer(session, "ride-1").rider_id == "r2"
 
 
+def test_fila_liberada_por_tempo_avisa_o_motoqueiro_tambem(w, session, positions, events):
+    add_passenger(session, "p0", "+5575900000010")
+    add_passenger(session)
+    aceitar(session, positions, w, method=PaymentMethod.CASH, ride_id="ride-0", passenger_id="p0")
+    ride0 = repo.get_ride(session, "ride-0")
+    ride0.state = RideState.IN_PROGRESS
+    repo.save_ride(session, ride0)
+    repo.set_ride_details(session, "ride-0", repo.RideDetails(pt(0, 0), pt(300, 0), "A", "B", 400, 1.0, ""))
+    positions.update("r1", pt(150, 0), now=AGORA + 100)
+    add_searching_ride(session, "ride-1", "p1", method=PaymentMethod.CASH, now=AGORA + 100)
+    w.dispatch.offer_next(session, "ride-1", AGORA + 100)
+    w.dispatch.accept_offer(session, "r1", "ride-1", AGORA + 101)
+    make_online_rider(session, positions, 2, pt(120, 0), now=AGORA + 101 + 480)
+    positions.update("r1", pt(150, 0), now=AGORA + 101 + 480)
+    antes = len(events.events)
+    w.sweeps.run(session, AGORA + 101 + 480)
+    avisos = [e for e in events.events[antes:] if e.type == "queue_released"]
+    assert {e.user_id for e in avisos} == {"p1", "r1"}
+    assert all(e.payload["ride_id"] == "ride-1" for e in avisos)
+
+
 def test_espera_na_chegada_de_5_minutos_cancela_com_devolucao_do_pix(w, session, positions, provider, events):
     add_passenger(session)
     aceitar(session, positions, w)
