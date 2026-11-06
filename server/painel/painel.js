@@ -27,6 +27,7 @@ function sair() {
   const token = sessionStorage.getItem(TOKEN_KEY);
   if (token) fetch("/v1/auth/logout", { method: "POST", headers: { Authorization: "Bearer " + token } }).catch(() => {});   // encerra a sessão no servidor
   sessionStorage.removeItem(TOKEN_KEY);
+  pararAvisos();
   mostrarEntrada();
 }
 
@@ -204,6 +205,101 @@ async function mostrar(tela) {
   try { el("tela").innerHTML = await VISOES[tela](); } catch (erro) { el("tela").innerHTML = ""; aviso(erro.message); }
 }
 
+// ---------- avisos ao vivo (WebSocket do mesmo endereço; o servidor manda aos administradores o que importa) ----------
+const TITULO = "Painel do dono";
+const ESPERA_RECONEXAO_MS = 3000;
+const CODIGO_SESSAO_ACABOU = 4401;
+let ligacao = null;
+let avisosNovos = 0;
+let telaDoAviso = "alertas";
+
+function descreverAviso(mensagem) {
+  const dados = (mensagem && mensagem.data) || {};
+  switch (mensagem && mensagem.type) {
+    case "sos": {
+      const quem = { rider: " pelo motoqueiro", passenger: " pelo passageiro" }[dados.raised_by] || "";
+      return { texto: "SOS" + quem, tela: "alertas", urgente: true };
+    }
+    case "safety_alert":
+      return { texto: "Alerta de segurança: " + ({ stopped: "parou", off_route: "saiu da rota", no_signal: "sem sinal" }[dados.kind] || "atenção"), tela: "alertas", urgente: false };
+    case "mock_location_suspected":
+      return { texto: "Localização suspeita numa corrida", tela: "alertas", urgente: false };
+    case "appeal_opened":
+      return { texto: "Novo recurso de taxa de cancelamento", tela: "recursos", urgente: false };
+    default:
+      return null;
+  }
+}
+
+// Mantém uma conexão aberta: manda o token ao abrir, refaz sozinha se cair e para quando mandam (`fechar`) ou quando o
+// servidor diz que a sessão acabou. Nunca há duas conexões vivas ao mesmo tempo.
+function conectarAvisos({ criarSocket, agendar, cancelar, token, aoMensagem, aoRecusar }) {
+  let fechado = false;
+  let socket = null;
+  let pendente = null;
+  function abrir() {
+    pendente = null;
+    if (fechado) return;
+    const este = criarSocket();
+    socket = este;
+    este.onopen = () => este.send(JSON.stringify({ token }));
+    este.onmessage = (evento) => { try { aoMensagem(JSON.parse(evento.data)); } catch (erro) { /* mensagem ruim: ignora */ } };
+    este.onclose = (evento) => {
+      if (fechado || socket !== este) return;
+      socket = null;
+      if (evento && evento.code === CODIGO_SESSAO_ACABOU) { fechado = true; if (aoRecusar) aoRecusar(); return; }
+      pendente = agendar(abrir, ESPERA_RECONEXAO_MS);
+    };
+  }
+  abrir();
+  return {
+    fechar() {
+      fechado = true;
+      if (pendente !== null && cancelar) cancelar(pendente);
+      pendente = null;
+      const aberto = socket;
+      socket = null;
+      if (aberto) aberto.close();
+    },
+  };
+}
+
+function limparAviso() {
+  avisosNovos = 0;
+  el("alerta-vivo").hidden = true;
+  document.title = TITULO;
+}
+
+function aoAviso(mensagem) {
+  const aviso = descreverAviso(mensagem);
+  if (!aviso) {
+    if (mensagem && mensagem.type === "safety_ok" && telaAtual === "alertas") mostrar("alertas");   // o passageiro respondeu "tudo bem"
+    return;
+  }
+  avisosNovos += 1;
+  telaDoAviso = aviso.tela;
+  const caixa = el("alerta-vivo");
+  caixa.textContent = aviso.texto + (avisosNovos > 1 ? " (+" + (avisosNovos - 1) + ")" : "") + " — clique para ver";   // textContent: nunca HTML
+  caixa.className = aviso.urgente ? "urgente" : "";
+  caixa.hidden = false;
+  document.title = "(!) " + aviso.texto + " — " + TITULO;
+  if (telaAtual === aviso.tela) mostrar(aviso.tela);
+}
+
+function pararAvisos() {
+  if (ligacao) { ligacao.fechar(); ligacao = null; }
+  limparAviso();
+}
+
+function comecarAvisos() {
+  pararAvisos();
+  const endereco = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/v1/ws";
+  ligacao = conectarAvisos({
+    criarSocket: () => new WebSocket(endereco), agendar: (fn, ms) => setTimeout(fn, ms), cancelar: (id) => clearTimeout(id),
+    token: sessionStorage.getItem(TOKEN_KEY), aoMensagem: aoAviso, aoRecusar: sair,
+  });
+}
+
 // ---------- ações ----------
 function perguntar(texto) { const r = window.prompt(texto); return r === null ? null : r.trim(); }
 async function abrirDocumento(id, tipo) {
@@ -257,12 +353,14 @@ function iniciar() {
   el("entrada").hidden = true; el("menu").hidden = false; el("sair").hidden = false;
   el("menu").innerHTML = Object.entries(TELAS).map(([chave, nome]) => `<button data-tela="${attr(chave)}">${esc(nome)}</button>`).join("");
   mostrar(telaAtual);
+  comecarAvisos();
 }
 
 function comecar() {
   document.addEventListener("click", aoClicar);
   document.addEventListener("change", aoMudar);
   el("sair").onclick = sair;
+  el("alerta-vivo").onclick = () => { const tela = telaDoAviso; limparAviso(); mostrar(tela); };
   el("menu").onclick = (e) => { const b = e.target.closest("button[data-tela]"); if (b) mostrar(b.dataset.tela); };
   el("tela").addEventListener("click", (e) => {
     if (e.target.id === "buscar-passageiros") { filtros.passageiros = el("busca-passageiros").value; mostrar("passageiros"); }
@@ -271,4 +369,4 @@ function comecar() {
 }
 
 if (typeof document !== "undefined") comecar();
-if (typeof module !== "undefined") module.exports = { esc, attr, money, when, ACOES, CANCELADO, TELAS, VISOES, situacaoDoCadastro, tipoDoAlerta, fotosDoCadastro };
+if (typeof module !== "undefined") module.exports = { esc, attr, money, when, ACOES, CANCELADO, TELAS, VISOES, mostrar, descreverAviso, conectarAvisos, aoAviso, limparAviso, situacaoDoCadastro, tipoDoAlerta, fotosDoCadastro };

@@ -18,6 +18,8 @@ th { color: var(--suave); font-weight: 600; }
 .cartao { border: 1px solid var(--linha); border-radius: 8px; padding: 10px 12px; }
 .cartao b { display: block; font-size: 20px; }
 .suave { color: var(--suave); }
+#alerta-vivo { margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--azul); border-radius: 8px; cursor: pointer; font-weight: 600; }
+#alerta-vivo.urgente { border-color: var(--verm); color: var(--verm); }
 #aviso { min-height: 1.4em; color: var(--verm); }
 #aviso.ok { color: var(--verde); }
 textarea { width: 100%; min-height: 220px; font-family: ui-monospace, monospace; }

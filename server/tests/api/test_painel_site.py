@@ -38,6 +38,9 @@ def test_toda_rota_chamada_pelo_javascript_existe_na_api(client):
     chamados = {re.sub(r"\$\{[^}]*\}", "{}", m) for m in re.findall(r"/v1/[A-Za-z0-9_\-/{}$.]+", fonte)}
     assert len(chamados) >= 15
     conhecidos = {re.sub(r"\{[^}]*\}", "{}", caminho) for caminho in client.app.openapi()["paths"]}
+    from app.api.routes import ws as rotas_ws
+
+    conhecidos |= {rota.path for rota in rotas_ws.router.routes}            # o WebSocket não aparece no openapi
     faltam = sorted(c for c in chamados if c.rstrip("/") not in conhecidos)
     assert faltam == []
 
@@ -177,3 +180,106 @@ const p = require({str(JS)!r});
     assert "&lt;b&gt;Ana&lt;/b&gt;" in r["html"] and "<b>Ana</b>" not in r["html"]
     assert "Nada por aqui." in r["vazio"]
     assert r["telas"].index("saques") == r["telas"].index("dinheiro") + 1
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar os avisos ao vivo")
+@pytest.mark.parametrize(
+    "mensagem, esperado",
+    [
+        ({"type": "sos", "data": {"raised_by": "rider"}}, {"texto": "SOS pelo motoqueiro", "tela": "alertas", "urgente": True}),
+        ({"type": "sos", "data": {"raised_by": "passenger"}}, {"texto": "SOS pelo passageiro", "tela": "alertas", "urgente": True}),
+        ({"type": "sos", "data": {}}, {"texto": "SOS", "tela": "alertas", "urgente": True}),
+        ({"type": "safety_alert", "data": {"kind": "stopped"}}, {"texto": "Alerta de segurança: parou", "tela": "alertas", "urgente": False}),
+        ({"type": "safety_alert", "data": {"kind": "off_route"}}, {"texto": "Alerta de segurança: saiu da rota", "tela": "alertas", "urgente": False}),
+        ({"type": "safety_alert", "data": {"kind": "no_signal"}}, {"texto": "Alerta de segurança: sem sinal", "tela": "alertas", "urgente": False}),
+        ({"type": "mock_location_suspected", "data": {"ride_id": "x"}}, {"texto": "Localização suspeita numa corrida", "tela": "alertas", "urgente": False}),
+        ({"type": "appeal_opened", "data": {"ride_id": "x"}}, {"texto": "Novo recurso de taxa de cancelamento", "tela": "recursos", "urgente": False}),
+        ({"type": "safety_ok", "data": {}}, None),
+        ({"type": "ready", "data": {"user_id": "a"}}, None),
+        ({"type": "coisa_nova", "data": {}}, None),
+        (None, None),
+    ],
+)
+def test_texto_do_aviso_ao_vivo(mensagem, esperado):
+    codigo = f"global.document = undefined; const p = require({str(JS)!r}); console.log(JSON.stringify(p.descreverAviso({json.dumps(mensagem)})));"
+    assert json.loads(_rodar_node(codigo)) == esperado
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar a conexão ao vivo")
+def test_conexao_ao_vivo_manda_o_token_reconecta_sozinha_e_para_quando_mandam():
+    codigo = f"""
+global.document = undefined;
+const p = require({str(JS)!r});
+const sockets = [], tarefas = [], recebidas = [];
+class Falso {{
+  constructor() {{ sockets.push(this); this.enviado = []; this.fechado = false; }}
+  send(m) {{ this.enviado.push(m); }}
+  close() {{ this.fechado = true; if (this.onclose) this.onclose({{ code: 1000 }}); }}
+}}
+let recusou = 0;
+const agendar = (fn, ms) => {{ tarefas.push({{ fn, ms }}); return tarefas.length; }};
+const ligacao = p.conectarAvisos({{ criarSocket: () => new Falso(), agendar, cancelar() {{}}, token: 'tok', aoMensagem: (m) => recebidas.push(m), aoRecusar: () => {{ recusou += 1; }} }});
+const s0 = sockets[0];
+s0.onopen();
+s0.onmessage({{ data: JSON.stringify({{ type: 'sos', data: {{}} }}) }});
+s0.onmessage({{ data: 'isto não é json' }});                      // mensagem ruim não derruba a conexão
+s0.onclose({{ code: 1006 }});                                       // caiu: agenda outra tentativa
+const depoisDeCair = {{ tarefas: tarefas.length, ms: tarefas[0].ms, sockets: sockets.length }};
+tarefas[0].fn();
+const depoisDeReconectar = sockets.length;
+const s1 = sockets[1];
+s1.onclose({{ code: 1006 }});
+ligacao.fechar();                                                    // a pessoa saiu do painel
+tarefas[1].fn();                                                     // a tentativa que estava agendada não abre nada
+const depoisDeFechar = sockets.length;
+const outra = p.conectarAvisos({{ criarSocket: () => new Falso(), agendar, cancelar() {{}}, token: 'tok', aoMensagem() {{}}, aoRecusar: () => {{ recusou += 1; }} }});
+const agendadasAntes = tarefas.length;
+sockets[sockets.length - 1].onclose({{ code: 4401 }});               // o servidor diz que a sessão acabou
+console.log(JSON.stringify({{ enviado: s0.enviado, recebidas, depoisDeCair, depoisDeReconectar, depoisDeFechar, recusou,
+  agendouAposRecusa: tarefas.length - agendadasAntes }}));
+"""
+    r = json.loads(_rodar_node(codigo))
+    assert r["enviado"] == ['{"token":"tok"}']
+    assert r["recebidas"] == [{"type": "sos", "data": {}}]
+    assert r["depoisDeCair"] == {"tarefas": 1, "ms": 3000, "sockets": 1}
+    assert r["depoisDeReconectar"] == 2
+    assert r["depoisDeFechar"] == 2
+    assert r["recusou"] == 1 and r["agendouAposRecusa"] == 0
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar o aviso na tela")
+def test_aviso_ao_vivo_na_tela_nunca_vira_html_conta_os_seguintes_e_recarrega_a_lista():
+    codigo = f"""
+global.document = undefined;
+global.sessionStorage = {{ getItem: () => 't', setItem() {{}}, removeItem() {{}} }};
+const chamadas = [];
+global.fetch = async (url) => {{ chamadas.push(url); return {{ status: 200, ok: true, json: async () => [] }}; }};
+const p = require({str(JS)!r});
+const caixas = {{ 'alerta-vivo': {{ hidden: true, textContent: '', className: '' }}, tela: {{ hidden: true, innerHTML: '' }},
+  aviso: {{ textContent: '', className: '' }}, detalhe: {{ hidden: true }}, menu: {{ children: [] }} }};
+global.document = {{ title: 'Painel do dono', getElementById: (id) => caixas[id] }};
+(async () => {{
+  await p.mostrar('alertas');
+  const antes = chamadas.filter((u) => u.includes('safety-alerts')).length;
+  p.aoAviso({{ type: 'sos', data: {{ raised_by: '<img src=x onerror=alert(1)>' }} }});
+  const primeiro = {{ texto: caixas['alerta-vivo'].textContent, titulo: document.title, escondida: caixas['alerta-vivo'].hidden, classe: caixas['alerta-vivo'].className }};
+  p.aoAviso({{ type: 'safety_alert', data: {{ kind: 'stopped' }} }});
+  const segundo = caixas['alerta-vivo'].textContent;
+  await new Promise((r) => setTimeout(r, 20));
+  const recarregou = chamadas.filter((u) => u.includes('safety-alerts')).length > antes;
+  await p.mostrar('cadastros');
+  const antesRecursos = chamadas.filter((u) => u.includes('appeals')).length;
+  p.aoAviso({{ type: 'appeal_opened', data: {{}} }});
+  await new Promise((r) => setTimeout(r, 20));
+  const naoRecarregouOutraTela = chamadas.filter((u) => u.includes('appeals')).length === antesRecursos;
+  p.limparAviso();
+  console.log(JSON.stringify({{ primeiro, segundo, recarregou, naoRecarregouOutraTela, depois: {{ escondida: caixas['alerta-vivo'].hidden, titulo: document.title }} }}));
+}})();
+"""
+    r = json.loads(_rodar_node(codigo))
+    assert r["primeiro"]["texto"].startswith("SOS") and "clique para ver" in r["primeiro"]["texto"]
+    assert r["primeiro"]["titulo"] == "(!) " + r["primeiro"]["texto"].split(" — ")[0] + " — Painel do dono"
+    assert r["primeiro"]["escondida"] is False and "urgente" in r["primeiro"]["classe"]
+    assert "(+1)" in r["segundo"]
+    assert r["recarregou"] is True and r["naoRecarregouOutraTela"] is True
+    assert r["depois"] == {"escondida": True, "titulo": "Painel do dono"}
