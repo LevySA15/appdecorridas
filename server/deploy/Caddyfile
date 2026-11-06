@@ -1,0 +1,23 @@
+# Caddy: HTTPS automático (certificado grátis, renovado sozinho) na frente do servidor do app.
+# O endereço vem da variável APP_DOMAIN (ver docs/instalacao.md): por exemplo, corrida.exemplo.com.br
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	# Mesmo com o servidor em modo de desenvolvimento, estas rotas (código de login, "pagar" Pix de mentira, documentação)
+	# não saem da máquina.
+	@desenvolvimento path /v1/dev/* /docs /docs/* /openapi.json
+	respond @desenvolvimento 404
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# O servidor recusa foto de documento com mais de 8 MiB; aqui só se corta o que é claramente maior.
+	request_body {
+		max_size 10MB
+	}
+
+	# WebSocket (avisos em tempo real) passa sem configuração extra.
+	reverse_proxy 127.0.0.1:8000
+}

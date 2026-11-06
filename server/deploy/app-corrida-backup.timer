@@ -1,0 +1,11 @@
+# Backup todo dia às 03:30. Se a máquina estava desligada nessa hora, roda assim que ligar.
+[Unit]
+Description=Backup diário do app de corrida
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

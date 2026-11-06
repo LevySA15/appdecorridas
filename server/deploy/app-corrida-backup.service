@@ -1,0 +1,17 @@
+# Uma rodada do backup (banco e fotos). Quem chama é o app-corrida-backup.timer; à mão: systemctl start app-corrida-backup
+[Unit]
+Description=Backup do banco e das fotos do app de corrida
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=corrida
+Group=corrida
+EnvironmentFile=/etc/app-corrida/app.env
+ExecStart=/opt/app-corrida/server/deploy/backup.sh
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/backups/app-corrida

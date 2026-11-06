@@ -1,0 +1,37 @@
+# Serviço do servidor do app de corrida. Instalar em /etc/systemd/system/ (ver docs/instalacao.md).
+[Unit]
+Description=Servidor do app de corrida do Recôncavo
+After=network.target postgresql.service redis-server.service
+Wants=postgresql.service redis-server.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=corrida
+Group=corrida
+WorkingDirectory=/opt/app-corrida/server
+EnvironmentFile=/etc/app-corrida/app.env
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# aplica as mudanças do banco antes de subir (se falhar, o servidor não sobe e o motivo aparece no registro)
+ExecStartPre=/opt/app-corrida/server/.venv/bin/alembic upgrade head
+# Um processo só: o hub de WebSocket e o agendador vivem dentro dele. Só escuta na própria máquina (o Caddy faz a ponte);
+# --proxy-headers faz o servidor enxergar o IP verdadeiro de cada pessoa (o limite de pedidos de código usa); o uvicorn já
+# faz isso por padrão para 127.0.0.1, mas aqui fica explícito para não depender do padrão nem da variável FORWARDED_ALLOW_IPS.
+ExecStart=/opt/app-corrida/server/.venv/bin/uvicorn --factory app.main:create_default_app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=on-failure
+RestartSec=3
+
+# o serviço só escreve na pasta de dados (fotos de documento)
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/app-corrida
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

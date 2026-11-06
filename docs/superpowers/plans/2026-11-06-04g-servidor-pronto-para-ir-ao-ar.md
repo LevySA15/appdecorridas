@@ -13,7 +13,7 @@
 ## Fatos que moldam o plano (conferidos no código)
 
 - `build_runtime` **só aceita `APP_MODE=dev`** (`app/runtime.py:185`): enquanto o plano 7 não existe, o servidor usa adaptadores falsos. Em modo dev, `GET /v1/dev/otp?phone=…` devolve o código de login de qualquer pessoa e `/docs` mostra tudo. Logo, **este plano prepara um teste fechado, não o lançamento público**: nenhuma integração real é ligada e o guia diz isso no topo.
-- O limite de pedidos de código por IP (`app/api/routes/auth.py:38`) usa `request.client.host`. Atrás do Caddy, todo mundo seria `127.0.0.1` e a cidade inteira dividiria o mesmo limite. O uvicorn precisa de `--proxy-headers --forwarded-allow-ips 127.0.0.1`.
+- O limite de pedidos de código por IP (`app/api/routes/auth.py:38`) usa `request.client.host`, então atrás de um proxy ele só serve se o uvicorn ler o `X-Forwarded-For`. **Conferido na Task 5: o uvicorn já faz isso por padrão para `127.0.0.1`** (a premissa inicial de que daria problema estava errada); as flags `--proxy-headers --forwarded-allow-ips 127.0.0.1` ficam explícitas no serviço para não depender do padrão nem da variável `FORWARDED_ALLOW_IPS`.
 - Os dois apps têm `http://localhost:8000` fixo no código. O Android de release bloqueia HTTP sem criptografia.
 - O usuário do banco de desenvolvimento (`appcorrida`) não pode criar bancos; o teste de backup sobe um PostgreSQL descartável numa pasta temporária (`initdb` do usuário comum).
 - O painel (`server/painel`) não tem script, estilo nem `onclick` dentro do HTML/JS e só fala com o próprio endereço (`fetch` relativo, `window.open(blob)`): cabe numa política `default-src 'self'`.
@@ -117,7 +117,7 @@
 - [ ] **Step 3: escrever os arquivos** conforme as Interfaces. Conferência manual: `systemd-analyze verify` (com caminhos de teste) nas três unidades; sem erro além de "arquivo executável não existe" na máquina de desenvolvimento.
 - [ ] **Step 4:** `pytest tests/deploy -q`. Expected: PASS.
 - [ ] **Step 5: commit** `feat(deploy): serviço, backup diário, Caddy e modelo de configuração`.
-- [ ] **Conferência real (não é teste do git, vai para o registro):** subir `uvicorn --proxy-headers --forwarded-allow-ips 127.0.0.1` numa porta livre contra um banco/Redis de teste e pedir código com cabeçalhos `X-Forwarded-For` diferentes: cada IP tem a sua cota; sem as flags, todos dividem a mesma.
+- [x] **Conferência real (feita):** servidor descartável com limite por IP em 5; cinco pedidos com `X-Forwarded-For: A` passam, o sexto dá 429 e o primeiro de `B` passa — igual **com e sem** as flags (o padrão do uvicorn já confia em `127.0.0.1`). O teste do arquivo do serviço garante que as flags continuem explícitas.
 
 ### Task 6: Guia de instalação
 
