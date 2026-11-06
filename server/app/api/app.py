@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
 from app.api.errors import install_error_handlers
+from app.api.security_headers import install_security_headers
 from app.api.routes import admin as admin_routes
 from app.api.routes import auth as auth_routes
 from app.api.routes import files as files_routes
@@ -51,6 +52,7 @@ def create_app(runtime=None, *, run_background: bool = False, scheduler: Schedul
     )
     app.state.runtime = runtime
     install_error_handlers(app)
+    install_security_headers(app)
     app.include_router(auth_routes.router)
     app.include_router(rider_routes.router)
     app.include_router(admin_routes.router)
