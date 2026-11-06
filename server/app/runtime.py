@@ -103,6 +103,7 @@ class Runtime:
     safety_store: SafetyStore
     notifier: ContactNotifier
     mode: str = "production"
+    dev_routes: bool = True           # com "dev" e "off" o servidor não monta /v1/dev/*, /docs nem /openapi.json
     clock: Callable[[], float] = time.time
     redis_client: Any = None
     config_ttl_s: float = 30.0
@@ -207,5 +208,6 @@ def build_runtime(settings: Settings) -> Runtime:
         safety_store=RedisSafetyStore(client),
         notifier=FakeContactNotifier(),
         mode="dev",
+        dev_routes=settings.dev_routes,
         redis_client=client,
     )

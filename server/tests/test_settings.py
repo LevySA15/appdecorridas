@@ -60,3 +60,24 @@ def test_le_modo_segredo_do_webhook_e_pasta_de_documentos(tmp_path):
     settings = load_settings(env_path=env, environ={})
     assert (settings.mode, settings.webhook_secret) == ("dev", "segredo")
     assert str(settings.upload_dir) == "/dados/docs"
+
+
+def test_rotas_de_desenvolvimento_ficam_ligadas_por_padrao(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("DATABASE_URL=postgresql://a@h/x\nREDIS_URL=redis://a/0\n", encoding="utf-8")
+    assert load_settings(env_path=env, environ={}).dev_routes is True
+
+
+@pytest.mark.parametrize("valor,esperado", [("off", False), ("NAO", False), ("0", False), ("false", False),
+                                            ("on", True), ("Sim", True), ("1", True), ("true", True)])
+def test_dev_routes_aceita_ligar_e_desligar(tmp_path, valor, esperado):
+    env = tmp_path / ".env"
+    env.write_text(f"DATABASE_URL=postgresql://a@h/x\nREDIS_URL=redis://a/0\nDEV_ROUTES={valor}\n", encoding="utf-8")
+    assert load_settings(env_path=env, environ={}).dev_routes is esperado
+
+
+def test_dev_routes_com_valor_estranho_da_erro_claro(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("DATABASE_URL=postgresql://a@h/x\nREDIS_URL=redis://a/0\nDEV_ROUTES=talvez\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="DEV_ROUTES"):
+        load_settings(env_path=env, environ={})

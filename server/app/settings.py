@@ -21,6 +21,7 @@ class Settings:
     webhook_secret: str | None = None       # assina os avisos do provedor de pagamento (HMAC)
     upload_dir: Path = _DEFAULT_UPLOAD_DIR  # onde ficam as fotos dos documentos (fora do git)
     mode: str = "production"                # "dev" liga os adaptadores falsos, os únicos que existem até o plano 7
+    dev_routes: bool = True                 # "off" não monta /v1/dev/*, /docs e /openapi.json (servidor aberto na internet)
 
 
 def parse_env_file(path: Path) -> dict[str, str]:
@@ -45,6 +46,21 @@ def _with_driver(url: str) -> str:
     return url
 
 
+_LIGADO = {"on", "1", "true", "sim"}
+_DESLIGADO = {"off", "0", "false", "nao", "não"}
+
+
+def _parse_switch(name: str, raw: str | None, *, default: bool) -> bool:
+    if raw is None:
+        return default
+    valor = raw.strip().lower()
+    if valor in _LIGADO:
+        return True
+    if valor in _DESLIGADO:
+        return False
+    raise RuntimeError(f"{name} deve ser on ou off (veio {raw!r})")
+
+
 def load_settings(
     env_path: Path | None = None, environ: Mapping[str, str] | None = None
 ) -> Settings:
@@ -61,10 +77,12 @@ def load_settings(
         return env.get(key) or file_values.get(key) or None
 
     upload_dir = optional("UPLOAD_DIR")
+    dev_routes = _parse_switch("DEV_ROUTES", optional("DEV_ROUTES"), default=True)
     return Settings(
         database_url=_with_driver(get("DATABASE_URL")),
         redis_url=get("REDIS_URL"),
         webhook_secret=optional("WEBHOOK_SECRET"),
         upload_dir=Path(upload_dir) if upload_dir else _DEFAULT_UPLOAD_DIR,
         mode=optional("APP_MODE") or "production",
+        dev_routes=dev_routes,
     )

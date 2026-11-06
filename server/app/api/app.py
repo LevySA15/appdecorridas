@@ -29,7 +29,7 @@ PAINEL_DIR = Path(__file__).resolve().parents[2] / "painel"
 def create_app(runtime=None, *, run_background: bool = False, scheduler: Scheduler | None = None) -> FastAPI:
     """`runtime` reúne banco, Redis e adaptadores (ver `app/runtime.py`). `run_background` liga o
     agendador (varreduras de tempo); os testes deixam desligado e chamam as tarefas à mão."""
-    dev = getattr(runtime, "mode", "production") == "dev"
+    dev = getattr(runtime, "mode", "production") == "dev" and getattr(runtime, "dev_routes", True)
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
