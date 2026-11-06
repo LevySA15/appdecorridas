@@ -265,6 +265,7 @@ global.document = {{ title: 'Painel do dono', getElementById: (id) => caixas[id]
   const primeiro = {{ texto: caixas['alerta-vivo'].textContent, titulo: document.title, escondida: caixas['alerta-vivo'].hidden, classe: caixas['alerta-vivo'].className }};
   p.aoAviso({{ type: 'safety_alert', data: {{ kind: 'stopped' }} }});
   const segundo = caixas['alerta-vivo'].textContent;
+  const classeDepoisDoSegundo = caixas['alerta-vivo'].className;
   await new Promise((r) => setTimeout(r, 20));
   const recarregou = chamadas.filter((u) => u.includes('safety-alerts')).length > antes;
   await p.mostrar('cadastros');
@@ -273,13 +274,14 @@ global.document = {{ title: 'Painel do dono', getElementById: (id) => caixas[id]
   await new Promise((r) => setTimeout(r, 20));
   const naoRecarregouOutraTela = chamadas.filter((u) => u.includes('appeals')).length === antesRecursos;
   p.limparAviso();
-  console.log(JSON.stringify({{ primeiro, segundo, recarregou, naoRecarregouOutraTela, depois: {{ escondida: caixas['alerta-vivo'].hidden, titulo: document.title }} }}));
+  console.log(JSON.stringify({{ primeiro, segundo, classeDepoisDoSegundo, recarregou, naoRecarregouOutraTela, depois: {{ escondida: caixas['alerta-vivo'].hidden, titulo: document.title }} }}));
 }})();
 """
     r = json.loads(_rodar_node(codigo))
     assert r["primeiro"]["texto"].startswith("SOS") and "clique para ver" in r["primeiro"]["texto"]
     assert r["primeiro"]["titulo"] == "(!) " + r["primeiro"]["texto"].split(" — ")[0] + " — Painel do dono"
     assert r["primeiro"]["escondida"] is False and "urgente" in r["primeiro"]["classe"]
-    assert "(+1)" in r["segundo"]
+    assert r["segundo"].startswith("SOS") and "(+1)" in r["segundo"]            # um aviso comum não apaga o SOS da caixa
+    assert "urgente" in r["classeDepoisDoSegundo"]
     assert r["recarregou"] is True and r["naoRecarregouOutraTela"] is True
     assert r["depois"] == {"escondida": True, "titulo": "Painel do dono"}

@@ -212,6 +212,8 @@ const CODIGO_SESSAO_ACABOU = 4401;
 let ligacao = null;
 let avisosNovos = 0;
 let telaDoAviso = "alertas";
+let textoDaCaixa = "";
+let urgenteNaCaixa = false;     // um SOS na caixa não é apagado por um aviso comum que chegue depois
 
 function descreverAviso(mensagem) {
   const dados = (mensagem && mensagem.data) || {};
@@ -266,6 +268,7 @@ function conectarAvisos({ criarSocket, agendar, cancelar, token, aoMensagem, aoR
 
 function limparAviso() {
   avisosNovos = 0;
+  urgenteNaCaixa = false;
   el("alerta-vivo").hidden = true;
   document.title = TITULO;
 }
@@ -277,12 +280,13 @@ function aoAviso(mensagem) {
     return;
   }
   avisosNovos += 1;
-  telaDoAviso = aviso.tela;
+  const manterTexto = urgenteNaCaixa && !aviso.urgente;           // fica o texto do SOS; só a contagem sobe
+  if (!manterTexto) { urgenteNaCaixa = aviso.urgente; telaDoAviso = aviso.tela; textoDaCaixa = aviso.texto; }
   const caixa = el("alerta-vivo");
-  caixa.textContent = aviso.texto + (avisosNovos > 1 ? " (+" + (avisosNovos - 1) + ")" : "") + " — clique para ver";   // textContent: nunca HTML
-  caixa.className = aviso.urgente ? "urgente" : "";
+  caixa.textContent = textoDaCaixa + (avisosNovos > 1 ? " (+" + (avisosNovos - 1) + ")" : "") + " — clique para ver";   // textContent: nunca HTML
+  caixa.className = urgenteNaCaixa ? "urgente" : "";
   caixa.hidden = false;
-  document.title = "(!) " + aviso.texto + " — " + TITULO;
+  document.title = "(!) " + textoDaCaixa + " — " + TITULO;
   if (telaAtual === aviso.tela) mostrar(aviso.tela);
 }
 
