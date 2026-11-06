@@ -156,7 +156,7 @@ class SafetyService:
     # --- SOS ---------------------------------------------------------------------------------------
 
     def sos(self, session: Session, passenger_id: str, ride_id: str, now: float) -> SosResult:
-        ride = repo.get_ride(session, ride_id)
+        ride = repo.get_ride(session, ride_id, for_update=True)     # dois toques juntos: o segundo espera o commit do primeiro
         if ride.passenger_id != passenger_id:
             raise NotYourRide("Essa corrida não é sua.")
         if ride.state not in _ON_THE_MOVE:
@@ -204,7 +204,7 @@ class SafetyService:
     def rider_sos(self, session: Session, rider_id: str, ride_id: str, now: float) -> RiderSosResult:
         """O motoqueiro pede socorro durante a corrida. Avisa só os administradores: o perigo pode ser o passageiro,
         e o motoqueiro não tem contato de emergência. Os avisos "está tudo bem?" do passageiro ficam como estão."""
-        ride = repo.get_ride(session, ride_id)
+        ride = repo.get_ride(session, ride_id, for_update=True)     # idem: um toque só vira um alerta só
         if ride.rider_id != rider_id:
             raise NotYourRide("Essa corrida não é sua.")
         if ride.state not in _ON_THE_MOVE:
