@@ -408,3 +408,22 @@ global.document = {{ querySelectorAll: (seletor) => {{ consultou = seletor; retu
     assert len(r["feita"]) == 1 and r["feita"][0]["url"] == "/v1/admin/config/rides" and r["feita"][0]["metodo"] == "PUT"
     assert json.loads(r["feita"][0]["corpo"]) == {"cancel_fee_min_cents": 300, "pix_window_s": 120}
     assert "Tempo do Pix" in r["erro"] and r["chamadasDepois"] == 1               # número ruim não chegou ao servidor
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar o clique do painel")
+def test_depois_de_uma_acao_o_feito_continua_na_tela_em_vez_de_sumir_com_a_recarga():
+    codigo = f"""
+global.document = undefined;
+global.sessionStorage = {{ getItem: () => 't', setItem() {{}}, removeItem() {{}} }};
+global.fetch = async () => ({{ status: 204, ok: true, json: async () => [] }});
+const p = require({str(JS)!r});
+const caixas = {{ aviso: {{ textContent: '', className: '' }}, tela: {{ hidden: true, innerHTML: '' }}, detalhe: {{ hidden: true }}, menu: {{ children: [] }} }};
+global.document = {{ title: 'x', getElementById: (id) => caixas[id] }};
+const alvo = {{ dataset: {{ act: 'rider-approve', id: 'r1' }} }};
+(async () => {{
+  await p.aoClicar({{ target: {{ closest: () => alvo }} }});
+  console.log(JSON.stringify({{ aviso: caixas.aviso.textContent, classe: caixas.aviso.className }}));
+}})();
+"""
+    r = json.loads(_rodar_node(codigo))
+    assert r == {"aviso": "Feito.", "classe": "ok"}

@@ -475,8 +475,8 @@ async function aoClicar(evento) {
     }
     const feito = await ACOES[act](id);
     if (feito === CANCELADO) return;
+    await mostrar(telaAtual);       // a recarga limpa o aviso: o "Feito." vem depois dela
     aviso("Feito.", true);
-    await mostrar(telaAtual);
   } catch (erro) { aviso(erro.message); }
 }
 
@@ -505,4 +505,4 @@ function comecar() {
 }
 
 if (typeof document !== "undefined") comecar();
-if (typeof module !== "undefined") module.exports = { esc, attr, money, when, ACOES, CANCELADO, TELAS, VISOES, PARAMETROS, paraCampo, doCampo, coletarBloco, mostrar, descreverAviso, conectarAvisos, aoAviso, limparAviso, situacaoDoCadastro, tipoDoAlerta, fotosDoCadastro };
+if (typeof module !== "undefined") module.exports = { esc, attr, money, when, aoClicar, ACOES, CANCELADO, TELAS, VISOES, PARAMETROS, paraCampo, doCampo, coletarBloco, mostrar, descreverAviso, conectarAvisos, aoAviso, limparAviso, situacaoDoCadastro, tipoDoAlerta, fotosDoCadastro };
