@@ -467,8 +467,13 @@ def queue_info(session: Session, ride_id: str, rider_id: str) -> dict:
     finishing_at = None
     if active_id is not None:
         finishing_at = session.execute(select(RideRow.dest_text).where(RideRow.id == active_id)).scalar_one_or_none()
+    # Corrida da fila que estourou o tempo volta para a busca e pode ser aceita por outra moto: a oferta da primeira
+    # continua "aceita" no histórico. Vale a mais nova.
     eta = session.execute(
-        select(RideOfferRow.eta_seconds).where(RideOfferRow.ride_id == ride_id, RideOfferRow.status == "accepted")
+        select(RideOfferRow.eta_seconds)
+        .where(RideOfferRow.ride_id == ride_id, RideOfferRow.status == "accepted")
+        .order_by(RideOfferRow.id.desc())
+        .limit(1)
     ).scalar_one_or_none()
     return {"finishing_at": finishing_at or "", "eta_seconds": eta}
 
