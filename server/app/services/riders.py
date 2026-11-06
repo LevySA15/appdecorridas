@@ -196,6 +196,8 @@ class RiderService:
 
     def block(self, session: Session, rider_id: str, reason: str) -> None:
         profile = self._profile(session, rider_id)
+        if profile.status == "blocked":      # bloquear de novo trocaria o motivo guardado e repetiria o aviso e o registro
+            raise InvalidState("o cadastro já está bloqueado")
         profile.status = "blocked"
         profile.online = False
         profile.rejected_reason = reason[:200]

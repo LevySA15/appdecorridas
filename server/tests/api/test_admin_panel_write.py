@@ -179,3 +179,12 @@ def test_parametro_certo_continua_sendo_gravado_apos_as_validacoes_novas(client,
     atual = client.get("/v1/admin/config", headers=admin.headers).json()
     for chave, valor in atual.items():
         assert client.put(f"/v1/admin/config/{chave}", json=valor, headers=admin.headers).status_code == 204, chave
+
+
+def test_bloquear_de_novo_o_motoqueiro_da_409_e_nao_grava_outra_linha(client, rider, admin, session):
+    session.get(RiderProfileRow, "r1").status = "approved"
+    session.flush()
+    assert client.post("/v1/admin/riders/r1/block", json={"reason": "denúncia"}, headers=admin.headers).status_code == 204
+    resposta = client.post("/v1/admin/riders/r1/block", json={"reason": "outra"}, headers=admin.headers)
+    assert resposta.status_code == 409 and resposta.json()["error"]["code"] == "invalid_state"
+    assert [a for a in acoes(session) if a[0] == "rider.block"] == [("rider.block", "rider", "r1")]

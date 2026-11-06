@@ -484,3 +484,25 @@ def test_renovar_sem_liberar_nao_deixa_rastro(service, session):
         session, "r1", cnh_expires_on=dt.date(2032, 1, 1), crlv_expires_on=dt.date(2031, 1, 1), today=HOJE, now=700.0,
     )
     assert list_admin_actions(session, 10, 0) == []
+
+
+def test_bloquear_quem_ja_esta_bloqueado_e_recusado_e_guarda_o_primeiro_motivo(service, session, events):
+    novo_usuario(session)
+    cadastrar(service, session)
+    service.approve(session, "r1", now=100.0)
+    service.block(session, "r1", "primeira denúncia")
+    avisos = len(events.events)
+    with pytest.raises(InvalidState, match="já está bloqueado"):
+        service.block(session, "r1", "segunda denúncia")
+    assert session.get(RiderProfileRow, "r1").rejected_reason == "primeira denúncia"
+    assert len(events.events) == avisos                       # nenhum aviso repetido ao motoqueiro
+
+
+@pytest.mark.parametrize("situacao", ["pending", "approved"])
+def test_quem_nao_esta_bloqueado_continua_podendo_ser_bloqueado(service, session, situacao):
+    novo_usuario(session)
+    cadastrar(service, session)
+    if situacao == "approved":
+        service.approve(session, "r1", now=100.0)
+    service.block(session, "r1", "denúncia")
+    assert session.get(RiderProfileRow, "r1").status == "blocked"
