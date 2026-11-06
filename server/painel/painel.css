@@ -22,6 +22,11 @@ th { color: var(--suave); font-weight: 600; }
 #alerta-vivo.urgente { border-color: var(--verm); color: var(--verm); }
 #aviso { min-height: 1.4em; color: var(--verm); }
 #aviso.ok { color: var(--verde); }
-textarea { width: 100%; min-height: 220px; font-family: ui-monospace, monospace; }
+textarea { width: 100%; min-height: 120px; font-family: ui-monospace, monospace; }
+fieldset { border: 1px solid var(--linha); border-radius: 8px; margin: 0 0 16px; padding: 10px 14px 14px; }
+legend { font-weight: 600; padding: 0 6px; }
+.campo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 220px); gap: 4px 12px; align-items: center; padding: 4px 0; }
+.campo textarea { grid-column: 1 / -1; }
+fieldset > button { margin-top: 8px; }
 pre { white-space: pre-wrap; border: 1px solid var(--linha); border-radius: 8px; padding: 10px; overflow: auto; }
 @media (max-width: 640px) { th:nth-child(n+5), td:nth-child(n+5) { display: none; } }

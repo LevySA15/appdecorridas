@@ -221,6 +221,25 @@ function coletarBloco(campos) {
   return corpo;
 }
 
+function tipoDoValor(valor) {
+  if (typeof valor === "boolean") return "bool";
+  if (typeof valor === "number") return Number.isInteger(valor) ? "int" : "float";
+  return "json";
+}
+function campoDoFormulario(nome, info, valor) {
+  const dados = `data-campo="${attr(nome)}" data-tipo="${attr(info.tipo)}" data-rotulo="${attr(info.rotulo)}"`;
+  const texto = paraCampo(info.tipo, valor);
+  let controle;
+  if (info.tipo === "bool") {
+    controle = `<select ${raw(dados)}><option value="sim" ${raw(texto === "sim" ? "selected" : "")}>Sim</option><option value="nao" ${raw(texto === "nao" ? "selected" : "")}>Não</option></select>`;
+  } else if (info.tipo === "json") {
+    controle = `<textarea ${raw(dados)}>${esc(texto)}</textarea>`;
+  } else {
+    controle = `<input ${raw(dados)} value="${attr(texto)}" inputmode="decimal">`;
+  }
+  return `<label class="campo"><span>${esc(info.rotulo)}</span>${raw(controle)}</label>`;
+}
+
 // ---------- telas ----------
 const VISOES = {
   async cadastros() {
@@ -297,8 +316,12 @@ const VISOES = {
   },
   async parametros() {
     const todos = await api("/v1/admin/config");
-    return "<p class=\"suave\">Cada bloco é um conjunto de números do sistema. Mude com cuidado: o servidor recusa o que não faz sentido.</p>" +
-      Object.keys(todos).map((chave) => `<h3>${esc(chave)}</h3><textarea data-chave="${attr(chave)}">${esc(JSON.stringify(todos[chave], null, 2))}</textarea>${raw(botao("config-save", chave, "Salvar " + chave))}`).join("");
+    const blocos = Object.keys(todos).map((chave) => {
+      const meta = PARAMETROS[chave] || { titulo: chave, campos: {} };
+      const campos = Object.entries(todos[chave]).map(([nome, valor]) => campoDoFormulario(nome, meta.campos[nome] || { rotulo: nome, tipo: tipoDoValor(valor) }, valor));
+      return `<fieldset data-bloco="${attr(chave)}"><legend>${esc(meta.titulo)}</legend>${raw(campos.join(""))}${raw(botao("config-save", chave, "Salvar " + meta.titulo))}</fieldset>`;
+    });
+    return '<p class="suave">Cada bloco é um conjunto de números do sistema; dinheiro em reais. Mude com cuidado: o servidor recusa o que não faz sentido.</p>' + blocos.join("");
   },
   async registro() {
     const lista = await api("/v1/admin/actions?limit=100");
@@ -433,10 +456,8 @@ const ACOES = {
   "appeal-reject": (id) => { const n = perguntar("Nota (pode ficar vazia):"); return n === null ? CANCELADO : api("/v1/admin/appeals/" + encodeURIComponent(id) + "/decide", { method: "POST", json: { decision: "reject", note: n } }); },
   "alert-resolve": (id) => { const n = perguntar("Nota (pode ficar vazia):"); return n === null ? CANCELADO : api("/v1/admin/safety-alerts/" + encodeURIComponent(id) + "/resolve", { method: "POST", json: { note: n } }); },
   "config-save": (chave) => {
-    const campo = document.querySelector('textarea[data-chave="' + chave + '"]');
-    let corpo;
-    try { corpo = JSON.parse(campo.value); } catch (e) { throw new Error("O texto não é um JSON válido."); }
-    return api("/v1/admin/config/" + encodeURIComponent(chave), { method: "PUT", json: corpo });
+    const campos = [...document.querySelectorAll('[data-bloco="' + chave + '"] [data-campo]')].map((c) => ({ campo: c.dataset.campo, tipo: c.dataset.tipo, rotulo: c.dataset.rotulo, texto: c.value }));
+    return api("/v1/admin/config/" + encodeURIComponent(chave), { method: "PUT", json: coletarBloco(campos) });
   },
 };
 

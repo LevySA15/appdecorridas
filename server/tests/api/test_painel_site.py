@@ -355,3 +355,56 @@ def test_todo_campo_de_configuracao_tem_nome_em_portugues_no_painel():
         assert tabela[chave]["titulo"]
         assert all(c["rotulo"] and c["tipo"] in {"cents", "int", "float", "bool", "json"} for c in tabela[chave]["campos"].values())
     assert tabela["fees"]["campos"]["tiers"]["tipo"] == "json"
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar a tela de parâmetros")
+def test_tela_de_parametros_e_um_formulario_com_nomes_em_portugues_e_nada_vira_html():
+    codigo = f"""
+global.document = undefined;
+global.sessionStorage = {{ getItem: () => 't', setItem() {{}}, removeItem() {{}} }};
+const config = {{
+  pricing: {{ base_fare_cents: 300, factor_min: 0.8 }},
+  balance: {{ topup_enabled: false, pay_rides_enabled: true }},
+  fees: {{ tiers: [{{ from_ride: 1, to_ride: null, fee_cents: 100 }}] }},
+  rides: {{ campo_novo: 7, 'x"><b>y</b>': 3 }},
+}};
+global.fetch = async () => ({{ status: 200, ok: true, json: async () => config }});
+const p = require({str(JS)!r});
+p.VISOES.parametros().then((html) => console.log(JSON.stringify(html)));
+"""
+    html = json.loads(_rodar_node(codigo))
+    assert html.count("<fieldset") == 4 and "Preço da corrida" in html and "Saldo do passageiro" in html
+    assert "Bandeirada (R$)" in html and 'value="3,00"' in html and 'value="0,8"' in html
+    assert 'data-campo="topup_enabled"' in html and html.count("<select") == 2 and 'value="nao" selected' in html
+    assert "<textarea" in html and "from_ride" in html                         # as faixas de taxa seguem em JSON
+    assert 'data-campo="campo_novo"' in html and ">campo_novo<" in html          # campo sem nome em português aparece com o nome cru
+    assert "<b>y</b>" not in html and "&lt;b&gt;y&lt;/b&gt;" in html
+    assert "Salvar Preço da corrida" in html
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar o salvar de parâmetros")
+def test_salvar_parametros_manda_os_valores_convertidos_e_nao_chama_o_servidor_com_numero_ruim():
+    codigo = f"""
+global.document = undefined;
+global.sessionStorage = {{ getItem: () => 't', setItem() {{}}, removeItem() {{}} }};
+const chamadas = [];
+global.fetch = async (url, opcoes) => {{ chamadas.push({{ url, metodo: opcoes.method, corpo: opcoes.body }}); return {{ status: 204, ok: true }}; }};
+const p = require({str(JS)!r});
+const campos = (bloco) => [
+  {{ dataset: {{ campo: 'cancel_fee_min_cents', tipo: 'cents', rotulo: 'Taxa mínima' }}, value: '3,00' }},
+  {{ dataset: {{ campo: 'pix_window_s', tipo: 'int', rotulo: 'Tempo do Pix' }}, value: bloco === 'ruim' ? 'dois minutos' : '120' }},
+];
+let consultou = null;
+global.document = {{ querySelectorAll: (seletor) => {{ consultou = seletor; return campos(seletor.includes('ruim') ? 'ruim' : 'bom'); }} }};
+(async () => {{
+  await p.ACOES['config-save']('rides');
+  const feita = chamadas.slice();
+  let erro = null;
+  try {{ await p.ACOES['config-save']('ruim'); }} catch (e) {{ erro = e.message; }}
+  console.log(JSON.stringify({{ feita, erro, chamadasDepois: chamadas.length, consultou }}));
+}})();
+"""
+    r = json.loads(_rodar_node(codigo))
+    assert len(r["feita"]) == 1 and r["feita"][0]["url"] == "/v1/admin/config/rides" and r["feita"][0]["metodo"] == "PUT"
+    assert json.loads(r["feita"][0]["corpo"]) == {"cancel_fee_min_cents": 300, "pix_window_s": 120}
+    assert "Tempo do Pix" in r["erro"] and r["chamadasDepois"] == 1               # número ruim não chegou ao servidor
