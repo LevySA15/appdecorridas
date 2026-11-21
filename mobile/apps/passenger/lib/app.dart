@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 
 import 'passenger_controller.dart';
 import 'screens/home_screen.dart';
+import 'screens/name_screen.dart';
+import 'screens/profile_screen.dart';
 import 'screens/request_ride_screen.dart';
 import 'screens/ride_screen.dart';
 import 'screens/wallet_screen.dart';
@@ -176,10 +178,25 @@ class _SignedInShellState extends State<SignedInShell> {
               amountCents: amountCents,
               pixKey: pixKey,
             ),
-            onSetEmergencyContact: (name, phone) =>
-                widget.controller.setEmergencyContact(name: name, phone: phone),
             onAppealFee: widget.controller.appealFee,
             onShowCharge: _showCharge,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openProfile() {
+    _navigatorKey.currentState!.push(
+      MaterialPageRoute(
+        builder: (_) => ListenableBuilder(
+          listenable: widget.controller,
+          builder: (context, _) => ProfileScreen(
+            state: widget.controller.state!,
+            onSaveName: widget.controller.setName,
+            onSetEmergencyContact: (name, phone) =>
+                widget.controller.setEmergencyContact(name: name, phone: phone),
+            onSignOut: widget.controller.signOut,
           ),
         ),
       ),
@@ -202,11 +219,19 @@ class _SignedInShellState extends State<SignedInShell> {
                 onSignOut: widget.controller.signOut,
               );
             }
+            // sem nome ninguém passa daqui: o motoqueiro e a central precisam saber quem é o passageiro
+            if (state.name.trim().isEmpty) {
+              return NameScreen(
+                onSave: widget.controller.setName,
+                onSignOut: widget.controller.signOut,
+              );
+            }
             return HomeScreen(
               state: state,
               onRequestRide: _openRequestRide,
               onOpenRide: _openRide,
               onOpenWallet: _openWallet,
+              onOpenProfile: _openProfile,
               onSignOut: widget.controller.signOut,
               onPayPendingFee: widget.controller.payPendingFee,
               onShowPendingCash: widget.controller.loadCharge,

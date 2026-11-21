@@ -10,6 +10,8 @@ import 'package:http/testing.dart';
 import 'package:passenger/app.dart';
 import 'package:passenger/passenger_controller.dart';
 import 'package:passenger/screens/home_screen.dart';
+import 'package:passenger/screens/name_screen.dart';
+import 'package:passenger/screens/profile_screen.dart';
 import 'package:passenger/screens/ride_screen.dart';
 import 'package:stream_channel/stream_channel.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -98,8 +100,11 @@ class Mundo {
   late final PassengerController controller;
   final canais = <FakeChannel>[];
 
+  // `name` já vem preenchido (senão a tela do nome tomaria o lugar da Home em todo teste); um teste que
+  // quer ver a tela do nome põe `'name': ''` no seu `stateJson`.
   Map<String, Object?> stateJson = const {};
   int stateStatus = 200;
+  String? nomeSalvo;
   var stateThrows = false; // sem internet
   http.Request? ratingRequest;
 
@@ -124,7 +129,17 @@ class Mundo {
           'error': {'code': 'unauthorized', 'message': 'Sessão vencida.'},
         }, stateStatus);
       }
-      return _json(stateJson);
+      return _json({'name': 'Ana', ...stateJson});
+    }
+    if (r.method == 'PUT' && path == '/v1/me') {
+      nomeSalvo = (jsonDecode(r.body) as Map)['name'] as String;
+      stateJson = {'name': nomeSalvo};
+      return _json({
+        'user_id': 'u1',
+        'phone': '+5575999990001',
+        'name': nomeSalvo,
+        'role': 'passenger',
+      });
     }
     if (r.method == 'POST' && path == '/v1/rides/r1/rating') {
       ratingRequest = r;
@@ -323,4 +338,63 @@ void main() {
       await tester.runAsync(() => m.controller.signOut());
     },
   );
+
+  for (final vazio in ['', '   ']) {
+    testWidgets('nome "$vazio" no estado mostra a tela do nome e nao a home', (
+      tester,
+    ) async {
+      final m = Mundo();
+      await m.store.save(
+        Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
+      );
+      m.stateJson = {'name': vazio};
+      await m.controller.start();
+      await tester.pumpWidget(PassengerApp(controller: m.controller));
+      await tester.pump();
+
+      expect(find.byType(NameScreen), findsOneWidget);
+      expect(find.byType(HomeScreen), findsNothing);
+      await tester.runAsync(() => m.controller.signOut());
+    });
+  }
+
+  testWidgets('salvar o nome manda PUT /v1/me e abre a home', (tester) async {
+    final m = Mundo();
+    await m.store.save(
+      Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
+    );
+    m.stateJson = {'name': ''};
+    await m.controller.start();
+    await tester.pumpWidget(PassengerApp(controller: m.controller));
+    await tester.pump();
+
+    await tester.enterText(find.byKey(const Key('nome')), 'Ana');
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+
+    expect(m.nomeSalvo, 'Ana');
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.byType(NameScreen), findsNothing);
+    await tester.runAsync(() => m.controller.signOut());
+  });
+
+  testWidgets('Perfil na home abre a tela de perfil com o telefone', (
+    tester,
+  ) async {
+    final m = Mundo();
+    await m.store.save(
+      Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
+    );
+    m.stateJson = {'phone': '+5575999990001'};
+    await m.controller.start();
+    await tester.pumpWidget(PassengerApp(controller: m.controller));
+    await tester.pump();
+
+    await tester.tap(find.text('Perfil'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ProfileScreen), findsOneWidget);
+    expect(find.text('+5575999990001'), findsOneWidget);
+    await tester.runAsync(() => m.controller.signOut());
+  });
 }

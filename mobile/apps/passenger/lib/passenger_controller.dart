@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:corrida_core/corrida_core.dart';
-import 'package:corrida_ui/corrida_ui.dart' show Dial, dialNumber, emergencyNumber;
+import 'package:corrida_ui/corrida_ui.dart'
+    show Dial, dialNumber, emergencyNumber;
 import 'package:flutter/foundation.dart';
 
 /// A ponte única entre as telas e o pacote `corrida_core`: guarda a sessão, o último estado lido do
@@ -137,6 +138,12 @@ class PassengerController extends ChangeNotifier {
     final result = await api.withdraw(amountCents: amountCents, pixKey: pixKey);
     await refreshState();
     return result;
+  }
+
+  /// Salva o nome (`PUT /v1/me`) e relê o estado: é o `state.name` que tira a pessoa da tela do nome.
+  Future<void> setName(String name) async {
+    await authApi.updateName(name);
+    await refreshState();
   }
 
   Future<void> setEmergencyContact({

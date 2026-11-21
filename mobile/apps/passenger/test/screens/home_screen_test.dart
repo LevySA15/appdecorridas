@@ -17,6 +17,7 @@ void main() {
           onRequestRide: () {},
           onOpenRide: () => aberto = true,
           onOpenWallet: () {},
+          onOpenProfile: () {},
           onSignOut: () {},
           onPayPendingFee: () async => const PayFeeResult(paid: true),
           onShowPendingCash: (_) async =>
@@ -40,6 +41,7 @@ void main() {
           onRequestRide: () => pedido = true,
           onOpenRide: () {},
           onOpenWallet: () {},
+          onOpenProfile: () {},
           onSignOut: () {},
           onPayPendingFee: () async => const PayFeeResult(paid: true),
           onShowPendingCash: (_) async =>
@@ -63,6 +65,7 @@ void main() {
           onRequestRide: () {},
           onOpenRide: () {},
           onOpenWallet: () {},
+          onOpenProfile: () {},
           onSignOut: () {},
           onPayPendingFee: () async => const PayFeeResult(paid: true),
           onShowPendingCash: (_) async =>
@@ -96,6 +99,7 @@ void main() {
           onRequestRide: () {},
           onOpenRide: () {},
           onOpenWallet: () {},
+          onOpenProfile: () {},
           onSignOut: () {},
           onPayPendingFee: () async => const PayFeeResult(paid: true),
           onShowPendingCash: (id) async {
@@ -130,6 +134,7 @@ void main() {
             onRequestRide: () {},
             onOpenRide: () {},
             onOpenWallet: () {},
+            onOpenProfile: () {},
             onSignOut: () {},
             onPayPendingFee: () async => const PayFeeResult(paid: true),
             onShowPendingCash: (_) async =>
@@ -154,6 +159,7 @@ void main() {
           onRequestRide: () {},
           onOpenRide: () {},
           onOpenWallet: () {},
+          onOpenProfile: () {},
           onSignOut: () {},
           onPayPendingFee: () async => const PayFeeResult(paid: true),
           onShowPendingCash: (_) async =>
@@ -181,6 +187,7 @@ void main() {
           onRequestRide: () {},
           onOpenRide: () {},
           onOpenWallet: () {},
+          onOpenProfile: () {},
           onSignOut: () {},
           onPayPendingFee: () async =>
               PayFeeResult(paid: false, charge: charge),
@@ -207,6 +214,7 @@ void main() {
           onRequestRide: () {},
           onOpenRide: () {},
           onOpenWallet: () {},
+          onOpenProfile: () {},
           onSignOut: () {},
           onPayPendingFee: () async => throw ApiException(
             status: 409,
@@ -224,5 +232,28 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Não há nada para pagar.'), findsOneWidget);
+  });
+
+  testWidgets('Perfil chama onOpenProfile', (tester) async {
+    var aberto = false;
+    await tester.pumpWidget(
+      _app(
+        HomeScreen(
+          state: const PassengerState(),
+          onRequestRide: () {},
+          onOpenRide: () {},
+          onOpenWallet: () {},
+          onOpenProfile: () => aberto = true,
+          onSignOut: () {},
+          onPayPendingFee: () async => const PayFeeResult(paid: true),
+          onShowPendingCash: (_) async =>
+              const Charge(chargeId: 'c1', amountCents: 100),
+          onShowCharge: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Perfil'));
+    expect(aberto, isTrue);
   });
 }

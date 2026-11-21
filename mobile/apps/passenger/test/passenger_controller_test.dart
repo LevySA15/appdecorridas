@@ -103,6 +103,7 @@ class Mundo {
   final discados = <String>[];
   var discadorQuebrado = false;
   var sosStatus = 200;
+  String? nomeSalvo;
 
   Map<String, Object?> stateJson = const {};
   int stateStatus = 200;
@@ -127,6 +128,16 @@ class Mundo {
         }, stateStatus);
       }
       return _json(stateJson);
+    }
+    if (r.method == 'PUT' && path == '/v1/me') {
+      nomeSalvo = (jsonDecode(r.body) as Map)['name'] as String;
+      stateJson = {'name': nomeSalvo};
+      return _json({
+        'user_id': 'u1',
+        'phone': '+5575999990001',
+        'name': nomeSalvo,
+        'role': 'passenger',
+      });
     }
     if (r.method == 'POST' && path == '/v1/rides/r1/sos') {
       if (sosStatus != 200) {
@@ -312,5 +323,21 @@ void main() {
     final sos = await m.controller.sos('r1');
 
     expect(sos.alertId, 4);
+  });
+
+  test('setName salva o nome e rele o estado', () async {
+    final m = Mundo();
+    await m.store.save(
+      Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
+    );
+    m.stateJson = {'name': ''};
+    await m.controller.start();
+    expect(m.controller.state!.name, '');
+
+    await m.controller.setName('Ana Lima');
+
+    expect(m.nomeSalvo, 'Ana Lima');
+    expect(m.controller.state!.name, 'Ana Lima');
+    await m.controller.signOut();
   });
 }

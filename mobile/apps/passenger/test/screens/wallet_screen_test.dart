@@ -9,7 +9,6 @@ WalletScreen _screen({
   required PassengerState state,
   Future<Charge> Function(int)? onTopup,
   Future<Withdrawal> Function(int, String)? onWithdraw,
-  Future<void> Function(String, String)? onSetEmergencyContact,
   Future<void> Function(String, String)? onAppealFee,
   void Function(Charge)? onShowCharge,
 }) => WalletScreen(
@@ -23,7 +22,6 @@ WalletScreen _screen({
         balanceCents: 0,
         key: 'final 0000',
       ),
-  onSetEmergencyContact: onSetEmergencyContact ?? (_, _) async {},
   onAppealFee: onAppealFee ?? (_, _) async {},
   onShowCharge: onShowCharge ?? (_) {},
 );
@@ -104,33 +102,13 @@ void main() {
     expect(chaveRecebida, '52998224725');
   });
 
-  testWidgets('salvar contato de emergencia chama onSetEmergencyContact', (
+  testWidgets('a carteira nao tem mais o contato de emergencia', (
     tester,
   ) async {
-    String? nomeRecebido;
-    String? telefoneRecebido;
-    await tester.pumpWidget(
-      _app(
-        _screen(
-          state: const PassengerState(),
-          onSetEmergencyContact: (name, phone) async {
-            nomeRecebido = name;
-            telefoneRecebido = phone;
-          },
-        ),
-      ),
-    );
+    await tester.pumpWidget(_app(_screen(state: const PassengerState())));
 
-    await tester.enterText(find.byKey(const Key('contato_nome')), 'Maria');
-    await tester.enterText(
-      find.byKey(const Key('contato_telefone')),
-      '75999990000',
-    );
-    await tester.tap(find.text('Salvar'));
-    await tester.pumpAndSettle();
-
-    expect(nomeRecebido, 'Maria');
-    expect(telefoneRecebido, '75999990000');
+    expect(find.byKey(const Key('contato_nome')), findsNothing);
+    expect(find.text('Contato de emergência'), findsNothing);
   });
 
   testWidgets(

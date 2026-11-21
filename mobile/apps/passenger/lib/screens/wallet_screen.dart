@@ -1,13 +1,12 @@
 import 'package:corrida_core/corrida_core.dart';
 import 'package:flutter/material.dart';
 
-/// Saldo, recarga, saque, contato de emergência e as taxas de cancelamento recentes (com recurso).
+/// Saldo, recarga, saque e as taxas de cancelamento recentes (com recurso).
 class WalletScreen extends StatefulWidget {
   const WalletScreen({
     required this.state,
     required this.onTopup,
     required this.onWithdraw,
-    required this.onSetEmergencyContact,
     required this.onAppealFee,
     required this.onShowCharge,
     super.key,
@@ -16,7 +15,6 @@ class WalletScreen extends StatefulWidget {
   final PassengerState state;
   final Future<Charge> Function(int amountCents) onTopup;
   final Future<Withdrawal> Function(int amountCents, String pixKey) onWithdraw;
-  final Future<void> Function(String name, String phone) onSetEmergencyContact;
   final Future<void> Function(String rideId, String text) onAppealFee;
   final void Function(Charge) onShowCharge;
 
@@ -25,20 +23,6 @@ class WalletScreen extends StatefulWidget {
 }
 
 class _WalletScreenState extends State<WalletScreen> {
-  late final _nameController = TextEditingController(
-    text: widget.state.emergencyContact?.name ?? '',
-  );
-  late final _phoneController = TextEditingController(
-    text: widget.state.emergencyContact?.phone ?? '',
-  );
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
-    super.dispose();
-  }
-
   String _messageOf(Object error) => switch (error) {
     ApiException(message: final message) => message,
     NetworkException(message: final message) => message,
@@ -131,17 +115,6 @@ class _WalletScreenState extends State<WalletScreen> {
     }
   }
 
-  Future<void> _saveEmergencyContact() async {
-    try {
-      await widget.onSetEmergencyContact(
-        _nameController.text,
-        _phoneController.text,
-      );
-    } on Exception catch (error) {
-      _showMessage(_messageOf(error));
-    }
-  }
-
   Future<void> _appealFee(RecentFee fee) async {
     final textController = TextEditingController();
     final confirmado = await showDialog<bool>(
@@ -198,25 +171,6 @@ class _WalletScreenState extends State<WalletScreen> {
                   child: const Text('Sacar'),
                 ),
             ],
-          ),
-          const Divider(height: 32),
-          const Text('Contato de emergência'),
-          TextField(
-            key: const Key('contato_nome'),
-            controller: _nameController,
-            decoration: const InputDecoration(labelText: 'Nome'),
-          ),
-          TextField(
-            key: const Key('contato_telefone'),
-            controller: _phoneController,
-            decoration: const InputDecoration(labelText: 'Telefone'),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: _saveEmergencyContact,
-              child: const Text('Salvar'),
-            ),
           ),
           if (state.recentFees.isNotEmpty) ...[
             const Divider(height: 32),
