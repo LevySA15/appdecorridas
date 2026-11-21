@@ -406,42 +406,67 @@ void main() {
     await tester.runAsync(() => m.controller.signOut());
   });
 
-  testWidgets('Minhas corridas abre o historico e tocar numa corrida abre o recibo', (
-    tester,
-  ) async {
+  testWidgets(
+    'Minhas corridas abre o historico e tocar numa corrida abre o recibo',
+    (tester) async {
+      final m = Mundo();
+      await m.store.save(
+        Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
+      );
+      m.historicoJson = {
+        'rides': [
+          {
+            'ride_id': 'r9',
+            'state': 'completed',
+            'created_at': 1800000000.0,
+            'price_cents': 550,
+            'method': 'pix',
+            'pickup_text': 'Rua A',
+            'destination_text': 'Feira livre',
+            'distance_m': 1950,
+            'rider': {'name': 'João', 'plate': 'ABC1D23', 'moto_model': 'CG'},
+          },
+        ],
+        'has_more': false,
+      };
+      await m.controller.start();
+      await tester.pumpWidget(PassengerApp(controller: m.controller));
+      await tester.pump();
+
+      await tester.tap(find.text('Minhas corridas'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(HistoryScreen), findsOneWidget);
+      expect(m.historicoPedidos, 1);
+      await tester.tap(find.text('Rua A'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ReceiptScreen), findsOneWidget);
+      expect(find.text('João · ABC1D23 · CG'), findsOneWidget);
+      await tester.runAsync(() => m.controller.signOut());
+    },
+  );
+
+  testWidgets('Sair dentro do perfil volta ao login sem erro', (tester) async {
     final m = Mundo();
     await m.store.save(
       Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
     );
-    m.historicoJson = {
-      'rides': [
-        {
-          'ride_id': 'r9',
-          'state': 'completed',
-          'created_at': 1800000000.0,
-          'price_cents': 550,
-          'method': 'pix',
-          'pickup_text': 'Rua A',
-          'destination_text': 'Feira livre',
-          'distance_m': 1950,
-          'rider': {'name': 'João', 'plate': 'ABC1D23', 'moto_model': 'CG'},
-        },
-      ],
-      'has_more': false,
-    };
     await m.controller.start();
     await tester.pumpWidget(PassengerApp(controller: m.controller));
     await tester.pump();
 
-    await tester.tap(find.text('Minhas corridas'));
+    await tester.tap(find.text('Perfil'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Sair'));
+    await tester.tap(find.text('Sair'));
+    // o fechamento do tempo real tem um prazo de verdade (`.timeout`): dá tempo real, como nos outros testes
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 3)),
+    );
+    await tester.pump();
 
-    expect(find.byType(HistoryScreen), findsOneWidget);
-    expect(m.historicoPedidos, 1);
-    await tester.tap(find.text('Rua A'));
-    await tester.pumpAndSettle();
-    expect(find.byType(ReceiptScreen), findsOneWidget);
-    expect(find.text('João · ABC1D23 · CG'), findsOneWidget);
-    await tester.runAsync(() => m.controller.signOut());
+    expect(tester.takeException(), isNull);
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.byType(ProfileScreen), findsNothing);
   });
 }
