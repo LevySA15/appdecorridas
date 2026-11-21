@@ -68,10 +68,16 @@ class _BadReply(Exception):
     """A resposta do Google não tem o que precisamos."""
 
 
+class _NoRoute(_BadReply):
+    """O Google respondeu direito, mas não existe rota entre os dois pontos (não é falha do serviço)."""
+
+
 def _first_route(reply: object) -> dict:
+    if isinstance(reply, dict) and not reply.get("routes"):
+        raise _NoRoute("sem rota entre os pontos")              # `{}` é a resposta dele para "não há rota"
     routes = reply.get("routes") if isinstance(reply, dict) else None
-    if not isinstance(routes, list) or not routes or not isinstance(routes[0], dict):
-        raise _BadReply("sem rota")
+    if not isinstance(routes, list) or not isinstance(routes[0], dict):
+        raise _BadReply("resposta fora do formato")
     return routes[0]
 
 
@@ -225,6 +231,8 @@ class GoogleMaps:
     def _failed(self, exc: Exception) -> None:
         reason = str(exc).replace(self._api_key, "***")
         log.warning("Google Maps falhou (%s: %s); usei a estimativa.", type(exc).__name__, reason)
+        if isinstance(exc, _NoRoute):
+            return                                  # o serviço está bem: só não há rota para esse pedido
         with self._lock:
             self._failures_in_a_row += 1
             if self._failures_in_a_row >= self.failures_before_pause:

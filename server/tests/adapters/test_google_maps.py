@@ -298,3 +298,13 @@ def test_resposta_boa_no_meio_zera_a_contagem_de_falhas():
     assert len(post.calls) == 6
     google.route(origem(7), DESTINO)                      # agora sim, em pausa
     assert len(post.calls) == 6
+
+
+def test_ponto_sem_rota_nao_conta_como_falha_do_servico():
+    """O Google respondendo "não há rota" (destino no meio do mato) usa a estimativa, mas não pausa o Google para todos."""
+    post = Post({}, {"routes": []}, {}, BOA)
+    google = maps(post)
+    for n in (1, 2, 3):
+        assert google.route(origem(n), DESTINO) == FakeMaps().route(origem(n), DESTINO)
+    assert google.route(origem(4), DESTINO) == Route(2310, 412, decode_polyline(CODIFICADA))
+    assert len(post.calls) == 4
