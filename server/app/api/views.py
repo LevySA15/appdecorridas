@@ -154,6 +154,12 @@ def passenger_state(unit: Unit, passenger_id: str, payment_methods: list[str]) -
     }
 
 
+def passenger_history(unit: Unit, passenger_id: str, limit: int, offset: int) -> dict:
+    """Uma página do histórico: pede uma corrida a mais só para saber se existe a página seguinte."""
+    rows = queries.passenger_ride_history(unit.session, passenger_id, limit + 1, offset)
+    return {"rides": rows[:limit], "has_more": len(rows) > limit}
+
+
 # --- motoqueiro ----------------------------------------------------------------------------------------
 
 

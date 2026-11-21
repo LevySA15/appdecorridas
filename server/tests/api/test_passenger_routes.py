@@ -234,7 +234,7 @@ def test_rotas_do_passageiro_sao_so_do_passageiro(client, runtime):
     motoqueiro = login(client, runtime, "75 99999-0002", "rider")
     for metodo, url in (
         ("post", "/v1/passenger/quotes"), ("post", "/v1/passenger/rides"), ("get", "/v1/passenger/state"),
-        ("put", "/v1/passenger/emergency-contact"),
+        ("put", "/v1/passenger/emergency-contact"), ("get", "/v1/passenger/rides"),
     ):
         assert getattr(client, metodo)(url, headers=motoqueiro.headers).status_code == 403
         assert getattr(client, metodo)(url).status_code == 401

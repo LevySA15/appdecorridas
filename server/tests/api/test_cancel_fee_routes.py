@@ -205,3 +205,19 @@ def test_decisao_invalida_ou_de_recurso_nao_aberto_e_recusada(client, pax, rider
     assert nao_aberto.status_code == 409 and nao_aberto.json()["error"]["code"] == "appeal_not_allowed"
     assert client.post("/v1/admin/appeals/nao-existe/decide", json={"decision": "reject", "note": ""},
                        headers=admin.headers).status_code == 404
+
+
+def test_historico_mostra_a_taxa_do_cancelamento_tardio(client, pax, rider, clock):
+    ride_id, resposta = cancelar_tarde(client, pax, rider, clock)
+    item = client.get("/v1/passenger/rides", headers=pax.headers).json()["rides"][0]
+    assert item["ride_id"] == ride_id and item["state"] == "cancelled"
+    assert item["fee_cents"] == resposta["fee_cents"] > 0 and item["fee_refunded"] is False
+
+
+def test_historico_marca_a_taxa_devolvida_quando_o_recurso_e_aceito(client, pax, rider, admin, clock):
+    ride_id, _ = cancelar_tarde(client, pax, rider, clock)
+    assert client.post(f"/v1/passenger/rides/{ride_id}/fee/appeal", json=TEXTO, headers=pax.headers).status_code == 204
+    corpo = {"decision": "accept", "note": "Procede."}
+    assert client.post(f"/v1/admin/appeals/{ride_id}/decide", json=corpo, headers=admin.headers).status_code == 204
+    item = client.get("/v1/passenger/rides", headers=pax.headers).json()["rides"][0]
+    assert item["fee_cents"] > 0 and item["fee_refunded"] is True

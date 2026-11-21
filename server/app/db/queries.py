@@ -12,6 +12,7 @@ from app.db.models import (
     PassengerProfileRow,
     RideEventRow,
     RideOfferRow,
+    RatingRow,
     RideRow,
     RiderProfileRow,
     SafetyAlertRow,
@@ -84,6 +85,44 @@ def passenger_unpaid_cash_ride_id(session: Session, passenger_id: str) -> str | 
         )
         .limit(1)
     ).scalar_one_or_none()
+
+
+def passenger_ride_history(session: Session, passenger_id: str, limit: int, offset: int) -> list[dict]:
+    """As corridas encerradas do passageiro, da mais nova para a mais antiga, com o que o recibo mostra.
+
+    Uma consulta só: o motoqueiro, a taxa de cancelamento e a nota que o passageiro deu entram por `outerjoin`
+    (corrida cancelada antes de alguém aceitar não tem motoqueiro nem taxa).
+    """
+    rider_user = aliased(UserRow)
+    rows = session.execute(
+        select(RideRow, rider_user.name, RiderProfileRow.plate, RiderProfileRow.moto_model, CancelFeeRow, RatingRow.stars)
+        .outerjoin(rider_user, rider_user.id == RideRow.rider_id)
+        .outerjoin(RiderProfileRow, RiderProfileRow.user_id == RideRow.rider_id)
+        .outerjoin(CancelFeeRow, CancelFeeRow.ride_id == RideRow.id)
+        .outerjoin(RatingRow, (RatingRow.ride_id == RideRow.id) & (RatingRow.from_user == passenger_id))
+        .where(RideRow.passenger_id == passenger_id, RideRow.state.in_(_TERMINAL))
+        .order_by(RideRow.created_at.desc(), RideRow.id.desc())
+        .limit(limit)
+        .offset(offset)
+    ).all()
+    items = []
+    for ride, rider_name, plate, moto_model, fee, stars in rows:
+        items.append({
+            "ride_id": ride.id, "state": ride.state, "created_at": ride.created_at.timestamp(),
+            "price_cents": ride.price_cents,
+            "method": "balance" if ride.pay_with_balance else ride.payment_method,
+            "pickup_text": ride.pickup_text or "", "destination_text": ride.dest_text or "",
+            "distance_m": ride.distance_m or 0,
+            "rider": None if ride.rider_id is None else {"name": rider_name, "plate": plate, "moto_model": moto_model},
+            "my_stars": stars,
+            "fee_cents": 0 if fee is None else fee.fee_cents,
+            "fee_refunded": fee is not None and fee.appeal_state == "accepted",
+            "payment_pending": (
+                ride.state == RideState.COMPLETED.value and ride.payment_method == "cash"
+                and not ride.end_payment_confirmed
+            ),
+        })
+    return items
 
 
 def count_searching_rides(session: Session) -> int:

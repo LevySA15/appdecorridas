@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app.api.deps import get_runtime, passenger_user
 from app.api.schemas import PlaceIn
-from app.api.views import passenger_ride_view, passenger_state, quote_view
+from app.api.views import passenger_history, passenger_ride_view, passenger_state, quote_view
 from app.db import repositories as repo
 from app.domain.types import PaymentMethod
 from app.services.auth import AuthUser, normalize_phone
@@ -146,6 +146,17 @@ def withdraw_balance(body: WithdrawIn, request: Request, user: AuthUser = Depend
 def state(request: Request, user: AuthUser = Depends(passenger_user)) -> dict:
     runtime = get_runtime(request)
     return runtime.run(lambda unit: passenger_state(unit, user.user_id, runtime.payment_methods(unit.now)))
+
+
+@router.get("/rides")
+def ride_history(
+    request: Request,
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    user: AuthUser = Depends(passenger_user),
+) -> dict:
+    """O histórico: só as corridas encerradas (a que está aberta vem no `/state`), da mais nova para a mais antiga."""
+    return get_runtime(request).run(lambda unit: passenger_history(unit, user.user_id, limit, offset))
 
 
 @router.put("/emergency-contact", status_code=204)
