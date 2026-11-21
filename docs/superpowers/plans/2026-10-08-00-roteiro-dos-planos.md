@@ -181,6 +181,20 @@ Feito em 06/11/2026. **Conferido num Chrome de verdade** (servidor descartável,
 
 Feito em 06/11/2026. **Conferido num Chrome de verdade** (servidor descartável): os 7 blocos abrem, "3,00" virou "3,50" e ficou salvo depois de recarregar, "dois minutos" no lugar de número foi barrado com o nome do campo, e um valor sem sentido (taxa de cancelamento mínima maior que a máxima) foi recusado pelo servidor com a frase em português. **Achado na conferência, vale para o painel todo:** o "Feito." de qualquer ação sumia na hora, porque a tela recarrega e limpa o aviso; agora ele aparece depois da recarga (com teste). **Ainda cru:** as faixas da taxa por corrida (`fees.tiers`) seguem em JSON; sem "ajuda" por campo (só o nome); sem histórico de quem mudou o quê além do Registro. **Decisão minha:** nomes e unidades dos campos escritos por mim a partir dos comentários do código, para o Levy conferir.
 
+## Itens que sobraram do plano 6C
+
+Feito em 21/11/2026 (`2026-11-21-06c-nome-perfil-e-historico.md`; desenho em `docs/superpowers/specs/2026-11-21-nome-perfil-e-historico-do-passageiro-design.md`). O Levy mandou "continue o desenvolvimento" e aprovou a proposta com "pode ir"; as decisões de detalhe são minhas.
+
+**O que entrou:** (1) o app do passageiro **pede o nome** antes da tela inicial (tela "Como podemos te chamar?", vale também para contas antigas com nome vazio) — achado novo: ninguém nunca perguntava o nome, então o motoqueiro via o passageiro sem nome e o painel mostrava vazio; (2) **Perfil** (nome editável, telefone, contato de emergência, sair); o contato de emergência **saiu da carteira** e foi para o perfil; (3) **Minhas corridas**: `GET /v1/passenger/rides?limit&offset` (só corridas encerradas, da mais nova para a mais antiga, `{"rides","has_more"}`) e as telas de lista e de recibo. `GET /v1/passenger/state` ganhou `name` e `phone`. Sem migração. Contrato em `docs/api-v1.md`.
+
+**Suítes na entrega:** servidor 1346 (sem simulador) + 90 do simulador, `corrida_core` 125, `corrida_ui` 37, passageiro 95, motoqueiro 185, contrato 9 (a auditoria de campos cobre a rota nova e as chaves `name`/`phone`), análise limpa, APK de debug do passageiro compila. **Nada disto foi visto num celular de verdade.** Revisão: só minha (autorrevisão), sem revisor independente.
+
+**Correção minha:** eu tinha apontado como lacuna o "aviso de documento vencendo" do motoqueiro; **já existia** (a home avisa 30 dias antes, com botão de renovar, e tem testes). Fica fora.
+
+**Decisões minhas, para o Levy conferir:** (1) o nome só é obrigatório **no app**, não no servidor (exigir no servidor quebraria quem já usa a API); (2) o recibo mostra nome, placa e modelo do motoqueiro (o que o passageiro já via na corrida), nunca CPF nem telefone dele; (3) corrida cancelada ou sem moto aparece sem preço; se houve taxa de cancelamento, aparece a taxa (e "devolvida" se o recurso foi aceito); (4) 20 corridas por página, paginação por deslocamento (como as listas do painel); (5) a distância do recibo é truncada para uma casa (1950 m = 1,9 km).
+
+**Ainda não feito:** filtro/busca no histórico, recibo em PDF ou para compartilhar, trocar o telefone, foto de perfil, apagar histórico (LGPD, conversa com o advogado), e o histórico do motoqueiro (ele só tem o extrato do dia).
+
 ## Itens que sobraram do plano 3
 
 Do Levy decidir: nada novo.
