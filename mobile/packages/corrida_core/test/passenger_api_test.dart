@@ -22,13 +22,14 @@ class Chamada {
   String toString() => '$method $path ${body ?? ''}';
 }
 
-({PassengerApi api, List<Chamada> chamadas}) mundo(
-  http.Response Function(http.Request) responde,
-) {
+({PassengerApi api, List<Chamada> chamadas, List<http.Request> requisicoes})
+mundo(http.Response Function(http.Request) responde) {
   final chamadas = <Chamada>[];
+  final requisicoes = <http.Request>[];
   final client = ApiClient(
     baseUrl: Uri.parse('http://s.teste'),
     httpClient: MockClient((r) async {
+      requisicoes.add(r);
       chamadas.add(
         Chamada(
           r.method,
@@ -39,7 +40,11 @@ class Chamada {
       return responde(r);
     }),
   )..token = 't';
-  return (api: PassengerApi(client), chamadas: chamadas);
+  return (
+    api: PassengerApi(client),
+    chamadas: chamadas,
+    requisicoes: requisicoes,
+  );
 }
 
 const rua = Place(lat: -12.96, lng: -39.26, text: 'Rua A');
@@ -230,5 +235,31 @@ void main() {
     final estado = await m.api.state();
     expect(estado.ride, isNull);
     expect(estado.balanceCents, 0);
+  });
+
+  test('history pede a pagina com limit e offset e le o resultado', () async {
+    final m = mundo(
+      (r) => json({
+        'rides': [
+          {
+            'ride_id': 'ride-1',
+            'state': 'completed',
+            'created_at': 1.0,
+            'price_cents': 700,
+            'method': 'pix',
+          },
+        ],
+        'has_more': true,
+      }),
+    );
+    final pagina = await m.api.history(limit: 5, offset: 10);
+    expect(pagina.rides.single.rideId, 'ride-1');
+    expect(pagina.hasMore, isTrue);
+    expect(m.chamadas.single.method, 'GET');
+    expect(m.chamadas.single.path, '/v1/passenger/rides');
+    expect(m.requisicoes.single.url.queryParameters, {
+      'limit': '5',
+      'offset': '10',
+    });
   });
 }

@@ -306,6 +306,14 @@ void main() {
         isA<ApiException>().having((e) => e.code, 'code', 'already_rated'),
       ),
     );
+
+    final historico = await passageiro.history();
+    final recibo = historico.rides.first;
+    expect(recibo.rideId, corrida.rideId);
+    expect(recibo.state, RideState.completed);
+    expect(recibo.myStars, 5);
+    expect(recibo.rider!.name, isNotEmpty);
+    expect(recibo.priceCents, cotacao.priceCents);
   });
 
   test(
@@ -432,6 +440,7 @@ void main() {
   test('9. auditoria de campos: o que o servidor manda é o que o pacote lê', () {
     final parsers = <String, void Function(Map<String, Object?>)>{
       'GET /v1/passenger/state': PassengerState.fromJson,
+      'GET /v1/passenger/rides': RideHistoryPage.fromJson,
       'POST /v1/passenger/quotes': Quote.fromJson,
       'POST /v1/passenger/rides': PassengerRide.fromJson,
       'POST /v1/passenger/rides/{id}/cancel': CancelResult.fromJson,

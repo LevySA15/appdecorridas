@@ -346,6 +346,8 @@ class PassengerState {
     this.recentFees = const [],
     this.emergencyContact,
     this.paymentMethods = const [],
+    this.name = '',
+    this.phone = '',
   });
 
   final PassengerRide? ride;
@@ -363,6 +365,10 @@ class PassengerState {
   final List<RecentFee> recentFees;
   final EmergencyContact? emergencyContact;
   final List<String> paymentMethods;
+
+  /// Vazio enquanto a pessoa não disse o nome: o app pede antes da tela inicial.
+  final String name;
+  final String phone;
 
   factory PassengerState.fromJson(Json json) => PassengerState(
     ride: mapOrNull(json['ride'], PassengerRide.fromJson),
@@ -382,6 +388,89 @@ class PassengerState {
       EmergencyContact.fromJson,
     ),
     paymentMethods: asStringList(json['payment_methods']),
+    name: asString(json['name']),
+    phone: asString(json['phone']),
+  );
+}
+
+/// O motoqueiro como aparece no recibo (só o que o passageiro já via na corrida).
+class HistoryRider {
+  const HistoryRider({
+    required this.name,
+    required this.plate,
+    required this.motoModel,
+  });
+
+  final String name;
+  final String plate;
+  final String motoModel;
+
+  factory HistoryRider.fromJson(Json json) => HistoryRider(
+    name: asString(json['name']),
+    plate: asString(json['plate']),
+    motoModel: asString(json['moto_model']),
+  );
+}
+
+/// Uma corrida encerrada do histórico (`GET /v1/passenger/rides`).
+class RideHistoryItem {
+  const RideHistoryItem({
+    required this.rideId,
+    required this.state,
+    required this.createdAt,
+    required this.priceCents,
+    required this.method,
+    required this.pickupText,
+    required this.destinationText,
+    required this.distanceM,
+    required this.rider,
+    required this.myStars,
+    required this.feeCents,
+    required this.feeRefunded,
+    required this.paymentPending,
+  });
+
+  final String rideId;
+  final RideState state; // completed | cancelled | noRider
+  final double createdAt; // segundos desde 1970
+  final int priceCents;
+  final String method; // pix | cash | balance
+  final String pickupText;
+  final String destinationText;
+  final int distanceM;
+  final HistoryRider? rider; // nulo quando ninguém aceitou a corrida
+  final int? myStars;
+  final int feeCents; // taxa de cancelamento; 0 se não houve
+  final bool feeRefunded; // recurso aceito: a taxa voltou
+  final bool paymentPending; // corrida em dinheiro concluída e ainda não paga
+
+  factory RideHistoryItem.fromJson(Json json) => RideHistoryItem(
+    rideId: asString(json['ride_id']),
+    state: RideState.parse(asStringOrNull(json['state'])),
+    createdAt: asDouble(json['created_at']),
+    priceCents: asInt(json['price_cents']),
+    method: asString(json['method']),
+    pickupText: asString(json['pickup_text']),
+    destinationText: asString(json['destination_text']),
+    distanceM: asInt(json['distance_m']),
+    rider: mapOrNull(json['rider'], HistoryRider.fromJson),
+    myStars: asIntOrNull(json['my_stars']),
+    feeCents: asInt(json['fee_cents']),
+    feeRefunded: asBool(json['fee_refunded']),
+    paymentPending: asBool(json['payment_pending']),
+  );
+}
+
+/// Uma página do histórico; [hasMore] diz se existe a seguinte.
+class RideHistoryPage {
+  const RideHistoryPage({required this.rides, required this.hasMore});
+
+  final List<RideHistoryItem> rides;
+  final bool hasMore;
+
+  factory RideHistoryPage.fromJson(Json json) => RideHistoryPage(
+    rides: mapList(json['rides'], RideHistoryItem.fromJson),
+    hasMore: asBool(json['has_more']),
   );
 }
 

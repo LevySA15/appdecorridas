@@ -23,6 +23,17 @@ class PassengerApi {
   Future<PassengerState> state() async =>
       PassengerState.fromJson(_map(await client.get('/v1/passenger/state')));
 
+  /// As corridas encerradas, da mais nova para a mais antiga (`GET /v1/passenger/rides`).
+  Future<RideHistoryPage> history({int limit = 20, int offset = 0}) async =>
+      RideHistoryPage.fromJson(
+        _map(
+          await client.get(
+            '/v1/passenger/rides',
+            query: {'limit': '$limit', 'offset': '$offset'},
+          ),
+        ),
+      );
+
   Future<Quote> quote(Place pickup, Place destination) async => Quote.fromJson(
     _map(
       await client.post(

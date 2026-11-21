@@ -351,4 +351,80 @@ void main() {
       0,
     );
   });
+
+  test('estado traz nome e telefone; sem eles vira vazio', () {
+    final com = PassengerState.fromJson({
+      'name': 'Ana Lima',
+      'phone': '+5575999990001',
+    });
+    expect((com.name, com.phone), ('Ana Lima', '+5575999990001'));
+    final sem = PassengerState.fromJson({});
+    expect((sem.name, sem.phone), ('', ''));
+  });
+
+  test('pagina do historico: corrida concluida e cancelada sem motoqueiro', () {
+    final pagina = RideHistoryPage.fromJson({
+      'rides': [
+        {
+          'ride_id': 'ride-9',
+          'state': 'completed',
+          'created_at': 1800000000.5,
+          'price_cents': 550,
+          'method': 'pix',
+          'pickup_text': 'Rua A',
+          'destination_text': 'Feira livre',
+          'distance_m': 1950,
+          'rider': {
+            'name': 'João',
+            'plate': 'ABC1D23',
+            'moto_model': 'Honda CG',
+          },
+          'my_stars': 4,
+          'fee_cents': 0,
+          'fee_refunded': false,
+          'payment_pending': false,
+        },
+        {
+          'ride_id': 'ride-8',
+          'state': 'cancelled',
+          'created_at': 1799990000.0,
+          'price_cents': 600,
+          'method': 'cash',
+          'pickup_text': 'Rua B',
+          'destination_text': 'Praça',
+          'distance_m': 800,
+          'rider': null,
+          'my_stars': null,
+          'fee_cents': 350,
+          'fee_refunded': true,
+          'payment_pending': false,
+        },
+      ],
+      'has_more': true,
+    });
+    expect(pagina.hasMore, isTrue);
+    final concluida = pagina.rides[0];
+    expect(concluida.rideId, 'ride-9');
+    expect(concluida.state, RideState.completed);
+    expect(concluida.createdAt, 1800000000.5);
+    expect((concluida.priceCents, concluida.method), (550, 'pix'));
+    expect(
+      (concluida.pickupText, concluida.destinationText, concluida.distanceM),
+      ('Rua A', 'Feira livre', 1950),
+    );
+    expect(concluida.rider!.plate, 'ABC1D23');
+    expect(concluida.rider!.motoModel, 'Honda CG');
+    expect(concluida.myStars, 4);
+    final cancelada = pagina.rides[1];
+    expect(cancelada.state, RideState.cancelled);
+    expect(cancelada.rider, isNull);
+    expect(cancelada.myStars, isNull);
+    expect((cancelada.feeCents, cancelada.feeRefunded), (350, true));
+  });
+
+  test('pagina do historico vazia ou fora do formato nao derruba', () {
+    final vazia = RideHistoryPage.fromJson({});
+    expect(vazia.rides, isEmpty);
+    expect(vazia.hasMore, isFalse);
+  });
 }
