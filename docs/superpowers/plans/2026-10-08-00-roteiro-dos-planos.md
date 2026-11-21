@@ -28,6 +28,7 @@ A especificação cobre várias partes independentes. Cada parte vira um plano p
 | 5C | **Reenviar cadastro recusado e renovar que desbloqueia** — **feito** (`2026-10-25-05c-reenviar-cadastro-e-renovar-desbloqueia.md`) | Respostas do Levy ao 5B (25/10/2026): renovar os documentos desbloqueia sozinho quem foi bloqueado pela varredura de "documento vencido" (bloqueio do administrador não sai por aí; aviso `rider_unblocked`) e cadastro recusado pode ser reenviado (mesma rota, volta a `pending`). App: recusado cai no formulário com o motivo; avisos de conta viram mensagem. | 5B | não |
 | 6A | **App do passageiro — telas e navegação** — **feito** (`2026-10-23-06a-app-do-passageiro.md`) | Login, início, pedir corrida (mapa de mentira), acompanhar, avaliar, carteira (saldo/saque/contato de emergência/recurso); `PassengerController` liga as telas ao `corrida_core`; navegação própria que volta ao login na hora se a sessão vencer e abre avaliar quando a corrida termina. | 5A | não |
 | 6 | **App do passageiro (Flutter, Android)** | Pedir, pagar, acompanhar, código, SOS, avaliar. | 6A | não |
+| 7A | **Rotas do Google no servidor** — **feito** (`2026-11-21-07a-rotas-do-google-no-servidor.md`) | Com `GOOGLE_MAPS_API_KEY` no `.env`, distância, tempo e traçado da corrida vêm da Routes API do Google; sem chave (ou se o Google falhar) fica a estimativa de sempre. Cache, teto diário de chamadas e pausa depois de falhas. Mapa dentro dos apps fica para depois. | 2C | não (a chave só quando for testar) |
 | 7 | **Integrações reais** | Woovi (Pix e divisão), Google Maps, código por WhatsApp. | 2, CNPJ, advogado | **sim** |
 | 8 | **Etapa 2 e publicação** | Cartão pela Asaas; publicação na Google Play; iPhone. | 7 | **sim** |
 
@@ -194,6 +195,20 @@ Feito em 21/11/2026 (`2026-11-21-06c-nome-perfil-e-historico.md`; desenho em `do
 **Decisões minhas, para o Levy conferir:** (1) o nome só é obrigatório **no app**, não no servidor (exigir no servidor quebraria quem já usa a API); (2) o recibo mostra nome, placa e modelo do motoqueiro (o que o passageiro já via na corrida), nunca CPF nem telefone dele; (3) corrida cancelada ou sem moto aparece sem preço; se houve taxa de cancelamento, aparece a taxa (e "devolvida" se o recurso foi aceito); (4) 20 corridas por página, paginação por deslocamento (como as listas do painel); (5) a distância do recibo é truncada para uma casa (1950 m = 1,9 km).
 
 **Ainda não feito:** filtro/busca no histórico, recibo em PDF ou para compartilhar, trocar o telefone, foto de perfil, apagar histórico (LGPD, conversa com o advogado), e o histórico do motoqueiro (ele só tem o extrato do dia).
+
+## Itens que sobraram do plano 7A
+
+Feito em 21/11/2026 (`2026-11-21-07a-rotas-do-google-no-servidor.md`; desenho em `docs/superpowers/specs/2026-11-21-mapa-real-no-servidor-design.md`). O Levy mandou continuar e aprovou a proposta com "pode"; as decisões de detalhe são minhas. Servidor: `GoogleMaps` em `server/app/adapters/google_maps.py` (`MapsProvider`), ligado por `GOOGLE_MAPS_API_KEY`; `build_maps` em `runtime.py` escolhe entre ele e `FakeMaps`; passo novo "Passo 12. Mapa de verdade" em `docs/instalacao.md`. Nenhuma dependência nova (`urllib`).
+
+**Suítes na entrega:** servidor 1391 testes (sem o simulador, que não passa por esta mudança: usa `FakeMaps`) + 2 testes de cotação pela API com o adaptador. Revisão: só minha (autorrevisão).
+
+**NÃO conferido contra o Google de verdade** (não há chave): o formato do pedido e da resposta é o da documentação da Routes API v2 (`computeRoutes`, cabeçalhos `X-Goog-Api-Key` e `X-Goog-FieldMask`, resposta com `distanceMeters`, `duration` em texto como `"412s"` e `polyline.encodedPolyline`), testado com respostas escritas por mim e com um servidor HTTP local para o transporte. Ao ligar a chave: conferir no registro a linha "Mapa: rotas do Google" e fazer uma cotação em Santo Antônio de Jesus; se o preço vier igual ao da estimativa, olhar no registro as linhas "Google Maps falhou".
+
+**Decisões minhas, para o Levy conferir:** (1) modo de viagem padrão `DRIVE` (não confirmei que o Google calcula `TWO_WHEELER` para o Brasil; `MAPS_TRAVEL_MODE=TWO_WHEELER` para testar); (2) teto de 800 chamadas por dia (≈ 24 mil por mês ≈ US$ 70), espera máxima de 3 s por chamada, 3 falhas seguidas = pausa de 60 s, cache de 6 h para rota e 2 min para tempo; (3) quando o Google falha ou o teto acaba, a cotação sai pela estimativa (o passageiro nunca fica sem pedir); o custo é o preço menos preciso nesses momentos, e o registro diz quando; (4) a rota do Google passa a ser a "rota esperada" do alerta de fora da rota (antes era um traço reto).
+
+**Achado de custo:** o servidor chama o mapa **uma vez por cotação** (mais uma vez, rara, para a moto que está terminando outra corrida), muito menos que os ~7 cálculos por corrida da spec (seção 10.3), porque o tempo de chegada mostrado na cotação é estimativa própria (linha reta × 1,3), não passa pelo mapa.
+
+**Ainda não feito:** mapa dentro dos apps (`google_maps_flutter`, chave no manifesto do Android), busca de endereço (Places), GPS do passageiro, tempo de chegada da cotação pelo Google (dobraria o gasto), trânsito em tempo real. **Limite conhecido:** a chamada ao Google acontece dentro da transação do banco da cotação (até 3 s); com muitos passageiros cotando ao mesmo tempo e o Google lento, as conexões do banco seguram por esse tempo (a pausa depois de 3 falhas limita o estrago). Para o teste fechado, sem problema.
 
 ## Itens que sobraram do plano 3
 
