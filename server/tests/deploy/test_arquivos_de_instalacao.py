@@ -117,6 +117,13 @@ def test_modelo_de_configuracao_e_aceito_pelo_servidor_e_nao_e_ignorado_pelo_git
     assert ignorado.returncode == 1, "o modelo precisa ir para o git"
 
 
+def test_modelo_de_configuracao_explica_o_mapa_de_verdade_em_linhas_comentadas():
+    texto = (DEPLOY / "app.env.example").read_text(encoding="utf-8")
+    for chave in ("# GOOGLE_MAPS_API_KEY=", "# MAPS_DAILY_CALL_LIMIT=", "# MAPS_TRAVEL_MODE="):
+        assert chave in texto
+    assert not parse_env_file(DEPLOY / "app.env.example").get("GOOGLE_MAPS_API_KEY")      # sem chave de verdade no git
+
+
 @pytest.mark.parametrize("script", ["backup.sh", "restore.sh"])
 def test_scripts_sao_executaveis(script):
     assert (DEPLOY / script).stat().st_mode & 0o111

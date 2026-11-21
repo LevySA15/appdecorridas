@@ -22,6 +22,9 @@ class Settings:
     upload_dir: Path = _DEFAULT_UPLOAD_DIR  # onde ficam as fotos dos documentos (fora do git)
     mode: str = "production"                # "dev" liga os adaptadores falsos, os únicos que existem até o plano 7
     dev_routes: bool = True                 # "off" não monta /v1/dev/*, /docs e /openapi.json (servidor aberto na internet)
+    google_maps_api_key: str | None = None  # com chave, as rotas vêm do Google; sem chave, a estimativa em linha reta
+    maps_daily_call_limit: int = 800        # teto de chamadas ao Google por dia (protege a fatura)
+    maps_travel_mode: str = "DRIVE"         # DRIVE ou TWO_WHEELER (moto; a testar no Brasil)
 
 
 def parse_env_file(path: Path) -> dict[str, str]:
@@ -61,6 +64,30 @@ def _parse_switch(name: str, raw: str | None, *, default: bool) -> bool:
     raise RuntimeError(f"{name} deve ser on ou off (veio {raw!r})")
 
 
+_TRAVEL_MODES = ("DRIVE", "TWO_WHEELER")
+
+
+def _parse_daily_limit(raw: str | None) -> int:
+    if raw is None:
+        return Settings.maps_daily_call_limit
+    try:
+        value = int(raw.strip())
+    except ValueError:
+        value = 0
+    if value < 1:
+        raise RuntimeError(f"MAPS_DAILY_CALL_LIMIT deve ser um número inteiro maior que zero (veio {raw!r})")
+    return value
+
+
+def _parse_travel_mode(raw: str | None) -> str:
+    if raw is None:
+        return Settings.maps_travel_mode
+    mode = raw.strip().upper()
+    if mode not in _TRAVEL_MODES:
+        raise RuntimeError(f"MAPS_TRAVEL_MODE deve ser DRIVE ou TWO_WHEELER (veio {raw!r})")
+    return mode
+
+
 def load_settings(
     env_path: Path | None = None, environ: Mapping[str, str] | None = None
 ) -> Settings:
@@ -85,4 +112,7 @@ def load_settings(
         upload_dir=Path(upload_dir) if upload_dir else _DEFAULT_UPLOAD_DIR,
         mode=optional("APP_MODE") or "production",
         dev_routes=dev_routes,
+        google_maps_api_key=(optional("GOOGLE_MAPS_API_KEY") or "").strip() or None,
+        maps_daily_call_limit=_parse_daily_limit(optional("MAPS_DAILY_CALL_LIMIT")),
+        maps_travel_mode=_parse_travel_mode(optional("MAPS_TRAVEL_MODE")),
     )

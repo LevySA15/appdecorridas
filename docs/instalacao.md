@@ -213,6 +213,33 @@ na sua máquina, sem abrir para a internet: no servidor, troque para `DEV_ROUTES
 
 Quando terminar, volte para `DEV_ROUTES=off` e reinicie.
 
+## Passo 12. (Opcional) Mapa de verdade
+
+Sem isto o servidor **estima** a distância e o tempo em linha reta (e o preço sai dessa estimativa). Com a chave do Google, a distância e o
+tempo vêm das ruas de verdade. Você só precisa fazer isto quando for testar em Santo Antônio de Jesus.
+
+1. Entre no Google Cloud (console.cloud.google.com) com a sua conta e crie um projeto (por exemplo "app-corrida").
+2. Ligue o faturamento do projeto (o Google pede um cartão; o uso pequeno cai na cota grátis).
+3. Em "APIs e serviços", ative **só** a **Routes API**.
+4. Em "Credenciais", crie uma **chave de API** e restrinja: "APIs" = só a Routes API; "Restrições de aplicativo" = endereços IP, com o IP do servidor.
+5. Em "Faturamento > Orçamentos e alertas", crie um alerta (por exemplo R$ 300 por mês) para o Google avisar por e-mail se o gasto subir.
+6. No servidor, abra o arquivo de configuração e tire o `#` da linha da chave, colando a chave depois do `=`:
+
+       nano /etc/app-corrida/app.env
+       # GOOGLE_MAPS_API_KEY=cole-a-chave-aqui   (sem o # na frente)
+       systemctl restart app-corrida
+
+7. Conferir que ligou: `journalctl -u app-corrida -n 50 | grep Mapa` deve mostrar "Mapa: rotas do Google". Se mostrar "estimativa em linha reta", a chave não foi lida.
+
+O que o servidor faz sozinho para proteger você:
+
+- Chama o Google **uma vez por cotação** e guarda a resposta (a mesma rota não é cobrada duas vezes).
+- Tem um **teto de chamadas por dia** (`MAPS_DAILY_CALL_LIMIT`, padrão 800, perto de US$ 70 por mês). Passou do teto, usa a estimativa até o dia seguinte.
+- Se o Google falhar (sem internet, chave errada, cota), **o passageiro continua pedindo moto**: o preço sai pela estimativa e o motivo aparece no registro
+  (`journalctl -u app-corrida | grep "Google Maps"`). Depois de 3 falhas seguidas o servidor para de tentar por 1 minuto.
+- `MAPS_TRAVEL_MODE=TWO_WHEELER` pede ao Google o cálculo de **moto**. Não confirmei que ele existe para o Brasil: teste, e se o Google recusar o servidor avisa no registro e usa
+  a estimativa (volte para `DRIVE`).
+
 ## Onde fica cada coisa
 
 | O que | Onde |

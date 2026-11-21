@@ -81,3 +81,41 @@ def test_dev_routes_com_valor_estranho_da_erro_claro(tmp_path):
     env.write_text("DATABASE_URL=postgresql://a@h/x\nREDIS_URL=redis://a/0\nDEV_ROUTES=talvez\n", encoding="utf-8")
     with pytest.raises(RuntimeError, match="DEV_ROUTES"):
         load_settings(env_path=env, environ={})
+
+
+def _env(tmp_path, extra=""):
+    arquivo = tmp_path / ".env"
+    arquivo.write_text("DATABASE_URL=postgresql://a@h/x\nREDIS_URL=redis://a/0\n" + extra, encoding="utf-8")
+    return arquivo
+
+
+def test_mapa_do_google_tem_padrao_seguro(tmp_path):
+    settings = load_settings(env_path=_env(tmp_path), environ={})
+    assert settings.google_maps_api_key is None          # sem chave, o mapa continua sendo a estimativa
+    assert settings.maps_daily_call_limit == 800
+    assert settings.maps_travel_mode == "DRIVE"
+
+
+def test_le_a_chave_o_teto_e_o_modo_do_mapa(tmp_path):
+    extra = "GOOGLE_MAPS_API_KEY=abc\nMAPS_DAILY_CALL_LIMIT=300\nMAPS_TRAVEL_MODE=two_wheeler\n"
+    settings = load_settings(env_path=_env(tmp_path, extra), environ={})
+    assert (settings.google_maps_api_key, settings.maps_daily_call_limit, settings.maps_travel_mode) == (
+        "abc", 300, "TWO_WHEELER",
+    )
+
+
+@pytest.mark.parametrize("teto", ["0", "-5", "abc", "1.5"])
+def test_teto_de_chamadas_torto_da_erro_claro(tmp_path, teto):
+    with pytest.raises(RuntimeError, match="MAPS_DAILY_CALL_LIMIT"):
+        load_settings(env_path=_env(tmp_path), environ={"MAPS_DAILY_CALL_LIMIT": teto})
+
+
+def test_modo_de_viagem_invalido_da_erro_claro(tmp_path):
+    with pytest.raises(RuntimeError, match="MAPS_TRAVEL_MODE"):
+        load_settings(env_path=_env(tmp_path), environ={"MAPS_TRAVEL_MODE": "BICYCLE"})
+
+
+def test_chave_so_com_espacos_vale_como_sem_chave(tmp_path):
+    settings = load_settings(env_path=_env(tmp_path), environ={"GOOGLE_MAPS_API_KEY": "   "})
+    assert settings.google_maps_api_key is None
+    assert load_settings(env_path=_env(tmp_path), environ={"GOOGLE_MAPS_API_KEY": " k1 "}).google_maps_api_key == "k1"

@@ -22,6 +22,7 @@ from app.adapters.fake_maps import FakeMaps
 from app.adapters.fake_notifier import FakeContactNotifier
 from app.adapters.fake_otp import DevOtpSender
 from app.adapters.fake_payments import FakePaymentProvider
+from app.adapters.google_maps import GoogleMaps
 from app.db.config_store import AppConfig, load_app_config
 from app.db.session import make_engine, make_session_factory
 from app.domain.maps import MapsProvider
@@ -182,6 +183,20 @@ class Runtime:
             self.redis_client.ping()
 
 
+def build_maps(settings: Settings) -> MapsProvider:
+    """Com `GOOGLE_MAPS_API_KEY` as rotas vêm do Google; sem ela, a estimativa em linha reta de sempre."""
+    if not settings.google_maps_api_key:
+        log.info("Mapa: estimativa em linha reta (sem GOOGLE_MAPS_API_KEY).")
+        return FakeMaps()
+    log.info(
+        "Mapa: rotas do Google (teto de %d chamadas por dia, modo %s).",
+        settings.maps_daily_call_limit, settings.maps_travel_mode,
+    )
+    return GoogleMaps(
+        settings.google_maps_api_key, daily_limit=settings.maps_daily_call_limit, travel_mode=settings.maps_travel_mode
+    )
+
+
 def build_runtime(settings: Settings) -> Runtime:
     if settings.mode != "dev":
         raise RuntimeError(
@@ -196,7 +211,7 @@ def build_runtime(settings: Settings) -> Runtime:
         positions=RedisPositionStore(client),
         reservations=RedisReservationBook(client),
         factors=RedisFactorStore(client),
-        maps=FakeMaps(),
+        maps=build_maps(settings),
         provider=FakePaymentProvider(),
         otp_sender=DevOtpSender(),
         hub=Hub(),

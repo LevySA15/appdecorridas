@@ -40,3 +40,9 @@ def test_comandos_do_guia_usam_os_nomes_certos_do_servico():
 def test_readme_do_servidor_aponta_para_o_guia():
     readme = (RAIZ / "server" / "README.md").read_text(encoding="utf-8")
     assert "docs/instalacao.md" in readme and "deploy/" in readme
+
+
+def test_guia_explica_o_mapa_de_verdade():
+    texto = _texto()
+    for termo in ("GOOGLE_MAPS_API_KEY", "Routes API", "MAPS_DAILY_CALL_LIMIT", "TWO_WHEELER", "Mapa: rotas do Google"):
+        assert termo in texto, f"o guia não fala de {termo!r}"
