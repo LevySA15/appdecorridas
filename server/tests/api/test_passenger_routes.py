@@ -147,7 +147,14 @@ def test_estado_do_passageiro_sem_corrida(client, pax):
         "balance_cents": 0, "topup_enabled": False, "pending_fee": None, "recent_fees": [],
         "pay_with_balance_enabled": True, "withdraw_enabled": False,
         "withdraw_min_cents": 500, "withdraw_max_cents": 50_000,
+        "name": "Ana Lima", "phone": pax.phone,
     }
+
+
+def test_passageiro_sem_nome_recebe_nome_vazio_no_estado(client, runtime):
+    novo = login(client, runtime, "75 99999-0007", "passenger")          # sem name=
+    estado = client.get("/v1/passenger/state", headers=novo.headers).json()
+    assert estado["name"] == "" and estado["phone"] == novo.phone
 
 
 def test_estado_com_motoqueiro_a_caminho_traz_ficha_codigo_pix_e_posicao(

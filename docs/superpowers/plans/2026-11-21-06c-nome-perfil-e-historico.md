@@ -37,7 +37,7 @@ Entradas que a spec deixa em silêncio e que mais provavelmente quebram, com a t
 
 ---
 
-## Tarefa 1: servidor — nome e telefone no estado do passageiro
+### Task 1: servidor — nome e telefone no estado do passageiro
 
 **Arquivos:**
 - Modificar: `server/app/api/views.py` (função `passenger_state`)
@@ -65,7 +65,7 @@ def test_passageiro_sem_nome_recebe_nome_vazio_no_estado(client, runtime):
 
 ---
 
-## Tarefa 2: servidor — histórico de corridas do passageiro
+### Task 2: servidor — histórico de corridas do passageiro
 
 **Arquivos:**
 - Modificar: `server/app/db/queries.py` (função nova no fim da seção de passageiro), `server/app/api/views.py`, `server/app/api/routes/passenger.py`
@@ -162,7 +162,7 @@ def test_limite_e_deslocamento_invalidos_sao_422(client, pax, params):
 
 ---
 
-## Tarefa 3: `corrida_core` — modelos e chamada do histórico, nome no estado
+### Task 3: `corrida_core` — modelos e chamada do histórico, nome no estado
 
 **Arquivos:**
 - Modificar: `mobile/packages/corrida_core/lib/src/models/passenger.dart`, `mobile/packages/corrida_core/lib/src/passenger_api.dart`
@@ -191,7 +191,7 @@ def test_limite_e_deslocamento_invalidos_sao_422(client, pax, params):
 
 ---
 
-## Tarefa 4: app do passageiro — nome obrigatório e perfil
+### Task 4: app do passageiro — nome obrigatório e perfil
 
 **Arquivos:**
 - Criar: `mobile/apps/passenger/lib/screens/name_screen.dart`, `mobile/apps/passenger/lib/screens/profile_screen.dart`
@@ -231,7 +231,7 @@ def test_limite_e_deslocamento_invalidos_sao_422(client, pax, params):
 
 ---
 
-## Tarefa 5: app do passageiro — histórico e recibo
+### Task 5: app do passageiro — histórico e recibo
 
 **Arquivos:**
 - Criar: `mobile/apps/passenger/lib/format.dart`, `mobile/apps/passenger/lib/screens/history_screen.dart`, `mobile/apps/passenger/lib/screens/receipt_screen.dart`
@@ -266,7 +266,7 @@ def test_limite_e_deslocamento_invalidos_sao_422(client, pax, params):
 
 ---
 
-## Tarefa 6: verificação final e roteiro
+### Task 6: verificação final e roteiro
 
 **Arquivos:**
 - Modificar: `docs/superpowers/plans/2026-10-08-00-roteiro-dos-planos.md` (seção nova "Itens que sobraram do plano 6C", antes de "Itens que sobraram do plano 3")

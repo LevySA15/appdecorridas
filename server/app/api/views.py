@@ -116,6 +116,7 @@ def passenger_state(unit: Unit, passenger_id: str, payment_methods: list[str]) -
         }
     contact = repo.get_emergency_contact(session, passenger_id)
     account = repo.get_passenger_account(session, passenger_id)
+    user = session.get(UserRow, passenger_id)
     fee = repo.pending_cancel_fee(session, passenger_id)
     pending_fee = None
     if fee is not None:
@@ -149,6 +150,7 @@ def passenger_state(unit: Unit, passenger_id: str, payment_methods: list[str]) -
         ],
         "emergency_contact": None if contact is None else {"name": contact.name, "phone": contact.phone},
         "payment_methods": payment_methods,
+        "name": user.name, "phone": user.phone,
     }
 
 
