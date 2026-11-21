@@ -34,13 +34,15 @@ Mudar regra de pagamento, taxa, cancelamento ou estado de corrida; exigir o nome
 ## Desenho
 
 **Servidor** (sem migração)
-- `GET /v1/passenger/state` ganha `name` (texto, vazio se ainda não definido). O app decide a tela do nome por ele, sem chamada extra.
+- `GET /v1/passenger/state` ganha `name` (texto, vazio se ainda não definido) e `phone` (para o perfil mostrar o número). O app decide a
+  tela do nome por `name`, sem chamada extra. (`phone` foi acrescentado ao escrever o plano: evita o perfil depender de outra chamada.)
 - Salvar o nome e o contato: rotas que já existem (`PUT /v1/me`, `PUT /v1/passenger/emergency-contact`).
 - `GET /v1/passenger/rides?limit=20&offset=0` (`limit` de 1 a 50): cada item traz `ride_id`, `state`, `created_at` (segundos), `price_cents`,
   `method` (`pix`, `cash` ou `balance`), `pickup_text`, `destination_text`, `distance_m`, `rider` (`name`, `plate`, `moto_model`, ou `null`
   se ninguém aceitou), `my_stars` (nota que o passageiro deu, ou `null`), `fee_cents` (taxa de cancelamento, 0 se não houve),
-  `payment_pending` (corrida em dinheiro concluída ainda não paga). Só corridas do próprio passageiro; só encerradas (a corrida aberta
-  continua vindo do `state`). Consulta com índice em `rides(passenger_id, state)`.
+  `fee_refunded` (a taxa foi devolvida porque o recurso foi aceito), `payment_pending` (corrida em dinheiro concluída ainda não paga).
+  A resposta é `{"rides": [...], "has_more": bool}`. Só corridas do próprio passageiro; só encerradas (a corrida aberta continua vindo do
+  `state`). Consulta com índice em `rides(passenger_id, state)`.
 - Contrato novo registrado em `docs/api-v1.md`.
 
 **Apps** (`corrida_core` + app do passageiro)
