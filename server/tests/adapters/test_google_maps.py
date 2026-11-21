@@ -154,3 +154,147 @@ def test_post_padrao_fala_http_de_verdade_com_um_servidor_local():
     finally:
         servidor.shutdown()
         servidor.server_close()
+
+
+# --- cache, teto diário e pausa -------------------------------------------------------------------------
+
+
+class Relogio:
+    def __init__(self, now=1_800_000_000.0):
+        self.now = now
+
+    def __call__(self):
+        return self.now
+
+    def advance(self, seconds):
+        self.now += seconds
+
+
+def origem(n):
+    """Origens bem distintas (cada uma com a sua chave de cache)."""
+    return GeoPoint(ORIGEM.lat + 0.01 * n, ORIGEM.lng)
+
+
+def da_bahia(ano, mes, dia, hora, minuto):
+    from datetime import datetime
+
+    from app.domain.clock import LOCAL_TZ
+
+    return datetime(ano, mes, dia, hora, minuto, tzinfo=LOCAL_TZ).timestamp()
+
+
+def test_mesma_rota_duas_vezes_chama_o_google_uma_vez():
+    post = Post(BOA)
+    google = maps(post)
+    google.route(ORIGEM, DESTINO)
+    google.route(ORIGEM, DESTINO)
+    assert len(post.calls) == 1
+    google.route(GeoPoint(ORIGEM.lat + 0.00001, ORIGEM.lng), DESTINO)     # difere só na 5ª casa: mesma chave
+    assert len(post.calls) == 1
+    google.route(GeoPoint(ORIGEM.lat + 0.0001, ORIGEM.lng), DESTINO)      # difere na 4ª casa: outra chave
+    assert len(post.calls) == 2
+
+
+def test_cache_da_rota_vence_depois_de_6_horas_e_o_do_tempo_depois_de_2_minutos():
+    relogio, post = Relogio(), Post(BOA)
+    google = maps(post, clock=relogio)
+    google.route(ORIGEM, DESTINO)
+    relogio.advance(21_599)
+    google.route(ORIGEM, DESTINO)
+    assert len(post.calls) == 1
+    relogio.advance(2)
+    google.route(ORIGEM, DESTINO)
+    assert len(post.calls) == 2
+    google.eta_seconds(ORIGEM, DESTINO)
+    assert len(post.calls) == 3
+    relogio.advance(119)
+    google.eta_seconds(ORIGEM, DESTINO)
+    assert len(post.calls) == 3
+    relogio.advance(2)
+    google.eta_seconds(ORIGEM, DESTINO)
+    assert len(post.calls) == 4
+
+
+def test_cache_guarda_no_maximo_cache_size_entradas():
+    post = Post(BOA)
+    google = maps(post, cache_size=2)
+    for n in (1, 2, 3):
+        google.route(origem(n), DESTINO)
+    assert len(post.calls) == 3
+    google.route(origem(1), DESTINO)                      # a mais antiga já saiu
+    assert len(post.calls) == 4
+    google.route(origem(3), DESTINO)                      # as duas mais novas ainda estão
+    assert len(post.calls) == 4
+
+
+def test_estimativa_de_reserva_nao_entra_no_cache():
+    post = Post(OSError("sem rede"), BOA)
+    google = maps(post)
+    primeira = google.route(ORIGEM, DESTINO)
+    segunda = google.route(ORIGEM, DESTINO)
+    assert primeira == FakeMaps().route(ORIGEM, DESTINO)
+    assert segunda == Route(2310, 412, decode_polyline(CODIFICADA))
+    assert len(post.calls) == 2
+
+
+def test_teto_diario_para_de_chamar_e_volta_no_dia_seguinte_da_bahia(caplog):
+    caplog.set_level(logging.WARNING, logger="app.google_maps")
+    relogio = Relogio(da_bahia(2026, 11, 20, 23, 59))
+    post = Post(BOA)
+    google = maps(post, clock=relogio, daily_limit=2)
+    google.route(origem(1), DESTINO)
+    google.route(origem(2), DESTINO)
+    barrada = google.route(origem(3), DESTINO)
+    assert len(post.calls) == 2 and barrada == FakeMaps().route(origem(3), DESTINO)
+    google.route(origem(1), DESTINO)                      # acerto de cache: nem chama nem conta
+    google.route(origem(4), DESTINO)                      # outra barrada
+    assert len(post.calls) == 2
+    assert sum("teto" in r.getMessage() for r in caplog.records) == 1
+    relogio.advance(120)                                  # 00:01 do dia 21 na Bahia
+    google.route(origem(3), DESTINO)
+    assert len(post.calls) == 3
+
+
+def test_teto_nao_zera_enquanto_o_dia_da_bahia_nao_vira():
+    relogio = Relogio(da_bahia(2026, 11, 20, 20, 0))      # 20:00 na Bahia = 23:00 UTC
+    post = Post(BOA)
+    google = maps(post, clock=relogio, daily_limit=1)
+    google.route(origem(1), DESTINO)
+    relogio.advance(3600 + 120)                           # 00:02 UTC do dia seguinte, mas só 21:02 na Bahia
+    google.route(origem(2), DESTINO)
+    assert len(post.calls) == 1
+
+
+def test_chamada_que_falha_conta_para_o_teto():
+    post = Post(OSError("sem rede"))
+    google = maps(post, daily_limit=1)
+    google.route(origem(1), DESTINO)
+    google.route(origem(2), DESTINO)
+    assert len(post.calls) == 1
+
+
+def test_tres_falhas_seguidas_pausam_o_google_por_60_segundos():
+    relogio, post = Relogio(), Post(OSError("sem rede"))
+    google = maps(post, clock=relogio)
+    for n in (1, 2, 3):
+        google.route(origem(n), DESTINO)
+    assert len(post.calls) == 3
+    quarta = google.route(origem(4), DESTINO)
+    google.route(origem(5), DESTINO)
+    assert len(post.calls) == 3 and quarta == FakeMaps().route(origem(4), DESTINO)
+    relogio.advance(61)
+    google.route(origem(6), DESTINO)
+    assert len(post.calls) == 4
+
+
+def test_resposta_boa_no_meio_zera_a_contagem_de_falhas():
+    erro = OSError("sem rede")
+    post = Post(erro, erro, BOA, erro, erro)             # a última se repete
+    google = maps(post)
+    for n in (1, 2, 3, 4, 5):
+        google.route(origem(n), DESTINO)
+    assert len(post.calls) == 5                           # nunca 3 falhas seguidas: nenhuma pausa
+    google.route(origem(6), DESTINO)                      # a 3ª falha seguida
+    assert len(post.calls) == 6
+    google.route(origem(7), DESTINO)                      # agora sim, em pausa
+    assert len(post.calls) == 6
