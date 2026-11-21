@@ -9,9 +9,11 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:passenger/app.dart';
 import 'package:passenger/passenger_controller.dart';
+import 'package:passenger/screens/history_screen.dart';
 import 'package:passenger/screens/home_screen.dart';
 import 'package:passenger/screens/name_screen.dart';
 import 'package:passenger/screens/profile_screen.dart';
+import 'package:passenger/screens/receipt_screen.dart';
 import 'package:passenger/screens/ride_screen.dart';
 import 'package:stream_channel/stream_channel.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -105,6 +107,8 @@ class Mundo {
   Map<String, Object?> stateJson = const {};
   int stateStatus = 200;
   String? nomeSalvo;
+  Map<String, Object?> historicoJson = const {'rides': [], 'has_more': false};
+  var historicoPedidos = 0;
   var stateThrows = false; // sem internet
   http.Request? ratingRequest;
 
@@ -130,6 +134,10 @@ class Mundo {
         }, stateStatus);
       }
       return _json({'name': 'Ana', ...stateJson});
+    }
+    if (r.method == 'GET' && path == '/v1/passenger/rides') {
+      historicoPedidos++;
+      return _json(historicoJson);
     }
     if (r.method == 'PUT' && path == '/v1/me') {
       nomeSalvo = (jsonDecode(r.body) as Map)['name'] as String;
@@ -395,6 +403,45 @@ void main() {
 
     expect(find.byType(ProfileScreen), findsOneWidget);
     expect(find.text('+5575999990001'), findsOneWidget);
+    await tester.runAsync(() => m.controller.signOut());
+  });
+
+  testWidgets('Minhas corridas abre o historico e tocar numa corrida abre o recibo', (
+    tester,
+  ) async {
+    final m = Mundo();
+    await m.store.save(
+      Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
+    );
+    m.historicoJson = {
+      'rides': [
+        {
+          'ride_id': 'r9',
+          'state': 'completed',
+          'created_at': 1800000000.0,
+          'price_cents': 550,
+          'method': 'pix',
+          'pickup_text': 'Rua A',
+          'destination_text': 'Feira livre',
+          'distance_m': 1950,
+          'rider': {'name': 'João', 'plate': 'ABC1D23', 'moto_model': 'CG'},
+        },
+      ],
+      'has_more': false,
+    };
+    await m.controller.start();
+    await tester.pumpWidget(PassengerApp(controller: m.controller));
+    await tester.pump();
+
+    await tester.tap(find.text('Minhas corridas'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HistoryScreen), findsOneWidget);
+    expect(m.historicoPedidos, 1);
+    await tester.tap(find.text('Rua A'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ReceiptScreen), findsOneWidget);
+    expect(find.text('João · ABC1D23 · CG'), findsOneWidget);
     await tester.runAsync(() => m.controller.signOut());
   });
 }

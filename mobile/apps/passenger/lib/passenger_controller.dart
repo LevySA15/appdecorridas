@@ -140,6 +140,10 @@ class PassengerController extends ChangeNotifier {
     return result;
   }
 
+  /// Uma página (20) do histórico, a partir de [offset] corridas já mostradas.
+  Future<RideHistoryPage> loadHistory({int offset = 0}) =>
+      api.history(limit: 20, offset: offset);
+
   /// Salva o nome (`PUT /v1/me`) e relê o estado: é o `state.name` que tira a pessoa da tela do nome.
   Future<void> setName(String name) async {
     await authApi.updateName(name);

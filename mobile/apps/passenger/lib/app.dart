@@ -5,9 +5,11 @@ import 'package:corrida_ui/corrida_ui.dart';
 import 'package:flutter/material.dart';
 
 import 'passenger_controller.dart';
+import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/name_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/receipt_screen.dart';
 import 'screens/request_ride_screen.dart';
 import 'screens/ride_screen.dart';
 import 'screens/wallet_screen.dart';
@@ -186,6 +188,19 @@ class _SignedInShellState extends State<SignedInShell> {
     );
   }
 
+  void _openHistory() {
+    _navigatorKey.currentState!.push(
+      MaterialPageRoute(
+        builder: (_) => HistoryScreen(
+          onLoad: (offset) => widget.controller.loadHistory(offset: offset),
+          onOpenReceipt: (ride) => _navigatorKey.currentState!.push(
+            MaterialPageRoute(builder: (_) => ReceiptScreen(ride: ride)),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _openProfile() {
     _navigatorKey.currentState!.push(
       MaterialPageRoute(
@@ -232,6 +247,7 @@ class _SignedInShellState extends State<SignedInShell> {
               onOpenRide: _openRide,
               onOpenWallet: _openWallet,
               onOpenProfile: _openProfile,
+              onOpenHistory: _openHistory,
               onSignOut: widget.controller.signOut,
               onPayPendingFee: widget.controller.payPendingFee,
               onShowPendingCash: widget.controller.loadCharge,

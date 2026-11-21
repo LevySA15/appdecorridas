@@ -10,6 +10,7 @@ class HomeScreen extends StatefulWidget {
     required this.onOpenRide,
     required this.onOpenWallet,
     required this.onOpenProfile,
+    required this.onOpenHistory,
     required this.onSignOut,
     required this.onPayPendingFee,
     required this.onShowPendingCash,
@@ -22,6 +23,7 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback onOpenRide;
   final VoidCallback onOpenWallet;
   final VoidCallback onOpenProfile;
+  final VoidCallback onOpenHistory;
   final VoidCallback onSignOut;
   final Future<PayFeeResult> Function() onPayPendingFee;
   final Future<Charge> Function(String chargeId) onShowPendingCash;
@@ -147,6 +149,11 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: widget.onOpenWallet,
               child: const Text('Carteira'),
             ),
+          ),
+          ListTile(
+            title: const Text('Minhas corridas'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: widget.onOpenHistory,
           ),
           ListTile(
             title: const Text('Perfil'),

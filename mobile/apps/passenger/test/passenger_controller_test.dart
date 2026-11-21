@@ -104,6 +104,7 @@ class Mundo {
   var discadorQuebrado = false;
   var sosStatus = 200;
   String? nomeSalvo;
+  Map<String, String>? historicoPedido;
 
   Map<String, Object?> stateJson = const {};
   int stateStatus = 200;
@@ -128,6 +129,10 @@ class Mundo {
         }, stateStatus);
       }
       return _json(stateJson);
+    }
+    if (r.method == 'GET' && path == '/v1/passenger/rides') {
+      historicoPedido = r.url.queryParameters;
+      return _json({'rides': <Object?>[], 'has_more': true});
     }
     if (r.method == 'PUT' && path == '/v1/me') {
       nomeSalvo = (jsonDecode(r.body) as Map)['name'] as String;
@@ -338,6 +343,20 @@ void main() {
 
     expect(m.nomeSalvo, 'Ana Lima');
     expect(m.controller.state!.name, 'Ana Lima');
+    await m.controller.signOut();
+  });
+
+  test('loadHistory pede 20 por pagina a partir do deslocamento', () async {
+    final m = Mundo();
+    await m.store.save(
+      Session(token: 'tok-1', userId: 'u1', role: 'passenger'),
+    );
+    await m.controller.start();
+
+    final pagina = await m.controller.loadHistory(offset: 40);
+
+    expect(m.historicoPedido, {'limit': '20', 'offset': '40'});
+    expect(pagina.hasMore, isTrue);
     await m.controller.signOut();
   });
 }
