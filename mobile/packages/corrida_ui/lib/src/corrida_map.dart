@@ -25,9 +25,13 @@ class CorridaMapView extends StatelessWidget {
     this.onTap,
     this.bottomSpace = 0,
     this.interactive = true,
+    this.framePadding,
     this.engine,
     super.key,
   });
+
+  /// Folga em volta dos marcadores ao enquadrar; `null` usa a de tela cheia (miniatura passa uma menor).
+  final EdgeInsets? framePadding;
 
   final List<MapMarker> markers;
   final ValueChanged<Place>? onTap;
@@ -47,6 +51,8 @@ class CorridaMapView extends StatelessWidget {
           onTap: onTap,
           bottomSpace: bottomSpace,
           interactive: interactive,
+          framePadding:
+              framePadding ?? const EdgeInsets.fromLTRB(56, 96, 56, 56),
         )
       : FakeMapView(markers: markers, onTap: onTap);
 }

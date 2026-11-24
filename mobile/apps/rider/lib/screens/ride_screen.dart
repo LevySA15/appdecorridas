@@ -25,6 +25,7 @@ class RideScreen extends StatefulWidget {
 
   final RiderRide ride;
   final Place position;
+
   /// Anda no mapa de mentira. `null` com o GPS de verdade: a posição é a do celular, sem atalhos.
   final void Function(Place)? onMove;
   final Future<void> Function() onArrive;
@@ -87,7 +88,9 @@ class _RideScreenState extends State<RideScreen> {
             : 'Pedido de socorro enviado. Ligue ${result.emergencyNumber} agora.',
       );
     } on Exception catch (error) {
-      _showMessage('${friendlyMessage(error)} Se estiver em perigo, ligue 190.');
+      _showMessage(
+        '${friendlyMessage(error)} Se estiver em perigo, ligue 190.',
+      );
     }
   }
 

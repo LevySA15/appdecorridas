@@ -24,7 +24,7 @@ async function browser() {
 /** Uma "tela de celular": 390x844, tema claro ou escuro. */
 async function phone(b, { dark = false, url, width = 390, height = 844, permissions = [] } = {}) {
   const ctx = await b.newContext({
-    viewport: { width, height }, deviceScaleFactor: 2, colorScheme: dark ? 'dark' : 'light', locale: 'pt-BR',
+    viewport: { width, height }, deviceScaleFactor: Number(process.env.DSF || 2), colorScheme: dark ? 'dark' : 'light', locale: 'pt-BR',
     permissions, geolocation: { latitude: -12.9644, longitude: -39.2597 },
   });
   const page = await ctx.newPage();

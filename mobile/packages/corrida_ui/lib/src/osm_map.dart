@@ -26,8 +26,12 @@ class OsmMapView extends StatefulWidget {
     this.tileProvider,
     this.focus,
     this.interactive = true,
+    this.framePadding = const EdgeInsets.fromLTRB(56, 96, 56, 56),
     super.key,
   });
+
+  /// Folga em volta dos marcadores ao enquadrar (o padrão deixa espaço para a barra de cima e a dica; miniatura usa menos).
+  final EdgeInsets framePadding;
 
   /// `false` para miniatura dentro de lista: o toque não mexe no mapa (senão brigaria com a rolagem da tela).
   final bool interactive;
@@ -52,9 +56,53 @@ class _OsmMapViewState extends State<OsmMapView> {
   final _controller = MapController();
   var _ready = false;
 
+  // As opções e a camada de ladrilhos nascem uma vez: se cada reconstrução da tela (o contador da oferta muda a cada
+  // segundo) criasse objetos novos, o flutter_map entenderia que mudou e abortaria os ladrilhos que estava baixando.
+  late MapOptions _options;
+  late TileLayer _tiles;
+
+  @override
+  void initState() {
+    super.initState();
+    _options = _buildOptions();
+    _tiles = _buildTiles();
+  }
+
+  MapOptions _buildOptions() => MapOptions(
+    initialCenter: _latLng(cityCenter),
+    initialZoom: 14,
+    minZoom: 8,
+    maxZoom: 19,
+    onMapReady: () {
+      _ready = true;
+      _frame();
+    },
+    // lê o `onTap` do momento: a tela pode trocar o callback sem refazer o mapa
+    onTap: (_, point) =>
+        widget.onTap?.call(Place(lat: point.latitude, lng: point.longitude)),
+    interactionOptions: InteractionOptions(
+      flags: widget.interactive
+          ? InteractiveFlag.all & ~InteractiveFlag.rotate
+          : InteractiveFlag.none,
+    ),
+  );
+
+  TileLayer _buildTiles() => TileLayer(
+    urlTemplate: osmTileUrl,
+    userAgentPackageName: osmUserAgentPackage,
+    maxNativeZoom: 19,
+    tileProvider: widget.tileProvider,
+  );
+
   @override
   void didUpdateWidget(covariant OsmMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.interactive != widget.interactive) {
+      _options = _buildOptions();
+    }
+    if (oldWidget.tileProvider != widget.tileProvider) {
+      _tiles = _buildTiles();
+    }
     if (!_sameMarkers(oldWidget.markers, widget.markers)) _frame();
     final focus = widget.focus;
     if (focus != null && focus != oldWidget.focus && _ready) {
@@ -89,7 +137,8 @@ class _OsmMapViewState extends State<OsmMapView> {
       _controller.fitCamera(
         CameraFit.coordinates(
           coordinates: points,
-          padding: EdgeInsets.fromLTRB(56, 96, 56, 56 + widget.bottomSpace),
+          padding:
+              widget.framePadding + EdgeInsets.only(bottom: widget.bottomSpace),
           maxZoom: 17,
         ),
       );
@@ -108,36 +157,12 @@ class _OsmMapViewState extends State<OsmMapView> {
       if (marker.kind == MarkerKind.pickup) pickup = marker;
       if (marker.kind == MarkerKind.destination) destination = marker;
     }
-    final onTap = widget.onTap;
     return FlutterMap(
       mapController: _controller,
-      options: MapOptions(
-        initialCenter: _latLng(cityCenter),
-        initialZoom: 14,
-        minZoom: 8,
-        maxZoom: 19,
-        onMapReady: () {
-          _ready = true;
-          _frame();
-        },
-        onTap: onTap == null
-            ? null
-            : (_, point) =>
-                  onTap(Place(lat: point.latitude, lng: point.longitude)),
-        interactionOptions: InteractionOptions(
-          flags: widget.interactive
-              ? InteractiveFlag.all & ~InteractiveFlag.rotate
-              : InteractiveFlag.none,
-        ),
-      ),
+      options: _options,
       children: [
-        TileLayer(
-          urlTemplate: osmTileUrl,
-          userAgentPackageName: osmUserAgentPackage,
-          maxNativeZoom: 19,
-          tileProvider: widget.tileProvider,
-          tileBuilder: dark ? darkModeTileBuilder : null,
-        ),
+        // escuro: um filtro só em cima de todos os ladrilhos (um por ladrilho deixa linhas claras nas emendas)
+        dark ? darkModeTilesContainerBuilder(context, _tiles) : _tiles,
         if (pickup != null && destination != null)
           PolylineLayer(
             polylines: [

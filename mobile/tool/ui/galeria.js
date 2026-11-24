@@ -11,15 +11,19 @@ const waitText = (page, re, ms = 30000) => page.waitForFunction((src) => {
   return new RegExp(src).test(t);
 }, re.source, { timeout: ms });
 
+const achou0 = (lista) => Array.isArray(lista) && lista.length > 0;
 (async () => {
   const b = await h.browser();
+  // o servidor de teste dá só 8 s para aceitar; a galeria precisa de tempo para fotografar a oferta
+  { const a = await h.admin(); const c = await a.call('GET', '/v1/admin/config'); const r = await a.call('PUT', '/v1/admin/config/dispatch', { ...c.dispatch, offer_timeout_s: 60 }); if (r && r.error) console.log('config: ' + JSON.stringify(r)); }
   const dark = process.argv[2] === 'escuro';
   const tag = dark ? 'escuro' : 'claro';
   const sufixo = String(Date.now()).slice(-5);
   const PAX = '759998' + sufixo;
   const RIDER = '759775' + sufixo;
   const log = (m) => console.log(m);
-  const foto = async (ctx, who, name) => { await ctx.page.waitForTimeout(500); await h.shot(ctx.page, `${who}-${tag}-${name}`); };
+  // os ladrilhos do mapa chegam da internet: espera antes de cada foto
+  const foto = async (ctx, who, name) => { await ctx.page.waitForTimeout(2600); await h.shot(ctx.page, `${who}-${tag}-${name}`); };
 
   // ---------- passageiro: entrar ----------
   const P = await h.phone(b, { dark, url: APP_P, permissions: ['geolocation'] });
@@ -67,6 +71,7 @@ const waitText = (page, re, ms = 30000) => page.waitForFunction((src) => {
   await foto(M, 'm', '03-em-analise');
   const adm = await h.admin();
   const lista = await adm.call('GET', '/v1/admin/riders?status=pending&limit=200');
+  if (!achou0(lista)) { log('texto do app: ' + await h.text(M.page)); log('lista: ' + JSON.stringify(lista).slice(0, 300)); }
   const achou = lista.find((r) => String(r.phone).endsWith(RIDER.slice(-8)));
   await adm.call('POST', `/v1/admin/riders/${achou.rider_id}/approve`, {});
   await M.page.waitForTimeout(3500);
@@ -100,7 +105,10 @@ const waitText = (page, re, ms = 30000) => page.waitForFunction((src) => {
   await M.page.waitForTimeout(2500);
   await foto(M, 'm', '07-a-caminho');
   await foto(P, 'p', '08-moto-a-caminho');
-  const st = await (await h.pessoa(PAX, 'passenger')).call('GET', '/v1/passenger/state');
+  const paxApi = await h.pessoa(PAX, 'passenger');
+  let st = await paxApi.call('GET', '/v1/passenger/state');
+  for (let i = 0; i < 12 && !(st.ride && st.ride.pay); i++) { await new Promise((r) => setTimeout(r, 1000)); st = await paxApi.call('GET', '/v1/passenger/state'); }
+  if (!(st.ride && st.ride.pay)) throw new Error('o Pix da corrida não apareceu: ' + JSON.stringify(st.ride).slice(0, 300));
   const chargeId = st.ride.pay.charge_id;
   await h.tap(P.page, 'Ver Pix');
   await P.page.waitForTimeout(1500);

@@ -163,7 +163,8 @@ class RiderController extends ChangeNotifier {
   /// repete o último, mesmo com o motoqueiro parado (o GPS só avisa quando ele anda).
   Future<void> _startLocation(int run) async {
     final access = await location.request();
-    if (run != _positionRun) return; // parou (ou recomeçou) enquanto a pessoa decidia
+    if (run != _positionRun)
+      return; // parou (ou recomeçou) enquanto a pessoa decidia
     if (access != LocationAccess.granted) {
       _locationProblem = _accessMessage(access);
       notifyListeners();
@@ -216,14 +217,15 @@ class RiderController extends ChangeNotifier {
   static String _accessMessage(LocationAccess access) => switch (access) {
     LocationAccess.denied =>
       'Permita a localização do celular para ficar disponível.',
-    LocationAccess.deniedForever =>
-      'A localização está bloqueada. Libere nas configurações do celular para ficar disponível.',
-    LocationAccess.serviceOff => 'Ligue o GPS do celular para ficar disponível.',
+    LocationAccess.deniedForever => 'A localização está bloqueada. Libere nas configurações do celular para ficar disponível.',
+    LocationAccess.serviceOff =>
+      'Ligue o GPS do celular para ficar disponível.',
     LocationAccess.granted => '',
   };
 
   Future<void> _sendPosition() async {
-    if (usesRealGps && !_hasFix) return; // nunca manda o centro da cidade no lugar do GPS
+    if (usesRealGps && !_hasFix)
+      return; // nunca manda o centro da cidade no lugar do GPS
     try {
       await api.sendPosition(_position.lat, _position.lng);
     } on Exception {
