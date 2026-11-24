@@ -1,0 +1,20 @@
+const h = require('./harness');
+(async () => {
+  const b = await h.browser();
+  const dark = process.argv[2] === 'escuro';
+  const tag = dark ? 'escuro' : 'claro';
+  const { page, logs } = await h.phone(b, { dark, url: 'http://127.0.0.1:8081/index.html' });
+  const say = async (n) => { console.log(`--- ${n}`); console.log(await h.text(page)); await h.shot(page, `p-${tag}-${n}`); };
+  await page.waitForTimeout(1200);
+  await h.type(page, 'Telefone', '75999990001');
+  await h.tap(page, 'Enviar código');
+  await page.waitForTimeout(1000);
+  await say('01-codigo');
+  const code = await h.otp('75999990001');
+  await h.type(page, 'Código', code);
+  await h.tap(page, 'Entrar', { exact: true });
+  await page.waitForTimeout(2500);
+  await say('02-depois-do-login');
+  console.log(logs.join('\n'));
+  await b.close();
+})().catch((e) => { console.error(e); process.exit(1); });

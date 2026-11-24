@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'models/common.dart';
+import 'realtime_connect.dart';
 
 /// Um aviso do servidor (`docs/api-v1.md`, "Tempo real"). Os avisos são dicas: a fonte da verdade é o `state`.
 class ServerEvent {
@@ -50,9 +50,9 @@ class RealtimeClient {
     this.delay,
   }) : _connector =
            connector ??
-           ((uri) => IOWebSocketChannel.connect(
+           ((uri) => connectDefault(
              uri,
-             pingInterval: pingEvery,
+             pingEvery: pingEvery,
              connectTimeout: connectTimeout,
            )) {
     if (backoff.isEmpty)
