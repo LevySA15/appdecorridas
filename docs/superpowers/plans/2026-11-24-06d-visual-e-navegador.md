@@ -40,6 +40,15 @@ Compilar os dois para a web e abrir num navegador foi a primeira vez que alguém
   **IDOR** (corrida, cobrança e documentos de outro usuário), CORS de desenvolvimento, limite de cotações/pedidos, painel (rótulos, páginas), busca de passageiro.
 - Apps: `telas_pequenas_test.dart` nos dois (celular 320x568, letra 1,5x, claro e escuro), Pix (QR, copiar), máscaras.
 
+**Mapa de verdade e localização** (`docs/mapa.md`)
+- Os apps desenham o mapa por `CorridaMapView`/`CorridaMapPicker`, que escolhem entre o desenho de mentira (testes, `flutter run`, navegador) e **as ruas de verdade do
+  OpenStreetMap** (app de **release**, ou `--dart-define=MAP=osm`): toque marca embarque e destino, a câmera enquadra os dois, claro/escuro, atribuição "© OpenStreetMap".
+- Passageiro: botão **"Estou aqui"** (posição do celular vira o embarque; permissão de localização pedida na hora; frases claras para GPS desligado/negado/sem sinal).
+- Motoqueiro: **miniatura do trajeto** na oferta (embarque e destino) para decidir antes de aceitar.
+- Achado e corrigido no caminho: recriar as opções do mapa a cada reconstrução da tela (o contador da oferta muda por segundo) fazia o `flutter_map` abortar os
+  ladrilhos que estava baixando: o mapa do motoqueiro ficava cinza.
+- **Limites:** ladrilhos do OSM só para teste fechado; **mapa do Google no servidor × mapa de outro fornecedor no app** (termos do Google) — ver `docs/mapa.md`.
+
 **Servidor / painel**
 - Avaliar uma corrida que não é sua responde 403 **antes** de olhar o estado (de fora não se descobre em que estado a corrida dos outros está).
 - Busca de passageiros por telefone aceita o jeito que o dono copia ("(75) 99999-0001", "+55 75 …") e `%`/`_` deixam de ser coringa.
@@ -59,11 +68,12 @@ Compilar os dois para a web e abrir num navegador foi a primeira vez que alguém
 1. O vermelho da spec vale como identidade; o escuro acompanha a configuração do celular.
 2. O início do passageiro perdeu o botão "Sair" (fica no Perfil). Durante a viagem some o "Cancelar" do passageiro (fica o SOS); antes da viagem continua.
 3. Limites de 20 cotações e 8 pedidos por minuto (constantes em `app/api/routes/passenger.py`).
-4. Dependência nova: `qr_flutter` (só desenha o QR). `flutter_launcher_icons` fica só como ferramenta de desenvolvimento.
-5. Ícone do motoqueiro preto com a moto vermelha, para não confundir os dois apps na tela do celular.
+4. Dependências novas: `qr_flutter` (QR do Pix), `flutter_map` + `latlong2` (mapa), `geolocator` também no passageiro; `flutter_launcher_icons` só como ferramenta.
+5. Mapa de verdade (OpenStreetMap) como padrão do release e desenho de mentira nos testes/depuração: é a única forma de o teste fechado mostrar a cidade sem a chave do Google; trocar é um parâmetro.
+6. Ícone do motoqueiro preto com a moto vermelha, para não confundir os dois apps na tela do celular.
 
 ## Não feito (precisa do Levy ou do plano 7)
 
-- Mapa de verdade dentro dos apps, busca de endereço e GPS do passageiro (chave do Google).
+- Mapa do **Google** dentro dos apps (`google_maps_flutter`, precisa da chave e de um celular), busca de endereço (Places) e o trajeto pelas ruas (hoje é linha reta).
 - Os apps **ainda não foram vistos num celular de verdade** depois destas mudanças (os dois APKs de depuração compilam); notificação com o app fechado (Firebase).
 - Revisão independente (só autorrevisão) — a regra desta máquina não deixa chamar subagente sem o Levy pedir.
