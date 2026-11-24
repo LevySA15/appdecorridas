@@ -131,3 +131,10 @@ def test_chave_so_com_espacos_vale_como_sem_chave(tmp_path):
     settings = load_settings(env_path=_env(tmp_path), environ={"GOOGLE_MAPS_API_KEY": "   "})
     assert settings.google_maps_api_key is None
     assert load_settings(env_path=_env(tmp_path), environ={"GOOGLE_MAPS_API_KEY": " k1 "}).google_maps_api_key == "k1"
+
+
+def test_ruas_de_mentira_vem_desligadas_e_o_interruptor_liga(tmp_path):
+    assert load_settings(env_path=_env(tmp_path), environ={}).fake_maps_streets is False
+    assert load_settings(env_path=_env(tmp_path), environ={"FAKE_MAPS_STREETS": "on"}).fake_maps_streets is True
+    with pytest.raises(RuntimeError, match="FAKE_MAPS_STREETS"):
+        load_settings(env_path=_env(tmp_path), environ={"FAKE_MAPS_STREETS": "talvez"})

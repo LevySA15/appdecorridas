@@ -170,4 +170,46 @@ void main() {
 
     expect(cotacoes, 1);
   });
+
+  testWidgets('o traçado pelas ruas da cotação vai para o mapa', (
+    tester,
+  ) async {
+    const ruas = [
+      Place(lat: -12.96, lng: -39.26),
+      Place(lat: -12.97, lng: -39.26),
+      Place(lat: -12.97, lng: -39.27),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RequestRideScreen(
+          onQuote: (_, _) async => Quote(
+            quoteId: 'q1',
+            priceCents: 1200,
+            distanceM: 2500,
+            durationS: 480,
+            reason: 'normal',
+            expiresAt: 999999,
+            pickup: const Place(lat: -12.96, lng: -39.26),
+            destination: const Place(lat: -12.97, lng: -39.27),
+            etaSeconds: 180,
+            nearbyRiders: 2,
+            paymentMethods: const ['pix', 'cash'],
+            route: ruas,
+          ),
+          onConfirm: (_, _) async {},
+        ),
+      ),
+    );
+    expect(
+      tester.widget<CorridaMapPicker>(find.byType(CorridaMapPicker)).route,
+      isEmpty,
+    ); // antes da cotação não há traçado
+
+    await _marcarOsDoisPontos(tester);
+
+    expect(
+      tester.widget<CorridaMapPicker>(find.byType(CorridaMapPicker)).route,
+      ruas,
+    );
+  });
 }

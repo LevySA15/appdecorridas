@@ -46,3 +46,33 @@ def distance_to_route_m(p: GeoPoint, route: list[GeoPoint]) -> float:
     if len(route) == 1:
         return haversine_m(p, route[0])
     return min(distance_to_segment_m(p, a, b) for a, b in zip(route, route[1:]))
+
+
+def simplify_route(points: list[GeoPoint], tolerance_m: float = 4.0) -> list[GeoPoint]:
+    """Tira pontos que quase não mudam o desenho (Douglas-Peucker): o traçado do Google tem um ponto a cada poucos metros,
+    e o celular só precisa do formato. Primeiro e último ponto ficam sempre; nenhum ponto some se estiver a mais de
+    `tolerance_m` metros da linha que o substitui."""
+    if len(points) <= 2:
+        return list(points)
+    keep = [False] * len(points)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(points) - 1)]
+    while stack:                                   # sem recursão: o traçado pode ter centenas de pontos
+        first, last = stack.pop()
+        far_index, far_m = -1, tolerance_m
+        for i in range(first + 1, last):
+            d = distance_to_segment_m(points[i], points[first], points[last])
+            if d > far_m:
+                far_index, far_m = i, d
+        if far_index != -1:
+            keep[far_index] = True
+            stack.append((first, far_index))
+            stack.append((far_index, last))
+    return [p for p, k in zip(points, keep) if k]
+
+
+def route_for_app(route) -> list[list[float]]:
+    """O traçado pelas ruas como o app recebe: `[[lat, lng], ...]`, enxuto (sem pontos que não mudam o desenho) e com
+    5 casas decimais (cerca de 1 m). Sem o mapa do Google são só dois pontos, embarque e destino (o app desenha a linha reta)."""
+    points = simplify_route([GeoPoint(float(lat), float(lng)) for lat, lng in route])
+    return [[round(p.lat, 5), round(p.lng, 5)] for p in points]

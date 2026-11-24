@@ -24,6 +24,7 @@ class Quote {
     required this.etaSeconds,
     required this.nearbyRiders,
     required this.paymentMethods,
+    this.route = const [],
   });
 
   final String quoteId;
@@ -37,6 +38,9 @@ class Quote {
   final int? etaSeconds; // null sem moto livre por perto
   final int nearbyRiders;
   final List<String> paymentMethods; // pix, cash e, se o saldo cobre, balance
+
+  /// O traçado pelas ruas (vazio se o servidor não mandou); com o mapa do Google são dezenas de pontos, sem ele só embarque e destino.
+  final List<Place> route;
 
   bool get canPayWithBalance => paymentMethods.contains('balance');
 
@@ -52,6 +56,7 @@ class Quote {
     etaSeconds: asIntOrNull(json['eta_seconds']),
     nearbyRiders: asInt(json['nearby_riders']),
     paymentMethods: asStringList(json['payment_methods']),
+    route: placesFromPairs(json['route']),
   );
 }
 
@@ -160,6 +165,7 @@ class PassengerRide {
     this.pickup = const Place(lat: 0, lng: 0),
     this.destination = const Place(lat: 0, lng: 0),
     this.distanceM = 0,
+    this.route = const [],
     this.rider,
     this.riderPosition,
     this.queue,
@@ -183,6 +189,8 @@ class PassengerRide {
   final Place pickup;
   final Place destination;
   final int distanceM;
+  final List<Place>
+  route; // o traçado pelas ruas da cotação (vazio se o servidor não mandou)
   final RiderCard? rider;
   final GeoPoint? riderPosition;
   final QueueInfo? queue;
@@ -205,6 +213,7 @@ class PassengerRide {
     pickup: Place.fromJson(asMap(json['pickup']) ?? const {}),
     destination: Place.fromJson(asMap(json['destination']) ?? const {}),
     distanceM: asInt(json['distance_m']),
+    route: placesFromPairs(json['route']),
     rider: mapOrNull(json['rider'], RiderCard.fromJson),
     riderPosition: mapOrNull(json['rider_position'], GeoPoint.fromJson),
     queue: mapOrNull(json['queue'], QueueInfo.fromJson),

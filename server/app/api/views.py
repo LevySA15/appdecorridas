@@ -8,6 +8,7 @@ import datetime as dt
 
 from app.domain.clock import LOCAL_TZ, local_date, local_day_start
 from app.domain.fees import debt_to_pay_cents, fee_for_ride, offer_block_reason
+from app.domain.geo import route_for_app
 from app.domain.rides import Ride, RideState
 from app.domain.types import PaymentMethod
 from app.runtime import Unit
@@ -28,7 +29,7 @@ def quote_view(quote: Quote, payment_methods: list[str]) -> dict:
         "pickup": place(quote.pickup.lat, quote.pickup.lng, quote.pickup_text),
         "destination": place(quote.destination.lat, quote.destination.lng, quote.destination_text),
         "eta_seconds": quote.eta_seconds, "nearby_riders": quote.nearby_riders,
-        "payment_methods": payment_methods,
+        "payment_methods": payment_methods, "route": route_for_app(quote.route),
     }
 
 
@@ -86,7 +87,7 @@ def passenger_ride_view(unit: Unit, ride_id: str) -> dict:
         "pay_with_balance": ride.pay_with_balance,
         "pickup": place(details.pickup.lat, details.pickup.lng, details.pickup_text),
         "destination": place(details.destination.lat, details.destination.lng, details.destination_text),
-        "distance_m": details.distance_m, "rider": rider, "rider_position": position,
+        "distance_m": details.distance_m, "route": route_for_app(details.route), "rider": rider, "rider_position": position,
         "queue": queries.queue_info(unit.session, ride.ride_id, ride.rider_id) if ride.state is RideState.QUEUED else None,
         "safety_alert": queries.open_safety_alert(unit.session, ride.ride_id),
         "pay": _pix_to_pay(unit, ride), "end_payment": _end_payment(unit, ride),
@@ -175,7 +176,7 @@ def rider_ride_view(unit: Unit, ride_id: str) -> dict:
         "passenger": {"name": first_name},      # o motoqueiro só vê o primeiro nome (o código fica com o passageiro)
         "pickup": place(details.pickup.lat, details.pickup.lng, details.pickup_text),
         "destination": place(details.destination.lat, details.destination.lng, details.destination_text),
-        "distance_m": details.distance_m, "end_payment": _end_payment(unit, ride),
+        "distance_m": details.distance_m, "route": route_for_app(details.route), "end_payment": _end_payment(unit, ride),
     }
 
 

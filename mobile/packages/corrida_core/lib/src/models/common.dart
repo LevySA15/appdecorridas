@@ -145,3 +145,16 @@ class EndPayment {
     blocked: asBool(json['blocked']),
   );
 }
+
+/// O traçado pelas ruas que o servidor manda: `[[lat, lng], ...]`. Item torto (não é par de números) é ignorado; sem
+/// traçado a lista é vazia e o mapa desenha a linha reta entre embarque e destino.
+List<Place> placesFromPairs(Object? value) {
+  final places = <Place>[];
+  for (final pair in asList(value)) {
+    if (pair is! List || pair.length < 2) continue;
+    final lat = asDoubleOrNull(pair[0]);
+    final lng = asDoubleOrNull(pair[1]);
+    if (lat != null && lng != null) places.add(Place(lat: lat, lng: lng));
+  }
+  return places;
+}

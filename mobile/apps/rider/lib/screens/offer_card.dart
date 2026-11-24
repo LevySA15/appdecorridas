@@ -126,6 +126,7 @@ class _OfferCardState extends State<OfferCard> {
                   height: 140,
                   child: CorridaMapView(
                     interactive: false,
+                    route: offer.route,
                     framePadding: const EdgeInsets.all(28),
                     markers: [
                       MapMarker(MarkerKind.pickup, offer.pickup),

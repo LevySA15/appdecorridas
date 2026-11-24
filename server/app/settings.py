@@ -26,6 +26,7 @@ class Settings:
     maps_daily_call_limit: int = 800        # teto de chamadas de rota ao Google por dia (protege a fatura)
     geocode_daily_call_limit: int = 600     # teto de chamadas de endereço escrito ao Google por dia
     maps_travel_mode: str = "DRIVE"         # DRIVE ou TWO_WHEELER (moto; a testar no Brasil)
+    fake_maps_streets: bool = False         # só demonstração: rota falsa em "escada" (sem chave do Google); nunca em produção
 
 
 def parse_env_file(path: Path) -> dict[str, str]:
@@ -119,4 +120,5 @@ def load_settings(
             optional("GEOCODE_DAILY_CALL_LIMIT"), "GEOCODE_DAILY_CALL_LIMIT", Settings.geocode_daily_call_limit
         ),
         maps_travel_mode=_parse_travel_mode(optional("MAPS_TRAVEL_MODE")),
+        fake_maps_streets=_parse_switch("FAKE_MAPS_STREETS", optional("FAKE_MAPS_STREETS"), default=False),
     )

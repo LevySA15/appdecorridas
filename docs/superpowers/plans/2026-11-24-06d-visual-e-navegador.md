@@ -77,6 +77,6 @@ Compilar os dois para a web e abrir num navegador foi a primeira vez que alguém
 ## Não feito (precisa do Levy ou do plano 7)
 
 - ~~Mapa do **Google** dentro dos apps~~ — **feito depois, na mesma tarde** (terceiro motor `google` em `corrida_ui`, chave no manifesto do Android pelo Gradle, 21 testes com um Google de mentira;
-  `docs/mapa.md`, seção "Mapa do Google nos apps"). **Falta ver com a chave de verdade num celular.** O endereço escrito pelo Google também foi feito (servidor, `GET /v1/passenger/address`). Continuam faltando: busca de endereço digitado (Places) e o trajeto pelas ruas (hoje é linha reta).
+  `docs/mapa.md`, seção "Mapa do Google nos apps"). **Falta ver com a chave de verdade num celular.** O endereço escrito pelo Google também foi feito (servidor, `GET /v1/passenger/address`). O trajeto pelas ruas também (o servidor manda `route`, os três mapas desenham; `docs/mapa.md`). Continuam faltando: busca de endereço digitado (Places) e o caminho da moto até o passageiro.
 - Os apps **ainda não foram vistos num celular de verdade** depois destas mudanças (os dois APKs de depuração compilam); notificação com o app fechado (Firebase).
 - Revisão independente (só autorrevisão) — a regra desta máquina não deixa chamar subagente sem o Levy pedir.

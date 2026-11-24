@@ -47,6 +47,7 @@ class CorridaMapView extends StatelessWidget {
   const CorridaMapView({
     required this.markers,
     this.onTap,
+    this.route = const [],
     this.bottomSpace = 0,
     this.interactive = true,
     this.framePadding,
@@ -59,6 +60,9 @@ class CorridaMapView extends StatelessWidget {
 
   final List<MapMarker> markers;
   final ValueChanged<Place>? onTap;
+
+  /// O traçado pelas ruas entre embarque e destino (vazio: linha reta). Vem do servidor (`route` da cotação/corrida).
+  final List<Place> route;
 
   /// `false` para miniatura numa lista (o mapa de verdade não reage ao dedo).
   final bool interactive;
@@ -73,6 +77,7 @@ class CorridaMapView extends StatelessWidget {
     return switch (engine ?? defaultMapEngine) {
       MapEngine.google => GoogleMapView(
         markers: markers,
+        route: route,
         onTap: onTap,
         bottomSpace: bottomSpace,
         interactive: interactive,
@@ -80,12 +85,17 @@ class CorridaMapView extends StatelessWidget {
       ),
       MapEngine.osm => OsmMapView(
         markers: markers,
+        route: route,
         onTap: onTap,
         bottomSpace: bottomSpace,
         interactive: interactive,
         framePadding: padding,
       ),
-      MapEngine.fake => FakeMapView(markers: markers, onTap: onTap),
+      MapEngine.fake => FakeMapView(
+        markers: markers,
+        onTap: onTap,
+        route: route,
+      ),
     };
   }
 }
@@ -96,12 +106,16 @@ class CorridaMapPicker extends StatelessWidget {
     required this.onChanged,
     this.bottomSpace = 0,
     this.pickup,
+    this.route = const [],
     this.engine,
     super.key,
   });
 
   final void Function(Place? pickup, Place? destination) onChanged;
   final double bottomSpace;
+
+  /// O traçado pelas ruas da cotação (vazio: linha reta entre embarque e destino).
+  final List<Place> route;
 
   /// Quando muda para um ponto novo, ele vira o embarque ("estou aqui").
   final Place? pickup;
@@ -113,12 +127,18 @@ class CorridaMapPicker extends StatelessWidget {
       onChanged: onChanged,
       bottomSpace: bottomSpace,
       pickup: pickup,
+      route: route,
     ),
     MapEngine.osm => OsmMapPicker(
       onChanged: onChanged,
       bottomSpace: bottomSpace,
       pickup: pickup,
+      route: route,
     ),
-    MapEngine.fake => FakeMapPicker(onChanged: onChanged, pickup: pickup),
+    MapEngine.fake => FakeMapPicker(
+      onChanged: onChanged,
+      pickup: pickup,
+      route: route,
+    ),
   };
 }

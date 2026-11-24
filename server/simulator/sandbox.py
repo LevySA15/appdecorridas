@@ -89,8 +89,11 @@ def _free_port() -> int:
 
 
 class Sandbox:
-    def __init__(self, *, fast: bool = False, redis_db: int = 14, port: int | None = None) -> None:
+    def __init__(
+        self, *, fast: bool = False, redis_db: int = 14, port: int | None = None, street_maps: bool = False
+    ) -> None:
         self.fast = fast
+        self.street_maps = street_maps
         self.port = port
         self.redis_db = redis_db
         self.url = ""
@@ -129,6 +132,8 @@ class Sandbox:
             DATABASE_URL=settings.database_url + separator + "options=" + quote(f"-csearch_path={self.schema},public"),
             REDIS_URL=self._redis_url, APP_MODE="dev", WEBHOOK_SECRET=WEBHOOK_SECRET, UPLOAD_DIR=self._uploads,
         )
+        if self.street_maps:
+            env["FAKE_MAPS_STREETS"] = "on"          # rotas em escada (demonstração dos apps no navegador)
         port = self.port or _free_port()
         self._log_path = Path(self._uploads) / "servidor.log"
         self._log = open(self._log_path, "w", encoding="utf-8")

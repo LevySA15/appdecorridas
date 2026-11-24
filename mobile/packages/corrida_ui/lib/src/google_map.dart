@@ -3,11 +3,13 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:corrida_core/corrida_core.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as g;
 
 import 'fake_map.dart' show MapMarker, MarkerKind, cityCenter;
 import 'map_picker.dart';
+import 'route_line.dart';
 import 'theme.dart';
 
 /// Chave do Google Maps (`--dart-define=GOOGLE_MAPS_API_KEY=...`). O Gradle lê a mesma opção e a põe no manifesto do
@@ -44,6 +46,7 @@ class GoogleMapView extends StatefulWidget {
   const GoogleMapView({
     required this.markers,
     this.onTap,
+    this.route = const [],
     this.bottomSpace = 0,
     this.interactive = true,
     this.focus,
@@ -53,6 +56,9 @@ class GoogleMapView extends StatefulWidget {
 
   final List<MapMarker> markers;
   final ValueChanged<Place>? onTap;
+
+  /// O traçado pelas ruas entre embarque e destino (vazio: linha reta).
+  final List<Place> route;
 
   /// Espaço (em pontos) que a folha de baixo cobre.
   final double bottomSpace;
@@ -104,7 +110,10 @@ class _GoogleMapViewState extends State<GoogleMapView> {
   @override
   void didUpdateWidget(covariant GoogleMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_sameMarkers(oldWidget.markers, widget.markers)) _frame(animate: true);
+    if (!_sameMarkers(oldWidget.markers, widget.markers) ||
+        !listEquals(oldWidget.route, widget.route)) {
+      _frame(animate: true);
+    }
     final focus = widget.focus;
     if (focus != null && !identical(focus, oldWidget.focus)) {
       _go(g.CameraUpdate.newLatLngZoom(_latLng(focus), 16), animate: true);
@@ -145,11 +154,11 @@ class _GoogleMapViewState extends State<GoogleMapView> {
     final markers = widget.markers;
     if (_controller == null || markers.length < 2) return;
     var south = 90.0, north = -90.0, west = 180.0, east = -180.0;
-    for (final marker in markers) {
-      south = math.min(south, marker.place.lat);
-      north = math.max(north, marker.place.lat);
-      west = math.min(west, marker.place.lng);
-      east = math.max(east, marker.place.lng);
+    for (final place in placesToFrame(markers, widget.route)) {
+      south = math.min(south, place.lat);
+      north = math.max(north, place.lat);
+      west = math.min(west, place.lng);
+      east = math.max(east, place.lng);
     }
     final tiny = (north - south) < 0.0015 && (east - west) < 0.0015;
     _go(
@@ -189,12 +198,17 @@ class _GoogleMapViewState extends State<GoogleMapView> {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final ratio = MediaQuery.devicePixelRatioOf(context);
     final markers = widget.markers;
-    MapMarker? pickup;
-    MapMarker? destination;
-    for (final marker in markers) {
-      if (marker.kind == MarkerKind.pickup) pickup = marker;
-      if (marker.kind == MarkerKind.destination) destination = marker;
-    }
+    final ends = tripEnds(markers);
+    final line = ends == null
+        ? const <g.LatLng>[]
+        : [
+            for (final place in routeLine(
+              ends.pickup,
+              ends.destination,
+              widget.route,
+            ))
+              _latLng(place),
+          ];
     final onTap = widget.onTap;
     final topSpace = math.max(0.0, widget.framePadding.top - _fitPadding);
     return IgnorePointer(
@@ -223,20 +237,26 @@ class _GoogleMapViewState extends State<GoogleMapView> {
         scrollGesturesEnabled: widget.interactive,
         zoomGesturesEnabled: widget.interactive,
         polylines: {
-          if (pickup != null && destination != null) ...[
+          if (line.isNotEmpty) ...[
             // a linha ganha um contorno (claro no claro, escuro no escuro) para aparecer sobre qualquer rua
             g.Polyline(
               polylineId: const g.PolylineId('trajeto-contorno'),
-              points: [_latLng(pickup.place), _latLng(destination.place)],
+              points: line,
               width: 9,
               color: dark ? const Color(0xFF0C0F14) : Colors.white,
+              jointType: g.JointType.round,
+              startCap: g.Cap.roundCap,
+              endCap: g.Cap.roundCap,
               zIndex: 1,
             ),
             g.Polyline(
               polylineId: const g.PolylineId('trajeto'),
-              points: [_latLng(pickup.place), _latLng(destination.place)],
+              points: line,
               width: 5,
               color: corridaAccent,
+              jointType: g.JointType.round,
+              startCap: g.Cap.roundCap,
+              endCap: g.Cap.roundCap,
               zIndex: 2,
             ),
           ],
@@ -262,11 +282,15 @@ class GoogleMapPicker extends StatelessWidget {
     required this.onChanged,
     this.bottomSpace = 0,
     this.pickup,
+    this.route = const [],
     super.key,
   });
 
   final void Function(Place? pickup, Place? destination) onChanged;
   final double bottomSpace;
+
+  /// O traçado pelas ruas da cotação (vazio: linha reta entre embarque e destino).
+  final List<Place> route;
 
   /// Quando muda para um ponto novo, ele vira o embarque (e o destino marcado antes sai).
   final Place? pickup;
@@ -279,6 +303,7 @@ class GoogleMapPicker extends StatelessWidget {
       bottomSpace: bottomSpace,
       focus: focus,
       markers: markers,
+      route: route,
       onTap: onTap,
     ),
   );

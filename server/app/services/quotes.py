@@ -9,7 +9,7 @@ from app.db import queries
 from app.db import repositories as repo
 from app.db.config_store import AppConfig
 from app.db.models import QuoteRow, UserRow
-from app.domain.geo import GeoPoint, haversine_m
+from app.domain.geo import GeoPoint, haversine_m, simplify_route
 from app.domain.ids import new_id
 from app.domain.maps import MapsProvider
 from app.domain.pricing import final_price_cents, price_reason, smooth_factor, target_factor
@@ -100,7 +100,8 @@ class QuoteService:
         free = len(free_ids)
         nearest = next((point for rider_id, point in near if rider_id in free_ids), None)
         eta_seconds = None if nearest is None else int(haversine_m(pickup, nearest) * _STREET_FACTOR / _ESTIMATED_SPEED_MPS)
-        route_points = tuple((point.lat, point.lng) for point in route.points)
+        # enxuto já na gravação: o traçado do Google tem um ponto a cada poucos metros e vai para o banco e para os apps
+        route_points = tuple((point.lat, point.lng) for point in simplify_route(list(route.points)))
         pending = queries.count_searching_rides(session)
         state = self.factors.get()
         if state is None or now - state[1] >= self.cfg.pricing.factor_interval_s:

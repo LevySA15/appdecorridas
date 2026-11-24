@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:corrida_core/corrida_core.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
+import 'route_line.dart';
 import 'theme.dart';
 
 /// A cidade de mentira do simulador do servidor (`server/simulator/geo.py:12`).
@@ -73,9 +75,17 @@ Offset _localFromPlace(Place place, Size size) =>
 /// Desenho esquemático da cidade de mentira: o primeiro toque marca a origem, o segundo marca o destino; tocar
 /// de novo depois dos dois só substitui o destino.
 class FakeMapPicker extends StatefulWidget {
-  const FakeMapPicker({required this.onChanged, this.pickup, super.key});
+  const FakeMapPicker({
+    required this.onChanged,
+    this.pickup,
+    this.route = const [],
+    super.key,
+  });
 
   final void Function(Place? pickup, Place? destination) onChanged;
+
+  /// O traçado pelas ruas da cotação (vazio: linha reta entre embarque e destino).
+  final List<Place> route;
 
   /// Quando muda para um ponto novo, ele vira o embarque (e o destino marcado antes sai).
   final Place? pickup;
@@ -139,6 +149,7 @@ class _FakeMapPickerState extends State<FakeMapPicker> {
             size: size,
             painter: _CityPainter(
               dark: dark,
+              route: widget.route,
               markers: [
                 if (_pickup != null) MapMarker(MarkerKind.pickup, _pickup!),
                 if (_destination != null)
@@ -172,10 +183,18 @@ class MapMarker {
 /// Mapa de mentira sem escolha de origem/destino: desenha os marcadores e, se [onTap] existir, devolve
 /// o ponto tocado (é assim que o motoqueiro "anda" enquanto não há GPS).
 class FakeMapView extends StatelessWidget {
-  const FakeMapView({required this.markers, this.onTap, super.key});
+  const FakeMapView({
+    required this.markers,
+    this.onTap,
+    this.route = const [],
+    super.key,
+  });
 
   final List<MapMarker> markers;
   final ValueChanged<Place>? onTap;
+
+  /// O traçado pelas ruas (vazio: linha reta entre embarque e destino).
+  final List<Place> route;
 
   @override
   Widget build(BuildContext context) {
@@ -192,7 +211,7 @@ class FakeMapView extends StatelessWidget {
                     onTapAtual(_placeFromLocal(details.localPosition, size)),
           child: CustomPaint(
             size: size,
-            painter: _CityPainter(dark: dark, markers: markers),
+            painter: _CityPainter(dark: dark, markers: markers, route: route),
           ),
         );
       },
@@ -204,10 +223,15 @@ class FakeMapView extends StatelessWidget {
 // Desenho: ruas, quarteirões e praças (sempre o mesmo para a mesma cidade) e os pinos por cima.
 
 class _CityPainter extends CustomPainter {
-  _CityPainter({required this.dark, required this.markers});
+  _CityPainter({
+    required this.dark,
+    required this.markers,
+    this.route = const [],
+  });
 
   final bool dark;
   final List<MapMarker> markers;
+  final List<Place> route;
 
   Color get _land => dark ? const Color(0xFF10151C) : const Color(0xFFEDEFF2);
   Color get _road => dark ? const Color(0xFF222B38) : const Color(0xFFFFFFFF);
@@ -318,32 +342,27 @@ class _CityPainter extends CustomPainter {
     canvas.drawCircle(center, 7, Paint()..color = _road);
     canvas.drawCircle(center, 4, Paint()..color = _park);
 
-    // o trajeto: do embarque ao destino
-    MapMarker? pickup;
-    MapMarker? destination;
-    for (final marker in markers) {
-      if (marker.kind == MarkerKind.pickup) pickup = marker;
-      if (marker.kind == MarkerKind.destination) destination = marker;
-    }
-    if (pickup != null && destination != null) {
-      final a = _localFromPlace(pickup.place, size);
-      final b = _localFromPlace(destination.place, size);
-      canvas.drawLine(
-        a,
-        b,
-        Paint()
-          ..color = dark ? const Color(0xFF0C0F14) : Colors.white
-          ..strokeWidth = 9
-          ..strokeCap = StrokeCap.round,
-      );
-      canvas.drawLine(
-        a,
-        b,
-        Paint()
-          ..color = corridaAccent
-          ..strokeWidth = 5
-          ..strokeCap = StrokeCap.round,
-      );
+    // o trajeto: do embarque ao destino (pelas ruas, se o servidor mandou o traçado)
+    final ends = tripEnds(markers);
+    if (ends != null) {
+      final line = routeLine(ends.pickup, ends.destination, route);
+      final path = Path();
+      for (var i = 0; i < line.length; i++) {
+        final at = _localFromPlace(line[i], size);
+        i == 0 ? path.moveTo(at.dx, at.dy) : path.lineTo(at.dx, at.dy);
+      }
+      Paint stroke(Color color, double width) => Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = width
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+      canvas
+        ..drawPath(
+          path,
+          stroke(dark ? const Color(0xFF0C0F14) : Colors.white, 9),
+        )
+        ..drawPath(path, stroke(corridaAccent, 5));
     }
 
     for (final marker in markers) {
@@ -405,7 +424,9 @@ class _CityPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CityPainter oldDelegate) =>
-      oldDelegate.dark != dark || !_sameMarkers(oldDelegate.markers, markers);
+      oldDelegate.dark != dark ||
+      !_sameMarkers(oldDelegate.markers, markers) ||
+      !listEquals(oldDelegate.route, route);
 
   bool _sameMarkers(List<MapMarker> a, List<MapMarker> b) {
     if (a.length != b.length) return false;

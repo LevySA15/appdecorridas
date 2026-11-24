@@ -29,7 +29,7 @@ A sessão dura 180 dias. `role: "admin"` só entra se o número já foi criado c
 
 | Rota | Corpo | Resposta |
 |---|---|---|
-| `POST /v1/passenger/quotes` | `{"pickup": {lat,lng,text}, "destination": {lat,lng,text}}` | preço: `quote_id, price_cents, reason, distance_m, duration_s, expires_at, pickup, destination, eta_seconds` (estimativa, `null` sem moto livre), `nearby_riders`, `payment_methods` (`["pix","cash"]`, ou só `["cash"]` com o Pix fora do ar; `"balance"` entra no fim quando o saldo cobre o preço inteiro). **429** `too_many_requests` depois de 20 cotações no mesmo minuto (por passageiro; protege o mapa pago) |
+| `POST /v1/passenger/quotes` | `{"pickup": {lat,lng,text}, "destination": {lat,lng,text}}` | preço: `quote_id, price_cents, reason, distance_m, duration_s, expires_at, pickup, destination, eta_seconds` (estimativa, `null` sem moto livre), `nearby_riders`, `payment_methods` (`["pix","cash"]`, ou só `["cash"]` com o Pix fora do ar; `"balance"` entra no fim quando o saldo cobre o preço inteiro), `route` (o traçado pelas ruas: `[[lat, lng], ...]`, ver "Traçado" abaixo). **429** `too_many_requests` depois de 20 cotações no mesmo minuto (por passageiro; protege o mapa pago) |
 | `GET /v1/passenger/address?lat=&lng=` | | `{"text": "Rua Severo Vieira, 120 - São Cristóvão"}`, ou `{"text": null}` quando não há endereço ali, o servidor está sem a chave do Google, o teto do dia acabou ou o Google falhou (o pedido segue sem texto; nunca dá erro por isso). **429** `too_many_requests` depois de 40 consultas no mesmo minuto (por passageiro). **422** com ponto impossível. O servidor é quem pergunta ao Google (Geocoding API), guarda a resposta por 24 horas e a chave não vai para o celular |
 | `POST /v1/passenger/rides` | `{"quote_id","method": "pix"\|"cash"\|"balance"}` | 201 com a corrida (abaixo). `balance` é uma corrida Pix paga com o saldo (veja "Saldo"); 403 `not_allowed` se o saldo não cobre o preço da cotação ou o recurso está desligado; **429** `too_many_requests` depois de 8 pedidos no mesmo minuto |
 | `POST /v1/passenger/rides/{id}/cancel` | | `{"refund", "fee_cents", "fee", "refund_to", "balance_cents"}` (veja "Cancelamento tardio" abaixo) |
@@ -82,6 +82,12 @@ recurso aceito e, com a recarga ligada (`topup_enabled`), recargas por Pix. Ele 
   taxa de cancelamento funcionam como no Pix, mas o que volta (menos a taxa retida) volta **sempre para o saldo** (`refund_to: "balance"`).
 - **Sacar:** `POST /v1/passenger/balance/withdraw`. Desligado por padrão (`withdraw_enabled`), recusado enquanto há taxa ou pagamento
   pendente. O servidor guarda só o final da chave. O administrador lista os saques em `GET /v1/admin/withdrawals`.
+
+**Traçado (`route`).** A cotação (`POST /v1/passenger/quotes`), a corrida do passageiro (`ride` no estado e a resposta do pedido), a oferta do motoqueiro
+(`offer` no estado e o aviso `offer`) e a corrida do motoqueiro (`ride`) trazem `route`: o caminho pelas ruas do embarque ao destino, `[[lat, lng], ...]`, de
+cima para baixo na ordem da viagem. O traçado é o que o Google calculou na hora do preço (o mesmo da cotação vai para a corrida), **enxuto** (pontos que não mudam
+o desenho saem, no máximo 4 m de diferença) e com 5 casas decimais (cerca de 1 m). Sem a chave do Google no servidor são só **dois pontos** (embarque e destino): o app
+desenha a linha reta. Os apps só usam o traçado se as pontas ficam a até 500 m do embarque e do destino marcados (senão desenham a reta).
 
 `pending_payment` (corrida em dinheiro terminada e sem pagamento): `{"ride_id","amount_cents","charge_id","blocked"}`.
 Com `blocked: true` o passageiro não pede outra corrida até pagar o QR (`charge_id`).
@@ -188,7 +194,7 @@ Com **4408**, reconecte e peça o estado. Com **4401** o token não vale: entre 
 
 | Aviso | Para | `data` |
 |---|---|---|
-| `offer` | motoqueiro | `ride_id, price_cents, payment_method, pickup, destination, distance_m, seconds_to_pickup, will_queue, expires_at` |
+| `offer` | motoqueiro | `ride_id, price_cents, payment_method, pickup, destination, distance_m, route, seconds_to_pickup, will_queue, expires_at` |
 | `offer_expired` | motoqueiro | `ride_id` |
 | `ride_assigned` | motoqueiro | `ride_id, queued` |
 | `next_ride` | motoqueiro | `ride_id` (a corrida da fila começou) |

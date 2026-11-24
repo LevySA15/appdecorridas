@@ -18,7 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from app.adapters.fake_maps import FakeMaps
+from app.adapters.fake_maps import FakeMaps, StreetGridMaps
 from app.adapters.fake_notifier import FakeContactNotifier
 from app.adapters.fake_otp import DevOtpSender
 from app.adapters.fake_payments import FakePaymentProvider
@@ -186,6 +186,9 @@ class Runtime:
 def build_maps(settings: Settings) -> MapsProvider:
     """Com `GOOGLE_MAPS_API_KEY` as rotas vêm do Google; sem ela, a estimativa em linha reta de sempre."""
     if not settings.google_maps_api_key:
+        if settings.fake_maps_streets:
+            log.info("Mapa: estimativa em ruas de mentira, só para demonstração (FAKE_MAPS_STREETS=on, sem GOOGLE_MAPS_API_KEY).")
+            return StreetGridMaps()
         log.info("Mapa: estimativa em linha reta (sem GOOGLE_MAPS_API_KEY).")
         return FakeMaps()
     log.info(

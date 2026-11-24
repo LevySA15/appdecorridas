@@ -14,7 +14,7 @@ from app.db.models import RideOfferRow
 from app.domain.clock import local_day_start
 from app.domain.dispatch import RiderStatus, rank_candidates
 from app.domain.fees import can_receive_cash_offers, fee_for_ride, offer_block_reason
-from app.domain.geo import haversine_m
+from app.domain.geo import haversine_m, route_for_app
 from app.domain.maps import MapsProvider
 from app.domain.rides import Ride, RideState, accept, mark_no_rider
 from app.domain.types import PaymentMethod
@@ -55,7 +55,7 @@ def offer_payload(
         "ride_id": ride.ride_id, "price_cents": ride.price_cents, "payment_method": ride.payment_method.value,
         "pickup": {"lat": details.pickup.lat, "lng": details.pickup.lng, "text": details.pickup_text},
         "destination": {"lat": details.destination.lat, "lng": details.destination.lng, "text": details.destination_text},
-        "distance_m": details.distance_m, "seconds_to_pickup": eta_seconds,
+        "distance_m": details.distance_m, "route": route_for_app(details.route), "seconds_to_pickup": eta_seconds,
         "will_queue": will_queue, "expires_at": expires_at,
     }
 

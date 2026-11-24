@@ -159,6 +159,7 @@ class _RideScreenState extends State<RideScreen> {
           Positioned.fill(
             child: CorridaMapView(
               bottomSpace: 380,
+              route: ride.route,
               markers: [
                 MapMarker(MarkerKind.pickup, ride.pickup),
                 MapMarker(MarkerKind.destination, ride.destination),

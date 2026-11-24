@@ -101,6 +101,7 @@ class Offer {
     this.pickup = const Place(lat: 0, lng: 0),
     this.destination = const Place(lat: 0, lng: 0),
     this.distanceM = 0,
+    this.route = const [],
     this.secondsToPickup,
     this.willQueue = false,
     this.expiresAt = 0,
@@ -112,6 +113,8 @@ class Offer {
   final Place pickup;
   final Place destination;
   final int distanceM;
+  final List<Place>
+  route; // o traçado pelas ruas (vazio se o servidor não mandou)
   final int? secondsToPickup;
   final bool willQueue; // a corrida espera na fila até ele terminar a de agora
   final double expiresAt;
@@ -123,6 +126,7 @@ class Offer {
     pickup: Place.fromJson(asMap(json['pickup']) ?? const {}),
     destination: Place.fromJson(asMap(json['destination']) ?? const {}),
     distanceM: asInt(json['distance_m']),
+    route: placesFromPairs(json['route']),
     secondsToPickup: asIntOrNull(json['seconds_to_pickup']),
     willQueue: asBool(json['will_queue']),
     expiresAt: asDouble(json['expires_at']),
@@ -144,6 +148,7 @@ class RiderRide {
     this.pickup = const Place(lat: 0, lng: 0),
     this.destination = const Place(lat: 0, lng: 0),
     this.distanceM = 0,
+    this.route = const [],
     this.endPayment,
   });
 
@@ -159,6 +164,8 @@ class RiderRide {
   final Place pickup;
   final Place destination;
   final int distanceM;
+  final List<Place>
+  route; // o traçado pelas ruas (vazio se o servidor não mandou)
   final EndPayment? endPayment;
 
   factory RiderRide.fromJson(Json json) => RiderRide(
@@ -174,6 +181,7 @@ class RiderRide {
     pickup: Place.fromJson(asMap(json['pickup']) ?? const {}),
     destination: Place.fromJson(asMap(json['destination']) ?? const {}),
     distanceM: asInt(json['distance_m']),
+    route: placesFromPairs(json['route']),
     endPayment: mapOrNull(json['end_payment'], EndPayment.fromJson),
   );
 }

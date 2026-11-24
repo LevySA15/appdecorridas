@@ -274,3 +274,22 @@ def test_get_padrao_fala_http_de_verdade_com_um_servidor_local():
     finally:
         servidor.shutdown()
         servidor.server_close()
+
+
+# --- ruas de mentira (demonstração) ---------------------------------------------------------------------
+
+
+def test_ruas_em_escada_andam_na_vertical_e_na_horizontal_e_a_distancia_e_a_do_percurso():
+    from app.adapters.fake_maps import StreetGridMaps
+    from app.domain.geo import haversine_m
+
+    origem, destino = GeoPoint(-12.96, -39.26), GeoPoint(-12.97, -39.25)
+    rota = StreetGridMaps().route(origem, destino)
+    assert rota.points[0] == origem and rota.points[-1].lat == pytest.approx(destino.lat)
+    assert rota.points[-1].lng == pytest.approx(destino.lng)
+    assert len(rota.points) == 7                                       # 3 degraus: 6 trechos
+    for a, b in zip(rota.points, rota.points[1:]):
+        assert a.lat == b.lat or a.lng == b.lng                       # cada trecho é vertical ou horizontal
+    assert rota.distance_m == round(sum(haversine_m(a, b) for a, b in zip(rota.points, rota.points[1:])))
+    assert rota.distance_m > haversine_m(origem, destino) * 1.3 * 0.9   # mais longa que a reta
+    assert StreetGridMaps().describe(origem) is None

@@ -27,6 +27,24 @@ O código está pronto e testado com um Google de mentira (`packages/corrida_ui/
 5. No servidor, ligue `GOOGLE_MAPS_API_KEY` (a chave **do servidor**, a da Routes API) e `MAPS_DAILY_CALL_LIMIT=500`; ver `docs/instalacao.md` e a conta em "Quanto custa o Google" abaixo.
 6. Sinais de que deu certo: o mapa mostra as ruas do Google com o logotipo "Google" no canto de baixo, acima da folha de controles; **mapa cinza, sem ruas ou com aviso de desenvolvimento = chave errada ou restrição errada** (pacote ou SHA-1 diferente do APK instalado; veja `adb logcat | grep -i "Google Maps"`).
 
+### Trajeto pelas ruas
+
+O servidor já calculava a rota do Google (Routes API) para o preço e a guardava na cotação e na corrida; agora ela **chega aos apps** no campo `route` (`docs/api-v1.md`, "Traçado") e os três mapas a desenham no lugar da linha reta:
+
+| Onde | O que mostra |
+|---|---|
+| Passageiro, ao cotar | o caminho pelas ruas entre os dois pontos marcados |
+| Passageiro, acompanhando a corrida | o caminho da viagem (embarque ao destino) com a moto por cima |
+| Motoqueiro, na oferta | a miniatura do caminho, para decidir antes de aceitar |
+| Motoqueiro, na corrida | o caminho da viagem na tela da corrida |
+
+- **Sem custo novo:** é o mesmo cálculo da cotação (uma chamada), só que enviado ao app. Nenhuma chamada extra ao Google.
+- **Sem a chave do Google** o servidor manda só embarque e destino e o app desenha a linha reta, como antes. Servidor antigo (sem o campo) também cai na reta.
+- **Só vale para esta corrida:** o app descarta um traçado cujas pontas estão a mais de 500 m do embarque ou do destino marcados (traçado velho de outra cotação).
+- **A câmera enquadra o traçado inteiro** (a rua pode sair do retângulo entre os dois pontos).
+- **O que ainda não existe:** o caminho **da moto até o passageiro** (o traçado é o da viagem) e o desvio em tempo real; a moto aparece como um ponto que se move.
+- **Ver sem a chave do Google:** `FAKE_MAPS_STREETS=on` no servidor faz uma rota de mentira em "escada" (só demonstração; `tool/web.sh up` já liga) para o navegador mostrar um traçado que não é uma reta.
+
 ### Endereço escrito pelo Google
 
 Com o mapa do Google, o endereço escrito dos pontos ("Rua Severo Vieira, 120 - São Cristóvão") vem da **Geocoding API do Google, pelo servidor**: o app chama `GET /v1/passenger/address?lat=&lng=` e o servidor pergunta ao Google.
@@ -66,7 +84,7 @@ No passageiro, toque em "Estou aqui" para o embarque virar a sua posição (o An
 2. **Mapa do Google no servidor × mapa de outro fornecedor no app.** Com `GOOGLE_MAPS_API_KEY` ligada, o servidor calcula as rotas pela Routes API
    (plano 7A). Os termos do Google proíbem usar os serviços deles num aplicativo que mostra mapa de outro fornecedor. Então: **app com `osm` = servidor
    sem a chave (estimativa em linha reta, que é o padrão)**; **app com `google` (seção acima) = servidor com a chave**. Nunca o contrário.
-3. O trajeto desenhado é uma linha reta entre embarque e destino (não é a rota das ruas).
+3. O trajeto desenhado segue as ruas **quando o servidor tem a chave do Google** (seção "Trajeto pelas ruas" abaixo); sem a chave é uma linha reta entre embarque e destino.
 4. Sem busca de endereço (digitar para procurar): o passageiro toca no mapa ou usa "Estou aqui" (o servidor responde "fora da área de atendimento" se o ponto estiver longe de Santo Antônio de Jesus).
    Cada ponto marcado ganha o **endereço escrito** ("Rua Severo Vieira - São Cristóvão") pelo Nominatim, o serviço de endereços do OpenStreetMap: uma consulta por ponto, no máximo uma por segundo, e se falhar o pedido
    segue sem endereço. **Privacidade (LGPD):** as coordenadas do embarque e do destino vão para o servidor do OpenStreetMap; entra na política de privacidade e na conversa com o advogado, e antes de abrir ao público

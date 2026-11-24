@@ -232,4 +232,33 @@ void main() {
 
     expect(find.byType(CorridaMapView), findsNothing);
   });
+
+  testWidgets('a miniatura da oferta mostra o traçado pelas ruas', (
+    tester,
+  ) async {
+    const ruas = [
+      Place(lat: -12.96, lng: -39.26),
+      Place(lat: -12.97, lng: -39.26),
+      Place(lat: -12.97, lng: -39.25),
+    ];
+    await tester.pumpWidget(
+      _app(
+        Offer(
+          rideId: 'r1',
+          priceCents: 700,
+          paymentMethod: 'cash',
+          pickup: const Place(lat: -12.96, lng: -39.26, text: 'Rua A, 10'),
+          destination: const Place(lat: -12.97, lng: -39.25, text: 'Rua B, 20'),
+          distanceM: 2300,
+          route: ruas,
+          expiresAt: _agoraSegundos + 10,
+        ),
+      ),
+    );
+
+    expect(
+      tester.widget<CorridaMapView>(find.byType(CorridaMapView)).route,
+      ruas,
+    );
+  });
 }

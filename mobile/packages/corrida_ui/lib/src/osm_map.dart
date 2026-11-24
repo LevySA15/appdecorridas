@@ -1,10 +1,12 @@
 import 'package:corrida_core/corrida_core.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'fake_map.dart' show MapMarker, MarkerKind, cityCenter;
 import 'map_picker.dart';
+import 'route_line.dart';
 import 'theme.dart';
 
 /// Servidor de ladrilhos do OpenStreetMap: serve para **desenvolvimento e teste fechado** (poucas pessoas). Antes de abrir ao
@@ -26,6 +28,7 @@ class OsmMapView extends StatefulWidget {
   const OsmMapView({
     required this.markers,
     this.onTap,
+    this.route = const [],
     this.bottomSpace = 0,
     this.tileProvider,
     this.focus,
@@ -42,6 +45,9 @@ class OsmMapView extends StatefulWidget {
 
   final List<MapMarker> markers;
   final ValueChanged<Place>? onTap;
+
+  /// O traçado pelas ruas entre embarque e destino (vazio: linha reta).
+  final List<Place> route;
 
   /// Quando muda para um ponto novo, a câmera vai até ele (ex.: "estou aqui" achou a posição da pessoa).
   final Place? focus;
@@ -75,7 +81,10 @@ class _OsmMapViewState extends State<OsmMapView> {
   CameraFit? _fitFor(List<MapMarker> markers) => markers.length < 2
       ? null
       : CameraFit.coordinates(
-          coordinates: [for (final marker in markers) _latLng(marker.place)],
+          coordinates: [
+            for (final place in placesToFrame(markers, widget.route))
+              _latLng(place),
+          ],
           padding:
               widget.framePadding + EdgeInsets.only(bottom: widget.bottomSpace),
           maxZoom: 17,
@@ -117,7 +126,10 @@ class _OsmMapViewState extends State<OsmMapView> {
     if (oldWidget.tileProvider != widget.tileProvider) {
       _tiles = _buildTiles();
     }
-    if (!_sameMarkers(oldWidget.markers, widget.markers)) _frame();
+    if (!_sameMarkers(oldWidget.markers, widget.markers) ||
+        !listEquals(oldWidget.route, widget.route)) {
+      _frame();
+    }
     final focus = widget.focus;
     if (focus != null && !identical(focus, oldWidget.focus) && _ready) {
       try {
@@ -163,23 +175,25 @@ class _OsmMapViewState extends State<OsmMapView> {
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final markers = widget.markers;
-    MapMarker? pickup;
-    MapMarker? destination;
-    for (final marker in markers) {
-      if (marker.kind == MarkerKind.pickup) pickup = marker;
-      if (marker.kind == MarkerKind.destination) destination = marker;
-    }
+    final ends = tripEnds(markers);
     return FlutterMap(
       mapController: _controller,
       options: _options,
       children: [
         // escuro: um filtro só em cima de todos os ladrilhos (um por ladrilho deixa linhas claras nas emendas)
         dark ? darkModeTilesContainerBuilder(context, _tiles) : _tiles,
-        if (pickup != null && destination != null)
+        if (ends != null)
           PolylineLayer(
             polylines: [
               Polyline(
-                points: [_latLng(pickup.place), _latLng(destination.place)],
+                points: [
+                  for (final place in routeLine(
+                    ends.pickup,
+                    ends.destination,
+                    widget.route,
+                  ))
+                    _latLng(place),
+                ],
                 strokeWidth: 5,
                 color: corridaAccent,
                 borderStrokeWidth: 3,
@@ -314,12 +328,16 @@ class OsmMapPicker extends StatelessWidget {
     this.bottomSpace = 0,
     this.tileProvider,
     this.pickup,
+    this.route = const [],
     super.key,
   });
 
   final void Function(Place? pickup, Place? destination) onChanged;
   final double bottomSpace;
   final TileProvider? tileProvider;
+
+  /// O traçado pelas ruas da cotação (vazio: linha reta entre embarque e destino).
+  final List<Place> route;
 
   /// Quando muda para um ponto novo, ele vira o embarque (e o destino marcado antes sai).
   final Place? pickup;
@@ -333,6 +351,7 @@ class OsmMapPicker extends StatelessWidget {
       tileProvider: tileProvider,
       focus: focus,
       markers: markers,
+      route: route,
       onTap: onTap,
     ),
   );

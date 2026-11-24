@@ -42,7 +42,7 @@ up() {
   moldura "$AQUI/apps/passenger/build/web"
   moldura "$AQUI/apps/rider/build/web"
   : > "$RUN/sandbox.env"
-  (cd "$AQUI/../server" && setsid nohup .venv/bin/python scripts/sandbox_server.py --out "$RUN/sandbox.env" --port "$API_PORT" --redis-db 11 >"$RUN/servidor.log" 2>&1 & echo $! >"$RUN/servidor.pid")
+  (cd "$AQUI/../server" && setsid nohup .venv/bin/python scripts/sandbox_server.py --out "$RUN/sandbox.env" --port "$API_PORT" --redis-db 11 --streets >"$RUN/servidor.log" 2>&1 & echo $! >"$RUN/servidor.pid")
   for _ in $(seq 1 240); do [ -s "$RUN/sandbox.env" ] && break; sleep 0.5; done
   [ -s "$RUN/sandbox.env" ] || { echo "O servidor não subiu:" >&2; cat "$RUN/servidor.log" >&2; exit 1; }
   (setsid nohup python3 -m http.server 8081 --bind 127.0.0.1 --directory "$AQUI/apps/passenger/build/web" >"$RUN/passageiro.log" 2>&1 & echo $! >"$RUN/passageiro.pid")
@@ -65,6 +65,13 @@ down() {
     for _ in $(seq 1 40); do kill -0 "$(cat "$RUN/servidor.pid")" 2>/dev/null || break; sleep 0.5; done
     rm -f "$RUN/servidor.pid"
   fi
+  # o PID guardado às vezes é o do `setsid` (que sai na hora) e não o do servidor: procura o servidor descartável pelo
+  # comando (ancorado no começo da linha, para não pegar o terminal de quem chamou) e o encerra do mesmo jeito (SIGTERM)
+  local pid
+  for pid in $(pgrep -f "^[^ ]*python[^ ]* scripts/sandbox_server\.py --out $RUN/sandbox\.env" || true); do
+    kill -TERM "$pid" 2>/dev/null || true
+    for _ in $(seq 1 40); do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+  done
   [ "${1:-}" = quiet ] || echo "Tudo derrubado."
 }
 

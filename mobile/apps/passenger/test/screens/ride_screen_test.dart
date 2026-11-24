@@ -1,4 +1,5 @@
 import 'package:corrida_core/corrida_core.dart';
+import 'package:corrida_ui/corrida_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:passenger/screens/ride_screen.dart';
@@ -257,5 +258,33 @@ void main() {
     );
 
     expect(find.text('Ver Pix'), findsNothing);
+  });
+
+  testWidgets('o traçado pelas ruas da corrida vai para o mapa', (
+    tester,
+  ) async {
+    const ruas = [
+      Place(lat: -12.96, lng: -39.26),
+      Place(lat: -12.97, lng: -39.26),
+      Place(lat: -12.97, lng: -39.27),
+    ];
+    await tester.pumpWidget(
+      _app(
+        _screen(
+          ride: const PassengerRide(
+            rideId: 'r1',
+            state: RideState.accepted,
+            pickup: Place(lat: -12.96, lng: -39.26),
+            destination: Place(lat: -12.97, lng: -39.27),
+            route: ruas,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester.widget<CorridaMapView>(find.byType(CorridaMapView)).route,
+      ruas,
+    );
   });
 }

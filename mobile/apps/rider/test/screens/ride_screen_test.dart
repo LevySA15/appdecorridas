@@ -501,4 +501,29 @@ void main() {
 
     expect(detector.onTapDown, isNull);
   });
+
+  testWidgets('o traçado pelas ruas da corrida vai para o mapa', (
+    tester,
+  ) async {
+    const ruas = [
+      Place(lat: -12.96, lng: -39.26),
+      Place(lat: -12.97, lng: -39.26),
+      Place(lat: -12.97, lng: -39.25),
+    ];
+    await _pump(
+      tester,
+      const RiderRide(
+        rideId: 'r1',
+        state: RideState.accepted,
+        pickup: _embarque,
+        destination: _destino,
+        route: ruas,
+      ),
+    );
+
+    expect(
+      tester.widget<CorridaMapView>(find.byType(CorridaMapView)).route,
+      ruas,
+    );
+  });
 }

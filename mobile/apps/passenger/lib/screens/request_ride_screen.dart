@@ -138,6 +138,7 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
             child: CorridaMapPicker(
               engine: widget.engine,
               pickup: _myPlace,
+              route: quote?.route ?? const [],
               bottomSpace: 300,
               key: ValueKey(_pickerRound),
               onChanged: _onPointsChanged,

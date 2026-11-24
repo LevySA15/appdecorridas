@@ -140,8 +140,12 @@ void main() {
       method: method,
     );
     expect(corrida.state, RideState.searching);
+    // o traçado da cotação segue para a corrida e para a oferta (sem Google: só embarque e destino)
+    expect(cotacao.route, hasLength(2));
+    expect(corrida.route, cotacao.route);
     final oferta = await joao.espera('offer', rideId: corrida.rideId);
     expect(Offer.fromJson(oferta.data).priceCents, cotacao.priceCents);
+    expect(Offer.fromJson(oferta.data).route, cotacao.route);
     final estadoMoto = await motoqueiro.state();
     expect(estadoMoto.offer!.rideId, corrida.rideId);
     final aceita = await motoqueiro.accept(corrida.rideId);
