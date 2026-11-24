@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:corrida_ui/corrida_ui.dart';
 
 import '../format.dart';
+import '../address_lookup.dart';
 import '../my_location.dart';
 
 const _labels = {'pix': 'Pix', 'cash': 'Dinheiro', 'balance': 'Saldo'};
@@ -14,9 +15,13 @@ class RequestRideScreen extends StatefulWidget {
     required this.onQuote,
     required this.onConfirm,
     this.myLocation,
+    this.addressLookup,
     this.engine,
     super.key,
   });
+
+  /// Com isto os dois pontos ganham o endereço escrito antes da cotação (o motoqueiro e o recibo mostram a rua).
+  final AddressLookup? addressLookup;
 
   /// Com isto o mapa ganha o botão "Estou aqui" (o embarque vira a posição do celular). `null` esconde o botão.
   final MyLocation? myLocation;
@@ -75,7 +80,9 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
     if (pickup == null || destination == null) return;
     setState(() => _loading = true);
     try {
-      final quote = await widget.onQuote(pickup, destination);
+      final from = await _withAddress(pickup);
+      final to = await _withAddress(destination);
+      final quote = await widget.onQuote(from, to);
       if (!mounted) return;
       setState(() {
         _quote = quote;
@@ -88,6 +95,15 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// O ponto com o endereço escrito, se o serviço de endereços achar (se não, o mesmo ponto: a cotação não espera por isso).
+  Future<Place> _withAddress(Place place) async {
+    final lookup = widget.addressLookup;
+    if (lookup == null || place.text.isNotEmpty) return place;
+    final text = await lookup.describe(place);
+    if (text == null || text.isEmpty) return place;
+    return Place(lat: place.lat, lng: place.lng, text: text);
   }
 
   Future<void> _confirm() async {
@@ -198,6 +214,22 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
               ),
           ],
         ),
+        if (quote.pickup.text.isNotEmpty ||
+            quote.destination.text.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          if (quote.pickup.text.isNotEmpty)
+            Text(
+              'De: ${quote.pickup.text}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          if (quote.destination.text.isNotEmpty)
+            Text(
+              'Para: ${quote.destination.text}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+        ],
         const SizedBox(height: 16),
         Text(
           'Forma de pagamento',

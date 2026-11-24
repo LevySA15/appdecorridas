@@ -44,11 +44,12 @@ Compilar os dois para a web e abrir num navegador foi a primeira vez que alguém
 - Os apps desenham o mapa por `CorridaMapView`/`CorridaMapPicker`, que escolhem entre o desenho de mentira (testes, `flutter run`, navegador) e **as ruas de verdade do
   OpenStreetMap** (app de **release**, ou `--dart-define=MAP=osm`): toque marca embarque e destino, a câmera enquadra os dois, claro/escuro, atribuição "© OpenStreetMap".
 - Passageiro: botão **"Estou aqui"** (posição do celular vira o embarque; permissão de localização pedida na hora; frases claras para GPS desligado/negado/sem sinal).
+- Passageiro: o embarque e o destino ganham o **endereço escrito** (Nominatim, uma consulta por ponto): aparece na cotação ("De / Para"), na oferta do motoqueiro, no recibo e no painel; falha não trava o pedido.
 - Motoqueiro: **miniatura do trajeto** na oferta (embarque e destino) para decidir antes de aceitar; a tela da corrida virou mapa por trás + folha de controles embaixo (como a do passageiro).
 - Achado e corrigido no caminho (levou uma hora): o mapa de verdade ficava **cinza ou borrado** quando a câmera era enquadrada com `fitCamera` dentro do `onMapReady` (os ladrilhos do zoom novo
   não eram pedidos/pintados na web). Agora a primeira imagem já nasce enquadrada (`initialCameraFit`) e as mudanças seguintes enquadram no quadro seguinte. Também: `Place` ganhou igualdade por valor
   (o mapa comparava marcadores a cada reconstrução) e os objetos do mapa nascem uma vez no `State`. Detalhes em `docs/mapa.md`.
-- **Limites:** ladrilhos do OSM só para teste fechado; **mapa do Google no servidor × mapa de outro fornecedor no app** (termos do Google) — ver `docs/mapa.md`.
+- **Limites:** ladrilhos do OSM e o serviço de endereços (as coordenadas vão para o OpenStreetMap: LGPD) só para teste fechado; **mapa do Google no servidor × mapa de outro fornecedor no app** (termos do Google) — ver `docs/mapa.md`.
 
 **Servidor / painel**
 - Avaliar uma corrida que não é sua responde 403 **antes** de olhar o estado (de fora não se descobre em que estado a corrida dos outros está).

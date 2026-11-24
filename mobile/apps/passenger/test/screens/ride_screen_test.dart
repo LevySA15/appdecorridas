@@ -144,7 +144,9 @@ void main() {
     expect(find.textContaining('R\$ 3,00'), findsOneWidget);
   });
 
-  testWidgets('o botao SOS fica na barra de cima, sempre a vista', (tester) async {
+  testWidgets('o botao SOS fica na barra de cima, sempre a vista', (
+    tester,
+  ) async {
     // numa emergência ninguém vai rolar a tela atrás do botão (o do motoqueiro já é assim)
     await tester.pumpWidget(
       _app(

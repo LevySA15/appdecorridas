@@ -15,12 +15,12 @@ dependencies:
   corrida_ui:
     path: ../../packages/corrida_ui
   geolocator: ^14.0.1
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_launcher_icons: ^0.14.4
   flutter_test:
     sdk: flutter
-  http: ^1.2.0
   stream_channel: ^2.1.0
   web_socket_channel: ^3.0.0
 

@@ -132,21 +132,18 @@ void main() {
     expect(cotacoes, isEmpty);
   });
 
-  testWidgets(
-    'com a cotação na tela o botão Estou aqui some',
-    (tester) async {
-      final cotacoes = <(Place, Place)>[];
-      final fonte = _Fake(const Place(lat: -12.9644, lng: -39.2597));
-      await tester.pumpWidget(_screen(fonte, cotacoes));
-      await tester.tap(find.text('Estou aqui'));
-      await tester.pumpAndSettle();
-      final rect = tester.getRect(find.byType(FakeMapPicker));
-      await tester.tapAt(rect.topLeft + const Offset(60, 120));
-      await tester.pumpAndSettle();
-      expect(find.text('R\$ 8,00'), findsOneWidget); // cotação na tela
+  testWidgets('com a cotação na tela o botão Estou aqui some', (tester) async {
+    final cotacoes = <(Place, Place)>[];
+    final fonte = _Fake(const Place(lat: -12.9644, lng: -39.2597));
+    await tester.pumpWidget(_screen(fonte, cotacoes));
+    await tester.tap(find.text('Estou aqui'));
+    await tester.pumpAndSettle();
+    final rect = tester.getRect(find.byType(FakeMapPicker));
+    await tester.tapAt(rect.topLeft + const Offset(60, 120));
+    await tester.pumpAndSettle();
+    expect(find.text('R\$ 8,00'), findsOneWidget); // cotação na tela
 
-      // a cotação cobre o botão: volta a marcar pela folha? o botão some quando há cotação
-      expect(find.text('Estou aqui'), findsNothing);
-    },
-  );
+    // a cotação cobre o botão: volta a marcar pela folha? o botão some quando há cotação
+    expect(find.text('Estou aqui'), findsNothing);
+  });
 }

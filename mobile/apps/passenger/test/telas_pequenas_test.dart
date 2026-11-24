@@ -26,7 +26,8 @@ Widget _app(Widget home, {required Brightness brightness, double text = 1.5}) {
     supportedLocales: corridaSupportedLocales,
     localizationsDelegates: corridaLocalizationsDelegates,
     builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(text)),
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: TextScaler.linear(text)),
       child: child!,
     ),
     home: home,
@@ -80,7 +81,12 @@ void main() {
       await _pequeno(tester);
       await tester.pumpWidget(
         _app(
-          _home(const PassengerState(name: 'Maria Aparecida de Souza', balanceCents: 123456)),
+          _home(
+            const PassengerState(
+              name: 'Maria Aparecida de Souza',
+              balanceCents: 123456,
+            ),
+          ),
           brightness: brightness,
         ),
       );
@@ -88,14 +94,20 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('início com pagamento e taxa pendentes ($modo)', (tester) async {
+    testWidgets('início com pagamento e taxa pendentes ($modo)', (
+      tester,
+    ) async {
       await _pequeno(tester);
       await tester.pumpWidget(
         _app(
           _home(
             const PassengerState(
               name: 'Maria',
-              pendingPayment: PendingPayment(rideId: 'r', amountCents: 1250, chargeId: 'c'),
+              pendingPayment: PendingPayment(
+                rideId: 'r',
+                amountCents: 1250,
+                chargeId: 'c',
+              ),
               pendingFee: PendingFee(rideId: 'r2', amountCents: 500),
               blockedReason: 'Falta pagar a taxa do cancelamento. Pague para pedir outra moto.',
             ),
@@ -107,7 +119,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('acompanhar com motoqueiro, código e Pix ($modo)', (tester) async {
+    testWidgets('acompanhar com motoqueiro, código e Pix ($modo)', (
+      tester,
+    ) async {
       await _pequeno(tester);
       await tester.pumpWidget(
         _app(
@@ -120,7 +134,11 @@ void main() {
               priceCents: 1850,
               distanceM: 12500,
               rider: _rider,
-              pay: PixToPay(chargeId: 'c', amountCents: 1850, expiresAt: 9999999999),
+              pay: PixToPay(
+                chargeId: 'c',
+                amountCents: 1850,
+                expiresAt: 9999999999,
+              ),
             ),
           ),
           brightness: brightness,
@@ -135,7 +153,10 @@ void main() {
       await tester.pumpWidget(
         _app(
           ProfileScreen(
-            state: const PassengerState(name: 'Maria Aparecida de Souza', phone: '+5575999990001'),
+            state: const PassengerState(
+              name: 'Maria Aparecida de Souza',
+              phone: '+5575999990001',
+            ),
             onSaveName: (_) async {},
             onSetEmergencyContact: (_, _) async {},
             onSignOut: () {},

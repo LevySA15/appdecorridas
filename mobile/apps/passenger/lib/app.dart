@@ -4,6 +4,7 @@ import 'package:corrida_core/corrida_core.dart';
 import 'package:corrida_ui/corrida_ui.dart';
 import 'package:flutter/material.dart';
 
+import 'address_lookup.dart';
 import 'my_location.dart';
 import 'passenger_controller.dart';
 import 'screens/history_screen.dart';
@@ -62,6 +63,9 @@ class PassengerApp extends StatelessWidget {
 
 /// A navegação de quem já entrou: uma pilha própria que começa na tela inicial e reage à corrida
 /// terminando do outro lado (`state.ride` virando `null`) e a `trip_completed` (abre avaliar).
+/// Um só serviço de endereços para o app inteiro (ele espaça as consultas: no máximo uma por segundo).
+final _addressLookup = NominatimAddressLookup();
+
 class SignedInShell extends StatefulWidget {
   const SignedInShell({required this.controller, super.key});
 
@@ -142,6 +146,10 @@ class _SignedInShellState extends State<SignedInShell> {
           // "Estou aqui" só com o mapa de verdade: no desenho de mentira a posição do celular não cai na cidade dele
           myLocation: defaultMapEngine == MapEngine.osm
               ? const GeolocatorMyLocation()
+              : null,
+          // endereço escrito só com o mapa de verdade (no desenho de mentira os pontos não são de lugar nenhum)
+          addressLookup: defaultMapEngine == MapEngine.osm
+              ? _addressLookup
               : null,
           onQuote: widget.controller.quote,
           onConfirm: (quoteId, method) async {

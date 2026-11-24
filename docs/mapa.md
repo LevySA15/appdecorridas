@@ -20,7 +20,10 @@ Escolha à mão: `flutter run --dart-define=MAP=osm` (ou `=fake`). O app do moto
    mapa do Google (`google_maps_flutter`, ainda não feito: precisa da chave e de um celular) — ou o servidor passar a usar rotas de um motor livre.
    Decisão do Levy quando for abrir ao público.
 3. O trajeto desenhado é uma linha reta entre embarque e destino (não é a rota das ruas).
-4. Sem busca de endereço: o passageiro toca no mapa (o servidor responde "fora da área de atendimento" se o ponto estiver longe de Santo Antônio de Jesus).
+4. Sem busca de endereço (digitar para procurar): o passageiro toca no mapa ou usa "Estou aqui" (o servidor responde "fora da área de atendimento" se o ponto estiver longe de Santo Antônio de Jesus).
+   Cada ponto marcado ganha o **endereço escrito** ("Rua Severo Vieira - São Cristóvão") pelo Nominatim, o serviço de endereços do OpenStreetMap: uma consulta por ponto, no máximo uma por segundo, e se falhar o pedido
+   segue sem endereço. **Privacidade (LGPD):** as coordenadas do embarque e do destino vão para o servidor do OpenStreetMap; entra na política de privacidade e na conversa com o advogado, e antes de abrir ao público
+   o serviço de endereços também precisa de um provedor com contrato (`packages`: `apps/passenger/lib/address_lookup.dart`).
 5. Os ladrilhos vêm da internet: sem sinal o mapa fica cinza (os pinos e o resto da tela funcionam).
 
 Armadilhas já pagas (não repita): **(1)** enquadrar a câmera com `fitCamera` dentro do `onMapReady` deixa o mapa sem os ladrilhos do zoom novo (cinza, ou borrado) — a primeira imagem
