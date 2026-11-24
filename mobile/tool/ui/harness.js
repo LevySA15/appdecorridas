@@ -98,9 +98,14 @@ module.exports = { browser, phone, tap, tapAt, type, text, shot, otp, OUT, API }
 
 // ---- API como administrador (aprova cadastros e afins, sem abrir o painel) ----
 async function admin(phone = '75 99999-0000') {
+  return pessoa(phone, 'admin');
+}
+
+/** Entra pela API (sem tela) com um telefone e um papel; `call` já leva o token. */
+async function pessoa(phone, role) {
   await fetch(`${API}/v1/auth/code`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phone }) });
   const code = await otp(phone);
-  const r = await fetch(`${API}/v1/auth/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phone, code, role: 'admin', device: 'cenario' }) });
+  const r = await fetch(`${API}/v1/auth/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phone, code, role, device: 'cenario' }) });
   const { token } = await r.json();
   const call = async (method, path, body) => {
     const resp = await fetch(`${API}${path}`, { method, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
@@ -110,3 +115,4 @@ async function admin(phone = '75 99999-0000') {
   return { call, token };
 }
 module.exports.admin = admin;
+module.exports.pessoa = pessoa;

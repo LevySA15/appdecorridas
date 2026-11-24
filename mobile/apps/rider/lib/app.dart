@@ -23,6 +23,13 @@ class RiderApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Recôncavo Motoqueiro',
+      theme: corridaTheme(Brightness.light),
+      darkTheme: corridaTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
+      locale: corridaLocale,
+      supportedLocales: corridaSupportedLocales,
+      localizationsDelegates: corridaLocalizationsDelegates,
       home: ListenableBuilder(
         listenable: controller,
         builder: (context, _) {
@@ -34,6 +41,8 @@ class RiderApp extends StatelessWidget {
           final session = controller.session;
           if (session == null) {
             return LoginScreen(
+              title: 'Bora rodar?',
+              subtitle: 'Entre com seu celular para começar.',
               onRequestCode: controller.requestCode,
               onVerify: (phone, code) =>
                   controller.verify(phone: phone, code: code),

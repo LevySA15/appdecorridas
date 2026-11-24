@@ -87,12 +87,34 @@ class _OfferCardState extends State<OfferCard> {
           children: [
             Text(
               brl(offer.priceCents),
-              style: Theme.of(context).textTheme.headlineSmall,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontSize: 40,
+              ),
             ),
-            Text(offer.paymentMethod == 'cash' ? 'Dinheiro' : 'Pix'),
-            Text('Corrida de ${km(offer.distanceM)}'),
-            if (toPickup != null)
-              Text('${(toPickup / 60).ceil()} min até o passageiro'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                InfoPill(
+                  onCard: true,
+                  icon: Icons.payments_outlined,
+                  text: offer.paymentMethod == 'cash' ? 'Dinheiro' : 'Pix',
+                ),
+                InfoPill(
+                  onCard: true,
+                  icon: Icons.route_outlined,
+                  text: 'Corrida de ${km(offer.distanceM)}',
+                ),
+                if (toPickup != null)
+                  InfoPill(
+                    onCard: true,
+                    icon: Icons.two_wheeler_rounded,
+                    text: '${(toPickup / 60).ceil()} min até o passageiro',
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
             if (offer.pickup.text.isNotEmpty)
               Text('Embarque: ${offer.pickup.text}'),
             if (offer.destination.text.isNotEmpty)
@@ -102,7 +124,10 @@ class _OfferCardState extends State<OfferCard> {
                 'Esta corrida espera na fila: você termina a de agora primeiro.',
               ),
             const SizedBox(height: 8),
-            Text(left == 0 ? 'Tempo esgotado' : 'Responda em ${left}s'),
+            Text(
+              left == 0 ? 'Tempo esgotado' : 'Responda em ${left}s',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 8),
             Row(
               children: [

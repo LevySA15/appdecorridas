@@ -1,4 +1,5 @@
 import 'package:corrida_core/corrida_core.dart';
+import 'package:corrida_ui/corrida_ui.dart';
 import 'package:flutter/material.dart';
 
 /// Ponto de entrada: pedir ou acompanhar a corrida, e os avisos que a pessoa precisa ver de cara
@@ -11,7 +12,6 @@ class HomeScreen extends StatefulWidget {
     required this.onOpenWallet,
     required this.onOpenProfile,
     required this.onOpenHistory,
-    required this.onSignOut,
     required this.onPayPendingFee,
     required this.onShowPendingCash,
     required this.onShowCharge,
@@ -24,7 +24,6 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback onOpenWallet;
   final VoidCallback onOpenProfile;
   final VoidCallback onOpenHistory;
-  final VoidCallback onSignOut;
   final Future<PayFeeResult> Function() onPayPendingFee;
   final Future<Charge> Function(String chargeId) onShowPendingCash;
   final void Function(Charge) onShowCharge;
@@ -76,93 +75,214 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
+    final theme = Theme.of(context);
+    final hasRide = state.ride != null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Recôncavo')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Stack(
         children: [
-          if (state.ride != null)
-            ElevatedButton(
-              onPressed: widget.onOpenRide,
-              child: const Text('Acompanhar corrida'),
-            )
-          else if (state.blockedReason != null)
-            Text(state.blockedReason!)
-          else
-            ElevatedButton(
-              onPressed: widget.onRequestRide,
-              child: const Text('Pedir corrida'),
-            ),
-          if (state.pendingPayment != null) ...[
-            const SizedBox(height: 16),
-            Card(
-              child: ListTile(
-                title: Text(brl(state.pendingPayment!.amountCents)),
-                subtitle: const Text('Corrida em dinheiro não paga'),
-                // chargeId é nulo até o motoqueiro pedir o QR do fim da corrida; sem QR não há
-                // o que mostrar ainda.
-                trailing: state.pendingPayment!.chargeId == null
-                    ? null
-                    : FilledButton(
-                        onPressed: _loadingCash
-                            ? null
-                            : () => _showPendingCash(
-                                state.pendingPayment!.chargeId!,
-                              ),
-                        child: _loadingCash
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('Ver Pix'),
+          const Positioned.fill(child: FakeMapView(markers: [])),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(99),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 12,
                       ),
-              ),
-            ),
-          ],
-          if (state.pendingFee != null) ...[
-            const SizedBox(height: 16),
-            Card(
-              child: ListTile(
-                title: Text(brl(state.pendingFee!.amountCents)),
-                subtitle: const Text('Taxa de cancelamento pendente'),
-                trailing: FilledButton(
-                  onPressed: _payingFee ? null : _payPendingFee,
-                  child: _payingFee
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Pagar'),
+                    ],
+                  ),
+                  child: Text(
+                    'Recôncavo',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ],
-          const SizedBox(height: 24),
-          ListTile(
-            title: Text(brl(state.balanceCents)),
-            subtitle: const Text('Saldo'),
-            trailing: TextButton(
-              onPressed: widget.onOpenWallet,
-              child: const Text('Carteira'),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+              ),
+              child: SheetCard(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (state.pendingPayment != null) ...[
+                        NoticeCard(
+                          title: brl(state.pendingPayment!.amountCents),
+                          body: 'Corrida em dinheiro não paga',
+                          // chargeId é nulo até o motoqueiro pedir o QR do fim da corrida; sem QR não há
+                          // o que mostrar ainda.
+                          action: state.pendingPayment!.chargeId == null
+                              ? null
+                              : FilledButton(
+                                  onPressed: _loadingCash
+                                      ? null
+                                      : () => _showPendingCash(
+                                          state.pendingPayment!.chargeId!,
+                                        ),
+                                  child: _loadingCash
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Text('Ver Pix'),
+                                ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      if (state.pendingFee != null) ...[
+                        NoticeCard(
+                          title: brl(state.pendingFee!.amountCents),
+                          body: 'Taxa de cancelamento pendente',
+                          action: FilledButton(
+                            onPressed: _payingFee ? null : _payPendingFee,
+                            child: _payingFee
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text('Pagar'),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      Text(
+                        hasRide
+                            ? 'Sua corrida está rolando'
+                            : 'Pra onde vamos?',
+                        style: theme.textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 14),
+                      if (hasRide)
+                        ElevatedButton(
+                          onPressed: widget.onOpenRide,
+                          child: const Text('Acompanhar corrida'),
+                        )
+                      // com pagamento ou taxa pendente o cartão de cima já explica; repetir o bloqueio só assusta
+                      else if (state.blockedReason != null &&
+                          state.pendingFee == null &&
+                          state.pendingPayment == null)
+                        NoticeCard(
+                          title: 'Pedido de corrida bloqueado',
+                          body: state.blockedReason!,
+                        )
+                      else
+                        ElevatedButton(
+                          onPressed: widget.onRequestRide,
+                          child: const Text('Pedir corrida'),
+                        ),
+                      const SizedBox(height: 14),
+                      IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: _Shortcut(
+                                icon: Icons.account_balance_wallet_outlined,
+                                label: 'Carteira',
+                                detail: brl(state.balanceCents),
+                                onTap: widget.onOpenWallet,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _Shortcut(
+                                icon: Icons.history_rounded,
+                                label: 'Minhas corridas',
+                                onTap: widget.onOpenHistory,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _Shortcut(
+                                icon: Icons.person_outline_rounded,
+                                label: 'Perfil',
+                                detail: state.name,
+                                onTap: widget.onOpenProfile,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-          ListTile(
-            title: const Text('Minhas corridas'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: widget.onOpenHistory,
-          ),
-          ListTile(
-            title: const Text('Perfil'),
-            subtitle: Text(state.name),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: widget.onOpenProfile,
-          ),
-          TextButton(onPressed: widget.onSignOut, child: const Text('Sair')),
         ],
+      ),
+    );
+  }
+}
+
+/// Atalho da folha de baixo: ícone, nome e (se tiver) um detalhe curto.
+class _Shortcut extends StatelessWidget {
+  const _Shortcut({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.detail,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? detail;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainer,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 22),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                maxLines: 2,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              Text(
+                detail ?? ' ',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

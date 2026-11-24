@@ -5,7 +5,7 @@ const { entrar } = require('./fluxo');
 const APP_P = 'http://127.0.0.1:8081/index.html';
 const APP_M = 'http://127.0.0.1:8082/index.html';
 const PAX = process.env.PAX || '75999990002';
-const RIDER = '75977000001';
+const RIDER = process.env.RIDER || '75977000001';
 
 (async () => {
   const b = await h.browser();
@@ -21,6 +21,16 @@ const RIDER = '75977000001';
     return new RegExp(src).test(t);
   }, re.source, { timeout: ms });
 
+  // se o motoqueiro ficou devendo taxa de uma corrida anterior, quita pela API (o app faria pelo Pix da dívida)
+  {
+    const api = await h.pessoa(RIDER, 'rider');
+    const st = await api.call('GET', '/v1/rider/state');
+    if (st.account && st.account.blocked_reason === 'debt_pending') {
+      const c = await api.call('POST', '/v1/rider/debt-charge', {});
+      await fetch(`${h.API}/v1/dev/pix/${c.charge_id}/pay`, { method: 'POST' });
+      log('M', 'dívida quitada pela API');
+    }
+  }
   // motoqueiro entra e liga o "estou rodando"
   await entrar(M.page, RIDER, null);
   await snap('M', M, '01-home');
@@ -47,6 +57,21 @@ const RIDER = '75977000001';
   await snap('M', M, '03-oferta');
   await h.tap(M.page, 'Aceitar');
   await M.page.waitForTimeout(2500);
+  if (metodo === 'Pix') {
+    // o Pix de mentira só "paga" por uma rota de desenvolvimento: pega o código da cobrança pela API e paga
+    const api = await h.pessoa(PAX, 'passenger');
+    const st = await api.call('GET', '/v1/passenger/state');
+    const chargeId = st.ride && st.ride.pay && st.ride.pay.charge_id;
+    log('P', `cobrança ${chargeId}`);
+    await snap('P', P, '03b-pagar-pix');
+    await h.tap(P.page, 'Ver Pix').catch(() => {});
+    await P.page.waitForTimeout(1500);
+    await snap('P', P, '03c-tela-do-pix');
+    await h.tap(P.page, 'Fechar').catch(() => {});
+    await P.page.waitForTimeout(800);
+    await fetch(`${h.API}/v1/dev/pix/${chargeId}/pay`, { method: 'POST' });
+    await P.page.waitForTimeout(2500);
+  }
   await snap('M', M, '04-a-caminho');
   await snap('P', P, '04-moto-a-caminho');
   await h.tap(M.page, 'Ir até o ponto de embarque').catch(() => {});
@@ -59,9 +84,6 @@ const RIDER = '75977000001';
   log('P', `PIN lido: ${pin}`);
   await h.tap(M.page, 'Confirmei o capacete extra');
   await M.page.waitForTimeout(1500);
-  if (metodo === 'Pix') {
-    log('P', 'pagando o Pix pelo servidor (rota de desenvolvimento)');
-  }
   await h.type(M.page, 'Código do passageiro', pin);
   await snap('M', M, '06-codigo');
   await h.tap(M.page, 'Começar corrida');

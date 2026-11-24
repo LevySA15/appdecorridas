@@ -3,6 +3,8 @@ import 'package:corrida_ui/corrida_ui.dart';
 import 'package:flutter/material.dart';
 
 import '../dates.dart';
+import '../input_masks.dart';
+import 'package:flutter/services.dart';
 import '../photo_source.dart';
 import '../registration_data.dart';
 import 'document_photo_field.dart';
@@ -129,12 +131,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     String label, {
     TextInputType? keyboard,
     String? hint,
+    List<TextInputFormatter>? formatters,
+    TextCapitalization capitalization = TextCapitalization.none,
   }) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: TextField(
       key: Key(key),
       controller: _controllers[key],
       keyboardType: keyboard,
+      inputFormatters: formatters,
+      textCapitalization: capitalization,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
@@ -168,22 +174,48 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             ),
           const Text('Preencha seus dados para pedir a aprovação.'),
           const SizedBox(height: 16),
-          _field('nome', 'Nome completo'),
-          _field('cpf', 'CPF', keyboard: TextInputType.number),
-          _field('cnh', 'Número da CNH', keyboard: TextInputType.number),
-          _field('placa', 'Placa da moto'),
-          _field('modelo', 'Modelo da moto'),
+          _field(
+            'nome',
+            'Nome completo',
+            capitalization: TextCapitalization.words,
+          ),
+          _field(
+            'cpf',
+            'CPF',
+            keyboard: TextInputType.number,
+            hint: '000.000.000-00',
+            formatters: const [cpfMask],
+          ),
+          _field(
+            'cnh',
+            'Número da CNH',
+            keyboard: TextInputType.number,
+            formatters: const [cnhMask],
+          ),
+          _field(
+            'placa',
+            'Placa da moto',
+            hint: 'ABC1D23',
+            formatters: const [PlateMask()],
+          ),
+          _field(
+            'modelo',
+            'Modelo da moto',
+            capitalization: TextCapitalization.words,
+          ),
           _field(
             'validade_cnh',
             'Validade da CNH',
-            keyboard: TextInputType.datetime,
+            keyboard: TextInputType.number,
             hint: 'dd/mm/aaaa',
+            formatters: const [dateMask],
           ),
           _field(
             'validade_crlv',
             'Validade do documento da moto',
-            keyboard: TextInputType.datetime,
+            keyboard: TextInputType.number,
             hint: 'dd/mm/aaaa',
+            formatters: const [dateMask],
           ),
           _photoField(DocKind.selfie, 'Selfie'),
           _photoField(DocKind.cnh, 'CNH'),

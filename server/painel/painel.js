@@ -10,6 +10,14 @@ function esc(valor) {
 function attr(valor) { return esc(valor); }
 function raw(html) { return html; }
 function money(centavos) { return "R$ " + (Number(centavos || 0) / 100).toFixed(2).replace(".", ","); }
+// Textos que o dono lê (o servidor manda os códigos em inglês).
+const ESTADOS_DA_CORRIDA = {
+  requested: "procurando moto", searching: "procurando moto", queued: "na fila", accepted: "moto a caminho",
+  arrived: "moto chegou", in_progress: "em viagem", completed: "concluída", cancelled: "cancelada", no_rider: "sem moto",
+};
+const FORMAS_DE_PAGAMENTO = { pix: "Pix", cash: "dinheiro", balance: "saldo do app" };
+function estadoDaCorrida(estado) { return ESTADOS_DA_CORRIDA[estado] || estado; }
+function formaDePagamento(forma) { return FORMAS_DE_PAGAMENTO[forma] || forma; }
 function when(segundos) { return segundos ? new Date(segundos * 1000).toLocaleString("pt-BR") : "–"; }
 
 const CANCELADO = Symbol("cancelado");   // o administrador desistiu no prompt: nada foi feito
@@ -260,9 +268,9 @@ const VISOES = {
   async corridas() {
     const estado = filtros.corridas;
     const lista = await api("/v1/admin/rides?limit=100" + (estado ? "&state=" + encodeURIComponent(estado) : ""));
-    const opcoes = ["", "searching", "accepted", "arrived", "in_progress", "completed", "cancelled", "no_rider"].map((s) => `<option value="${attr(s)}" ${raw(s === estado ? "selected" : "")}>${esc(s || "todas")}</option>`).join("");
+    const opcoes = ["", "searching", "accepted", "arrived", "in_progress", "completed", "cancelled", "no_rider"].map((s) => `<option value="${attr(s)}" ${raw(s === estado ? "selected" : "")}>${esc(s ? estadoDaCorrida(s) : "todas")}</option>`).join("");
     const linhas = lista.map((r) => [
-      esc(when(r.created_at)), esc(r.state), esc(r.method), esc(money(r.price_cents)), esc(r.passenger_name), esc(r.rider_name || "–"),
+      esc(when(r.created_at)), esc(estadoDaCorrida(r.state)), esc(formaDePagamento(r.method)), esc(money(r.price_cents)), esc(r.passenger_name), esc(r.rider_name || "–"),
       esc(r.pickup_text + " → " + r.dest_text), raw(botao("ride-detail", r.ride_id, "Detalhe")),
     ]);
     return `<p>Estado: <select id="filtro-corridas">${raw(opcoes)}</select></p>` +
@@ -285,7 +293,7 @@ const VISOES = {
       cartao("Ganho dos motoqueiros", money(d.riders_cents)), cartao("Saldos dos passageiros", money(d.passenger_balances_cents)),
       cartao("Taxas que motoqueiros devem", money(d.rider_debts_cents)), cartao("Passageiros devem (corridas e taxas)", money(d.passenger_unpaid_cents)),
       cartao("...das quais taxas de cancelamento", money(d.pending_fees_cents)), cartao("Livro-caixa fecha", d.ledger_balanced ? "sim" : "NÃO"),
-    ].join(""))}</div><h3>Corridas por estado</h3><pre>${esc(JSON.stringify(d.rides_by_state, null, 2))}</pre>`;
+    ].join(""))}</div><h3>Corridas por estado</h3>${raw(tabela(["Estado", "Corridas"], Object.entries(d.rides_by_state || {}).map(([estado, n]) => [esc(estadoDaCorrida(estado)), esc(String(n))])))}`;
   },
   async saques() {
     const lista = await api("/v1/admin/withdrawals?limit=100");
@@ -505,4 +513,4 @@ function comecar() {
 }
 
 if (typeof document !== "undefined") comecar();
-if (typeof module !== "undefined") module.exports = { esc, attr, money, when, aoClicar, ACOES, CANCELADO, TELAS, VISOES, PARAMETROS, paraCampo, doCampo, coletarBloco, mostrar, descreverAviso, conectarAvisos, aoAviso, limparAviso, situacaoDoCadastro, tipoDoAlerta, fotosDoCadastro };
+if (typeof module !== "undefined") module.exports = { esc, attr, money, when, aoClicar, ACOES, CANCELADO, TELAS, VISOES, PARAMETROS, paraCampo, doCampo, coletarBloco, mostrar, descreverAviso, conectarAvisos, aoAviso, limparAviso, situacaoDoCadastro, tipoDoAlerta, fotosDoCadastro, estadoDaCorrida, formaDePagamento };

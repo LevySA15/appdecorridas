@@ -19,7 +19,6 @@ void main() {
           onOpenWallet: () {},
           onOpenProfile: () {},
           onOpenHistory: () {},
-          onSignOut: () {},
           onPayPendingFee: () async => const PayFeeResult(paid: true),
           onShowPendingCash: (_) async =>
               const Charge(chargeId: 'c1', amountCents: 100),
@@ -44,7 +43,6 @@ void main() {
           onOpenWallet: () {},
           onOpenProfile: () {},
           onOpenHistory: () {},
-          onSignOut: () {},
           onPayPendingFee: () async => const PayFeeResult(paid: true),
           onShowPendingCash: (_) async =>
               const Charge(chargeId: 'c1', amountCents: 100),
@@ -69,7 +67,6 @@ void main() {
           onOpenWallet: () {},
           onOpenProfile: () {},
           onOpenHistory: () {},
-          onSignOut: () {},
           onPayPendingFee: () async => const PayFeeResult(paid: true),
           onShowPendingCash: (_) async =>
               const Charge(chargeId: 'c1', amountCents: 100),
@@ -104,7 +101,6 @@ void main() {
           onOpenWallet: () {},
           onOpenProfile: () {},
           onOpenHistory: () {},
-          onSignOut: () {},
           onPayPendingFee: () async => const PayFeeResult(paid: true),
           onShowPendingCash: (id) async {
             idPedido = id;
@@ -140,7 +136,6 @@ void main() {
             onOpenWallet: () {},
             onOpenProfile: () {},
             onOpenHistory: () {},
-            onSignOut: () {},
             onPayPendingFee: () async => const PayFeeResult(paid: true),
             onShowPendingCash: (_) async =>
                 const Charge(chargeId: 'c1', amountCents: 100),
@@ -166,7 +161,6 @@ void main() {
           onOpenWallet: () {},
           onOpenProfile: () {},
           onOpenHistory: () {},
-          onSignOut: () {},
           onPayPendingFee: () async => const PayFeeResult(paid: true),
           onShowPendingCash: (_) async =>
               const Charge(chargeId: 'c1', amountCents: 100),
@@ -195,7 +189,6 @@ void main() {
           onOpenWallet: () {},
           onOpenProfile: () {},
           onOpenHistory: () {},
-          onSignOut: () {},
           onPayPendingFee: () async =>
               PayFeeResult(paid: false, charge: charge),
           onShowPendingCash: (_) async =>
@@ -223,7 +216,6 @@ void main() {
           onOpenWallet: () {},
           onOpenProfile: () {},
           onOpenHistory: () {},
-          onSignOut: () {},
           onPayPendingFee: () async => throw ApiException(
             status: 409,
             code: 'nothing_to_pay',
@@ -253,7 +245,6 @@ void main() {
           onOpenWallet: () {},
           onOpenProfile: () => aberto = true,
           onOpenHistory: () {},
-          onSignOut: () {},
           onPayPendingFee: () async => const PayFeeResult(paid: true),
           onShowPendingCash: (_) async =>
               const Charge(chargeId: 'c1', amountCents: 100),
@@ -277,7 +268,6 @@ void main() {
           onOpenWallet: () {},
           onOpenProfile: () {},
           onOpenHistory: () => aberto = true,
-          onSignOut: () {},
           onPayPendingFee: () async => const PayFeeResult(paid: true),
           onShowPendingCash: (_) async =>
               const Charge(chargeId: 'c1', amountCents: 100),

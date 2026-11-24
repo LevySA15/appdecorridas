@@ -24,6 +24,13 @@ class PassengerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Recôncavo Passageiro',
+      theme: corridaTheme(Brightness.light),
+      darkTheme: corridaTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
+      locale: corridaLocale,
+      supportedLocales: corridaSupportedLocales,
+      localizationsDelegates: corridaLocalizationsDelegates,
       home: ListenableBuilder(
         listenable: controller,
         builder: (context, _) {
@@ -35,6 +42,8 @@ class PassengerApp extends StatelessWidget {
           final session = controller.session;
           if (session == null) {
             return LoginScreen(
+              title: 'Pra onde vamos?',
+              subtitle: 'Entre com seu celular e peça sua moto.',
               onRequestCode: controller.requestCode,
               onVerify: (phone, code) =>
                   controller.verify(phone: phone, code: code),
@@ -136,6 +145,8 @@ class _SignedInShellState extends State<SignedInShell> {
               method: method,
             );
             _navigatorKey.currentState!.pop();
+            // quem acabou de pedir quer ver a procura da moto, não a tela inicial
+            if (widget.controller.state?.ride != null) _openRide();
           },
         ),
       ),
@@ -248,7 +259,6 @@ class _SignedInShellState extends State<SignedInShell> {
               onOpenWallet: _openWallet,
               onOpenProfile: _openProfile,
               onOpenHistory: _openHistory,
-              onSignOut: widget.controller.signOut,
               onPayPendingFee: widget.controller.payPendingFee,
               onShowPendingCash: widget.controller.loadCharge,
               onShowCharge: _showCharge,

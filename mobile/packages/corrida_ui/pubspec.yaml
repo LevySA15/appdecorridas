@@ -10,6 +10,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   corrida_core:
     path: ../corrida_core
   flutter_secure_storage: ^11.2.0

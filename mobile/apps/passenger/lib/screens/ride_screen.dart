@@ -1,10 +1,14 @@
 import 'package:corrida_core/corrida_core.dart';
+import 'package:corrida_ui/corrida_ui.dart';
 import 'package:flutter/material.dart';
+
+import '../format.dart';
 
 String _statusText(RideState state) => switch (state) {
   RideState.searching => 'Procurando moto...',
   RideState.queued => 'Na fila...',
-  RideState.accepted || RideState.arrived => 'A moto está a caminho',
+  RideState.accepted => 'A moto está a caminho',
+  RideState.arrived => 'Sua moto chegou',
   RideState.inProgress => 'Em viagem',
   _ => '',
 };
@@ -127,6 +131,12 @@ class _RideScreenState extends State<RideScreen> {
     final ride = widget.ride;
     final rider = ride.rider;
     final endPayment = ride.endPayment;
+    final theme = Theme.of(context);
+    final riderPosition = ride.riderPosition;
+    final showPin =
+        rider != null &&
+        ride.pin.isNotEmpty &&
+        (ride.state == RideState.accepted || ride.state == RideState.arrived);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sua corrida'),
@@ -141,36 +151,134 @@ class _RideScreenState extends State<RideScreen> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Stack(
         children: [
-          Text(
-            _statusText(ride.state),
-            style: Theme.of(context).textTheme.headlineSmall,
+          Positioned.fill(
+            child: FakeMapView(
+              markers: [
+                MapMarker(MarkerKind.pickup, ride.pickup),
+                MapMarker(MarkerKind.destination, ride.destination),
+                if (riderPosition != null)
+                  MapMarker(
+                    MarkerKind.me,
+                    Place(lat: riderPosition.lat, lng: riderPosition.lng),
+                  ),
+              ],
+            ),
           ),
-          if (rider != null) ...[
-            const SizedBox(height: 16),
-            Text('PIN: ${ride.pin}'),
-            Text(rider.name),
-            Text('${rider.plate} — ${rider.motoModel}'),
-          ],
-          if (ride.pay != null) ...[
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => _showCharge(ride.pay!.chargeId),
-              child: const Text('Ver Pix'),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+              ),
+              child: SheetCard(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        _statusText(ride.state),
+                        style: theme.textTheme.headlineSmall,
+                      ),
+                      if (rider != null) ...[
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            InitialsAvatar(name: rider.name),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    rider.name,
+                                    style: theme.textTheme.titleMedium,
+                                  ),
+                                  Text(
+                                    '${rider.plate} — ${rider.motoModel}',
+                                    style: TextStyle(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (rider.rating != null)
+                              InfoPill(
+                                icon: Icons.star_rounded,
+                                text:
+                                    rider.rating!.toStringAsFixed(1).replaceAll('.', ','),
+                              ),
+                          ],
+                        ),
+                      ],
+                      if (showPin) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          'Diga este código ao motoqueiro',
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: PinDigits(pin: ride.pin),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          InfoPill(
+                            icon: Icons.payments_outlined,
+                            text: brl(ride.priceCents),
+                          ),
+                          InfoPill(
+                            icon: Icons.route_outlined,
+                            text: formatKm(ride.distanceM),
+                          ),
+                          if (ride.method.isNotEmpty)
+                            InfoPill(
+                              icon: Icons.credit_card_outlined,
+                              text: ride.payWithBalance
+                                  ? 'Saldo do app'
+                                  : (ride.method == 'cash' ? 'Dinheiro' : 'Pix'),
+                            ),
+                        ],
+                      ),
+                      if (ride.pay != null) ...[
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => _showCharge(ride.pay!.chargeId),
+                          child: const Text('Ver Pix'),
+                        ),
+                      ],
+                      // sem QR ainda (o motoqueiro não pediu) não há o que mostrar
+                      if (endPayment != null && endPayment.chargeId != null) ...[
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => _showCharge(endPayment.chargeId!),
+                          child: const Text('Ver Pix'),
+                        ),
+                      ],
+                      // durante a viagem não há o que cancelar: quem precisa de ajuda usa o SOS
+                      if (ride.state != RideState.inProgress) ...[
+                        const SizedBox(height: 16),
+                        OutlinedButton(
+                          onPressed: _cancel,
+                          child: const Text('Cancelar'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ],
-          // sem QR ainda (o motoqueiro não pediu) não há o que mostrar
-          if (endPayment != null && endPayment.chargeId != null) ...[
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => _showCharge(endPayment.chargeId!),
-              child: const Text('Ver Pix'),
-            ),
-          ],
-          const SizedBox(height: 24),
-          OutlinedButton(onPressed: _cancel, child: const Text('Cancelar')),
+          ),
         ],
       ),
     );

@@ -93,26 +93,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton(
+            child: FilledButton.tonal(
               onPressed: _saveName,
               child: const Text('Salvar nome'),
             ),
           ),
           const Divider(height: 32),
-          const Text('Contato de emergência'),
+          Text(
+            'Contato de emergência',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Avisamos essa pessoa se você pedir socorro numa corrida.',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
           TextField(
             key: const Key('contato_nome'),
             controller: _contactNameController,
             decoration: const InputDecoration(labelText: 'Nome'),
           ),
+          const SizedBox(height: 12),
           TextField(
             key: const Key('contato_telefone'),
             controller: _contactPhoneController,
+            keyboardType: TextInputType.phone,
             decoration: const InputDecoration(labelText: 'Telefone'),
           ),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton(
+            child: FilledButton.tonal(
               onPressed: _saveContact,
               child: const Text('Salvar'),
             ),

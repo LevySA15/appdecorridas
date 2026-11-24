@@ -110,13 +110,13 @@ class _HomeScreenState extends State<HomeScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          SwitchListTile(
-            title: const Text('Estou rodando'),
-            value: registration.online,
-            onChanged: _busy
-                ? null
-                : (on) => _run(on ? widget.onGoOnline : widget.onGoOffline),
+          _StatusHero(
+            online: registration.online,
+            busy: _busy,
+            onChanged: (on) =>
+                _run(on ? widget.onGoOnline : widget.onGoOffline),
           ),
+          const SizedBox(height: 12),
           if (widget.locationProblem case final problem?)
             Card(
               color: Theme.of(context).colorScheme.errorContainer,
@@ -228,22 +228,98 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           const SizedBox(height: 16),
-          if (account != null && !account.entryPaid)
-            Text(
-              'Corridas de teste: ${account.completedRides} de ${account.trialRides}',
-            ),
-          if (rating != null)
-            Text(
-              '${rating.toStringAsFixed(1).replaceAll('.', ',')} '
-              '(${registration.ratingCount} avaliações)',
-            ),
-          if (account != null && account.cashDebtCents > 0)
-            Text('Taxas devidas: ${brl(account.cashDebtCents)}'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (account != null && !account.entryPaid)
+                InfoPill(
+                  icon: Icons.flag_outlined,
+                  text:
+                      'Corridas de teste: ${account.completedRides} de ${account.trialRides}',
+                ),
+              if (rating != null)
+                InfoPill(
+                  icon: Icons.star_rounded,
+                  text:
+                      '${rating.toStringAsFixed(1).replaceAll('.', ',')} '
+                      '(${registration.ratingCount} avaliações)',
+                ),
+              if (account != null && account.cashDebtCents > 0)
+                InfoPill(
+                  icon: Icons.receipt_long_outlined,
+                  text: 'Taxas devidas: ${brl(account.cashDebtCents)}',
+                ),
+            ],
+          ),
           TextButton(
             onPressed: widget.onOpenStatement,
             child: const Text('Extrato do dia'),
           ),
           TextButton(onPressed: widget.onSignOut, child: const Text('Sair')),
+        ],
+      ),
+    );
+  }
+}
+
+/// O cartão grande do alto: liga e desliga o "estou rodando". Ligado, fica com o vermelho do app.
+class _StatusHero extends StatelessWidget {
+  const _StatusHero({
+    required this.online,
+    required this.busy,
+    required this.onChanged,
+  });
+
+  final bool online;
+  final bool busy;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = online ? corridaOnAccent : scheme.onSurface;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
+      decoration: BoxDecoration(
+        color: online ? corridaAccent : scheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Estou rodando',
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  online
+                      ? 'Esperando pedidos perto de você'
+                      : 'Ligue para receber corridas',
+                  style: TextStyle(
+                    color: online
+                        ? corridaOnAccent.withValues(alpha: 0.85)
+                        : scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: online,
+            onChanged: busy ? null : onChanged,
+            activeThumbColor: corridaAccent,
+            activeTrackColor: corridaOnAccent,
+          ),
         ],
       ),
     );

@@ -20,8 +20,11 @@ class ReceiptScreen extends StatelessWidget {
         children: [
           _Line('Data', formatRideDate(ride.createdAt)),
           _Line('Situação', rideStateLabel(ride.state)),
-          _Line('Origem', ride.pickupText),
-          _Line('Destino', ride.destinationText),
+          // sem endereço (mapa de mentira) a linha só ficaria em branco
+          if (ride.pickupText.trim().isNotEmpty)
+            _Line('Origem', ride.pickupText),
+          if (ride.destinationText.trim().isNotEmpty)
+            _Line('Destino', ride.destinationText),
           _Line('Distância', formatKm(ride.distanceM)),
           if (rider != null)
             _Line(

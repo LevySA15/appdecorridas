@@ -101,16 +101,22 @@ class _RideScreenState extends State<RideScreen> {
   // toque da direita cairia fora dos 3 km da cidade).
   Widget _map(RiderRide ride) => Center(
     child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 320),
-      child: AspectRatio(
-        aspectRatio: 1,
-        child: FakeMapView(
-          markers: [
-            MapMarker(MarkerKind.pickup, ride.pickup),
-            MapMarker(MarkerKind.destination, ride.destination),
-            MapMarker(MarkerKind.me, widget.position),
-          ],
-          onTap: widget.onMove,
+      constraints: const BoxConstraints(maxWidth: 360),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: FakeMapView(
+              markers: [
+                MapMarker(MarkerKind.pickup, ride.pickup),
+                MapMarker(MarkerKind.destination, ride.destination),
+                MapMarker(MarkerKind.me, widget.position),
+              ],
+              onTap: widget.onMove,
+            ),
+          ),
         ),
       ),
     ),
@@ -126,11 +132,13 @@ class _RideScreenState extends State<RideScreen> {
     if (ride.pickup.text.isNotEmpty) Text('Embarque: ${ride.pickup.text}'),
     const SizedBox(height: 8),
     _map(ride),
-    if (widget.onMove case final move?)
+    if (widget.onMove case final move?) ...[
       OutlinedButton(
         onPressed: () => move(ride.pickup),
         child: const Text('Ir até o ponto de embarque'),
       ),
+      const SizedBox(height: 8),
+    ],
     ElevatedButton(
       onPressed: _busy ? null : () => _run(widget.onArrive),
       child: const Text('Cheguei'),
@@ -192,11 +200,13 @@ class _RideScreenState extends State<RideScreen> {
       Text('Destino: ${ride.destination.text}'),
     const SizedBox(height: 8),
     _map(ride),
-    if (widget.onMove case final move?)
+    if (widget.onMove case final move?) ...[
       OutlinedButton(
         onPressed: () => move(ride.destination),
         child: const Text('Ir até o destino'),
       ),
+      const SizedBox(height: 8),
+    ],
     ElevatedButton(
       onPressed: _busy ? null : () => _run(widget.onComplete),
       child: const Text('Finalizar corrida'),

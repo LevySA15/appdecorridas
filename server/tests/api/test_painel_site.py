@@ -427,3 +427,26 @@ const alvo = {{ dataset: {{ act: 'rider-approve', id: 'r1' }} }};
 """
     r = json.loads(_rodar_node(codigo))
     assert r == {"aviso": "Feito.", "classe": "ok"}
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar as funções do painel")
+def test_estado_e_pagamento_da_corrida_aparecem_em_portugues_e_o_desconhecido_passa_inteiro():
+    codigo = (
+        f"const p = require({str(JS)!r}); "
+        "console.log(JSON.stringify(['completed','no_rider','in_progress','algo_novo'].map(p.estadoDaCorrida)) + '|' + "
+        "JSON.stringify(['pix','cash','balance','x'].map(p.formaDePagamento)));"
+    )
+    saida = subprocess.run(["node", "-e", codigo], capture_output=True, text=True)
+    assert saida.returncode == 0, saida.stderr
+    estados, formas = saida.stdout.strip().split("|", 1)
+    assert json.loads(estados) == ["concluída", "sem moto", "em viagem", "algo_novo"]
+    assert json.loads(formas) == ["Pix", "dinheiro", "saldo do app", "x"]
+
+
+def test_todo_estado_de_corrida_do_servidor_tem_nome_no_painel():
+    from app.domain.rides import RideState   # noqa: PLC0415
+
+    fonte = JS.read_text(encoding="utf-8")
+    bloco = fonte[fonte.index("const ESTADOS_DA_CORRIDA"): fonte.index("const FORMAS_DE_PAGAMENTO")]
+    faltam = [e.value for e in RideState if e.value not in bloco]
+    assert faltam == [], f"estado sem nome em português no painel: {faltam}"
