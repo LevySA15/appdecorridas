@@ -42,3 +42,36 @@ já nasce enquadrada por `initialCameraFit` e só as mudanças seguintes usam `f
 
 Conferido no navegador sem janela (`mobile/tool/ui`): ruas aparecem, toque marca embarque e destino, câmera enquadra os dois, escuro inverte os ladrilhos.
 **Não foi visto num celular de verdade.**
+
+## Quanto custa o Google (levantado em 24/11/2026)
+
+Preços lidos nas páginas oficiais do Google Maps Platform (`developers.google.com/maps/billing-and-pricing/pricing`), **sem** o crédito de US$ 200 por mês, que acabou em março de 2025:
+cada tipo de uso tem a sua própria cota grátis por mês. Os números abaixo valem para o servidor como ele está hoje (rota de carro, sem trânsito em tempo real, que o Google cobra como **Essentials**).
+
+| Uso | Cota grátis por mês | Depois da cota (por mil) |
+|---|---|---|
+| Rotas (`computeRoutes`, Essentials) | 10.000 | US$ 5,00 (US$ 4,00 acima de 100 mil) |
+| Endereço escrito de um ponto (Geocoding) | 10.000 | US$ 5,00 (US$ 4,00 acima de 100 mil) |
+| Mapa dentro do app (Maps SDK, Android/iOS) | sem limite | grátis (a confirmar na página de SKUs de mapas) |
+| Busca de endereço digitado (Autocomplete, por sessão) | sem limite | grátis; a ficha do lugar escolhido é outro item, ainda não conferido |
+
+**Atenção:** rota com trânsito em tempo real (`TRAFFIC_AWARE`) é **Pro** (US$ 10 por mil, 5 mil grátis); rota de moto (`TWO_WHEELER`) é **Enterprise** (US$ 15 por mil, 1 mil grátis).
+Hoje o servidor usa `TRAFFIC_UNAWARE` + `DRIVE` (Essentials), então não pague a mais sem querer.
+
+**Quantas chamadas por corrida** (o código, não a spec): a cotação chama o Google **uma vez** (`GoogleMaps.route`, com cache de 6 horas para pontos quase iguais) e o tempo de chegada só é pedido para a moto que está
+terminando outra corrida. A spec de outubro supunha 7 cálculos por corrida; o código faz bem menos. Premissas deste cálculo (minhas, a calibrar com o teste fechado): **3 rotas por corrida** (cerca de 2,5 cotações
+porque o passageiro muda de destino, mais uma parte para o tempo de chegada) e **4 endereços escritos por corrida** (embarque e destino, com um ou dois toques a mais no mapa), câmbio de R$ 5,40 por dólar.
+
+| Corridas por mês | Rotas | Endereços | Total em US$ | Total em R$ | R$ por corrida |
+|---|---|---|---|---|---|
+| 300 (teste fechado) | 900 | 1.200 | 0 | 0 | 0 |
+| 1.500 (cerca de 50 por dia) | 4.500 | 6.000 | 0 | 0 | 0 |
+| 3.000 | 9.000 | 12.000 | 10 | 54 | 0,02 |
+| 5.000 | 15.000 | 20.000 | 75 | 405 | 0,08 |
+| 10.000 | 30.000 | 40.000 | 250 | 1.350 | 0,14 |
+| 20.000 | 60.000 | 80.000 | 600 | 3.240 | 0,16 |
+
+- O teto atual do servidor (`MAPS_DAILY_CALL_LIMIT`, 800 por dia ≈ 24 mil rotas por mês) custa no máximo **US$ 70 por mês** em rotas.
+- Sem o Google nos endereços (se continuar o Nominatim/OpenStreetMap), tire a coluna "Endereços": rotas sozinhas ficam grátis até 3.300 corridas por mês e custam cerca de US$ 25 em 5.000.
+- Em 20 mil corridas por mês o Google fica perto de **R$ 0,16 por corrida**, perto dos R$ 0,19 da spec (que supunha 7 rotas e sem endereços). A taxa da empresa de R$ 0,70 por corrida cobre isso, mas o Pix (R$ 0,50) e o Google juntos já a consomem.
+- Faltam nesta conta: a ficha do lugar escolhido na busca de endereço (ainda não existe no app), o WhatsApp do código de login e a hospedagem.
