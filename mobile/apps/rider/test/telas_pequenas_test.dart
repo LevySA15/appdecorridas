@@ -12,7 +12,8 @@ Widget _app(Widget home, Brightness brightness) => MaterialApp(
   supportedLocales: corridaSupportedLocales,
   localizationsDelegates: corridaLocalizationsDelegates,
   builder: (context, child) => MediaQuery(
-    data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.5)),
+    data: MediaQuery.of(context)
+        .copyWith(textScaler: const TextScaler.linear(1.5)),
     child: child!,
   ),
   home: home,
@@ -24,7 +25,12 @@ void _pequeno(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
-RiderState _estado({RiderAccount? account, Offer? offer, RiderRide? awaiting, bool online = true}) => RiderState(
+RiderState _estado({
+  RiderAccount? account,
+  Offer? offer,
+  RiderRide? awaiting,
+  bool online = true,
+}) => RiderState(
   registration: RiderRegistration(
     status: RegistrationStatus.approved,
     online: online,
@@ -66,8 +72,16 @@ RideScreen _ride(RideState state) => RideScreen(
     pixPaid: true,
     helmetConfirmed: true,
     passengerName: 'Maria Aparecida de Souza',
-    pickup: const Place(lat: -12.96, lng: -39.26, text: 'Rua Conselheiro Franco, 1234, Centro'),
-    destination: const Place(lat: -12.97, lng: -39.25, text: 'Avenida Senhor dos Passos, 99, Irmã Dulce'),
+    pickup: const Place(
+      lat: -12.96,
+      lng: -39.26,
+      text: 'Rua Conselheiro Franco, 1234, Centro',
+    ),
+    destination: const Place(
+      lat: -12.97,
+      lng: -39.25,
+      text: 'Avenida Senhor dos Passos, 99, Irmã Dulce',
+    ),
   ),
   position: const Place(lat: -12.964, lng: -39.259),
   onMove: (_) {},
@@ -77,7 +91,8 @@ RideScreen _ride(RideState state) => RideScreen(
   onComplete: () async {},
   onAcceptOffer: (_) async {},
   onDeclineOffer: (_) async {},
-  onSos: () async => const RiderSosResult(alertId: 1, repeated: false, emergencyNumber: '190'),
+  onSos: () async =>
+      const RiderSosResult(alertId: 1, repeated: false, emergencyNumber: '190'),
 );
 
 void main() {
@@ -109,8 +124,16 @@ void main() {
                 secondsToPickup: 600,
                 willQueue: true,
                 expiresAt: 9999999999,
-                pickup: Place(lat: 0, lng: 0, text: 'Rua Conselheiro Franco, 1234, Centro'),
-                destination: Place(lat: 0, lng: 0, text: 'Avenida Senhor dos Passos, 99'),
+                pickup: Place(
+                  lat: 0,
+                  lng: 0,
+                  text: 'Rua Conselheiro Franco, 1234, Centro',
+                ),
+                destination: Place(
+                  lat: 0,
+                  lng: 0,
+                  text: 'Avenida Senhor dos Passos, 99',
+                ),
               ),
             ),
           ),
@@ -121,7 +144,11 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    for (final state in [RideState.accepted, RideState.arrived, RideState.inProgress]) {
+    for (final state in [
+      RideState.accepted,
+      RideState.arrived,
+      RideState.inProgress,
+    ]) {
       testWidgets('corrida ${state.name} ($modo)', (tester) async {
         _pequeno(tester);
         await tester.pumpWidget(_app(_ride(state), brightness));

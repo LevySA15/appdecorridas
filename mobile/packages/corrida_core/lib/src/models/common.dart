@@ -58,6 +58,18 @@ class Place {
   );
 
   Json toJson() => {'lat': lat, 'lng': lng, 'text': text};
+
+  // Igualdade por valor: duas leituras do mesmo lugar são o mesmo lugar (o mapa compara marcadores a cada reconstrução
+  // da tela; sem isto ele "via" marcadores novos o tempo todo e reenquadrava a câmera, abortando os ladrilhos).
+  @override
+  bool operator ==(Object other) =>
+      other is Place &&
+      other.lat == lat &&
+      other.lng == lng &&
+      other.text == text;
+
+  @override
+  int get hashCode => Object.hash(lat, lng, text);
 }
 
 /// Estado da corrida. Valor que o app não conhece vira [unknown] em vez de erro.

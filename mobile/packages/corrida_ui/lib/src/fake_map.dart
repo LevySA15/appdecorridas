@@ -103,7 +103,7 @@ class _FakeMapPickerState extends State<FakeMapPicker> {
   void didUpdateWidget(covariant FakeMapPicker oldWidget) {
     super.didUpdateWidget(oldWidget);
     final novo = widget.pickup;
-    if (novo != null && novo != oldWidget.pickup) {
+    if (novo != null && !identical(novo, oldWidget.pickup)) {
       setState(() {
         _pickup = novo;
         _destination = null;

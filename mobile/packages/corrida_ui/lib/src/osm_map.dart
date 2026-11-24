@@ -11,6 +11,9 @@ import 'theme.dart';
 /// ser Google; os termos do Google proíbem usar os serviços deles num app com mapa de outro fornecedor). Ver `docs/mapa.md`.
 const osmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
+/// Só para teste: ladrilhos sem rede para todo `OsmMapView` que não receber um `tileProvider` próprio.
+TileProvider? osmTileProviderForTests;
+
 /// Identifica o app para o servidor de ladrilhos (a política de uso do OpenStreetMap exige).
 const osmUserAgentPackage = 'br.com.reconcavo.corrida';
 
@@ -68,15 +71,24 @@ class _OsmMapViewState extends State<OsmMapView> {
     _tiles = _buildTiles();
   }
 
+  CameraFit? _fitFor(List<MapMarker> markers) => markers.length < 2
+      ? null
+      : CameraFit.coordinates(
+          coordinates: [for (final marker in markers) _latLng(marker.place)],
+          padding:
+              widget.framePadding + EdgeInsets.only(bottom: widget.bottomSpace),
+          maxZoom: 17,
+        );
+
   MapOptions _buildOptions() => MapOptions(
     initialCenter: _latLng(cityCenter),
     initialZoom: 14,
+    // com dois ou mais marcadores a primeira imagem do mapa já nasce enquadrada (enquadrar depois, dentro do `onMapReady`,
+    // deixava o mapa sem os ladrilhos do zoom novo na web)
+    initialCameraFit: _fitFor(widget.markers),
     minZoom: 8,
     maxZoom: 19,
-    onMapReady: () {
-      _ready = true;
-      _frame();
-    },
+    onMapReady: () => _ready = true,
     // lê o `onTap` do momento: a tela pode trocar o callback sem refazer o mapa
     onTap: (_, point) =>
         widget.onTap?.call(Place(lat: point.latitude, lng: point.longitude)),
@@ -91,7 +103,8 @@ class _OsmMapViewState extends State<OsmMapView> {
     urlTemplate: osmTileUrl,
     userAgentPackageName: osmUserAgentPackage,
     maxNativeZoom: 19,
-    tileProvider: widget.tileProvider,
+    tileProvider:
+        widget.tileProvider ?? osmTileProviderForTests ?? NetworkTileProvider(),
   );
 
   @override
@@ -105,7 +118,7 @@ class _OsmMapViewState extends State<OsmMapView> {
     }
     if (!_sameMarkers(oldWidget.markers, widget.markers)) _frame();
     final focus = widget.focus;
-    if (focus != null && focus != oldWidget.focus && _ready) {
+    if (focus != null && !identical(focus, oldWidget.focus) && _ready) {
       try {
         _controller.move(_latLng(focus), 16);
       } on Object {
@@ -129,22 +142,20 @@ class _OsmMapViewState extends State<OsmMapView> {
   }
 
   /// Enquadra os marcadores quando há dois ou mais (o retângulo que os contém). Com um só a câmera fica onde a pessoa
-  /// deixou: quem acabou de marcar o embarque ainda vai procurar o destino no mapa.
+  /// deixou: quem acabou de marcar o embarque ainda vai procurar o destino no mapa. Depois do quadro atual, para o
+  /// mapa já ter tamanho e os ladrilhos do zoom novo serem pedidos.
   void _frame() {
-    if (!_ready || widget.markers.length < 2) return;
-    final points = [for (final marker in widget.markers) _latLng(marker.place)];
-    try {
-      _controller.fitCamera(
-        CameraFit.coordinates(
-          coordinates: points,
-          padding:
-              widget.framePadding + EdgeInsets.only(bottom: widget.bottomSpace),
-          maxZoom: 17,
-        ),
-      );
-    } on Object {
-      // mapa ainda sem tamanho (primeiro quadro): o próximo toque ou mudança enquadra
-    }
+    if (!_ready) return;
+    final fit = _fitFor(widget.markers);
+    if (fit == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        _controller.fitCamera(fit);
+      } on Object {
+        // mapa ainda sem tamanho: a próxima mudança enquadra
+      }
+    });
   }
 
   @override
@@ -335,7 +346,7 @@ class _OsmMapPickerState extends State<OsmMapPicker> {
   void didUpdateWidget(covariant OsmMapPicker oldWidget) {
     super.didUpdateWidget(oldWidget);
     final novo = widget.pickup;
-    if (novo != null && novo != oldWidget.pickup) {
+    if (novo != null && !identical(novo, oldWidget.pickup)) {
       setState(() {
         _pickup = novo;
         _destination = null;

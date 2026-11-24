@@ -23,5 +23,9 @@ Escolha à mão: `flutter run --dart-define=MAP=osm` (ou `=fake`). O app do moto
 4. Sem busca de endereço: o passageiro toca no mapa (o servidor responde "fora da área de atendimento" se o ponto estiver longe de Santo Antônio de Jesus).
 5. Os ladrilhos vêm da internet: sem sinal o mapa fica cinza (os pinos e o resto da tela funcionam).
 
+Armadilhas já pagas (não repita): **(1)** enquadrar a câmera com `fitCamera` dentro do `onMapReady` deixa o mapa sem os ladrilhos do zoom novo (cinza, ou borrado) — a primeira imagem
+já nasce enquadrada por `initialCameraFit` e só as mudanças seguintes usam `fitCamera`, depois do quadro atual; **(2)** `Place` precisa de igualdade por valor (o mapa compara os marcadores a cada reconstrução);
+**(3)** objetos do mapa (`MapOptions`, `TileLayer`) nascem uma vez no `State`, nunca dentro do `build`.
+
 Conferido no navegador sem janela (`mobile/tool/ui`): ruas aparecem, toque marca embarque e destino, câmera enquadra os dois, escuro inverte os ladrilhos.
 **Não foi visto num celular de verdade.**

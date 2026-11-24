@@ -674,32 +674,33 @@ void main() {
     },
   );
 
-  testWidgets('GPS de verdade negado: tocar em Estou rodando mostra o motivo e não chama o servidor', (
-    tester,
-  ) async {
-    final m = Mundo(
-      location: FakeGps(access: LocationAccess.denied),
-      realGps: true,
-    );
-    m.stateJson = _aprovado();
-    await m.store.save(Session(token: 'tok-1', userId: 'u1', role: 'rider'));
-    await m.controller.start();
-    await tester.pumpWidget(RiderApp(controller: m.controller));
-    await tester.pump();
+  testWidgets(
+    'GPS de verdade negado: tocar em Estou rodando mostra o motivo e não chama o servidor',
+    (tester) async {
+      final m = Mundo(
+        location: FakeGps(access: LocationAccess.denied),
+        realGps: true,
+      );
+      m.stateJson = _aprovado();
+      await m.store.save(Session(token: 'tok-1', userId: 'u1', role: 'rider'));
+      await m.controller.start();
+      await tester.pumpWidget(RiderApp(controller: m.controller));
+      await tester.pump();
 
-    await tester.runAsync(() async {
-      await tester.tap(find.byType(Switch));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    });
-    await tester.pump();
+      await tester.runAsync(() async {
+        await tester.tap(find.byType(Switch));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pump();
 
-    expect(
-      find.text('Permita a localização do celular para ficar disponível.'),
-      findsOneWidget,
-    );
-    expect(m.sent('POST', '/v1/rider/online'), isEmpty);
-    await _fim(tester, m);
-  });
+      expect(
+        find.text('Permita a localização do celular para ficar disponível.'),
+        findsOneWidget,
+      );
+      expect(m.sent('POST', '/v1/rider/online'), isEmpty);
+      await _fim(tester, m);
+    },
+  );
 
   testWidgets('GPS de verdade: a tela da corrida não tem os atalhos de andar', (
     tester,

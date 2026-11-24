@@ -47,6 +47,12 @@ os erros do navegador, e param no primeiro botão que não achar.
 Por que sem janela: o Chrome do dia a dia, quando está atrás de outra janela, **não deixa tirar foto** (a captura espera por um
 quadro que nunca vem). O Chromium sem janela não tem esse problema e não atrapalha quem está usando o computador.
 
+## Galeria de telas
+
+`SHOT_JPEG=1 SHOTS=<pasta> node galeria.js claro` (e `escuro`) percorre os dois apps (cadastro e aprovação do motoqueiro, uma corrida em Pix, carteira, histórico, recibo, perfil) e fotografa cada tela;
+`SHOT_JPEG=1 SHOTS=<pasta> node painel.js 1280` fotografa o painel; `python3 galeria_html.py <pasta> <saida.html>` junta tudo numa página só (claro e escuro lado a lado, clique amplia).
+Para ver as ruas de verdade nas fotos, compile com `MAP=osm tool/web.sh build` (precisa de internet; ver `docs/mapa.md`).
+
 ## O que isto não substitui
 
 - Mapa de verdade, GPS, câmera, discador (190), notificação e bateria: só num celular.

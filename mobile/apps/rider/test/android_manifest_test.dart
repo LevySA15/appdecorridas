@@ -48,7 +48,9 @@ void main() {
     ]) {
       expect(
         manifest,
-        contains('<uses-permission android:name="android.permission.$permission"'),
+        contains(
+          '<uses-permission android:name="android.permission.$permission"',
+        ),
         reason: permission,
       );
     }

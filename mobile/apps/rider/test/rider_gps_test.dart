@@ -62,7 +62,10 @@ void main() {
       expect(_ultimoEnvio(w.m), {'lat': _lugar.lat, 'lng': _lugar.lng});
       w.gps.emit(_outroLugar);
       async.elapse(const Duration(seconds: 4));
-      expect(_ultimoEnvio(w.m), {'lat': _outroLugar.lat, 'lng': _outroLugar.lng});
+      expect(_ultimoEnvio(w.m), {
+        'lat': _outroLugar.lat,
+        'lng': _outroLugar.lng,
+      });
     });
   });
 
@@ -110,33 +113,36 @@ void main() {
     });
   });
 
-  test('o GPS e a tela acesa só ficam ligados enquanto disponível ou em corrida', () {
-    fakeAsync((async) {
-      final w = _mundo(_estado());
-      w.m.controller.start();
-      async.flushMicrotasks();
-      expect(w.gps.listening, isFalse);
-      expect(w.tela.last, isNull);
+  test(
+    'o GPS e a tela acesa só ficam ligados enquanto disponível ou em corrida',
+    () {
+      fakeAsync((async) {
+        final w = _mundo(_estado());
+        w.m.controller.start();
+        async.flushMicrotasks();
+        expect(w.gps.listening, isFalse);
+        expect(w.tela.last, isNull);
 
-      w.m.stateJson = _estado(online: true);
-      w.m.controller.refreshState();
-      async.flushMicrotasks();
-      expect(w.gps.listening, isTrue);
-      expect(w.tela.last, isTrue);
+        w.m.stateJson = _estado(online: true);
+        w.m.controller.refreshState();
+        async.flushMicrotasks();
+        expect(w.gps.listening, isTrue);
+        expect(w.tela.last, isTrue);
 
-      w.m.stateJson = _estado();
-      w.m.controller.refreshState();
-      async.flushMicrotasks();
-      expect(w.gps.listening, isFalse);
-      expect(w.tela.last, isFalse);
+        w.m.stateJson = _estado();
+        w.m.controller.refreshState();
+        async.flushMicrotasks();
+        expect(w.gps.listening, isFalse);
+        expect(w.tela.last, isFalse);
 
-      w.m.stateJson = _estado(comCorrida: true);
-      w.m.controller.refreshState();
-      async.flushMicrotasks();
-      expect(w.gps.listening, isTrue);
-      expect(w.tela.last, isTrue);
-    });
-  });
+        w.m.stateJson = _estado(comCorrida: true);
+        w.m.controller.refreshState();
+        async.flushMicrotasks();
+        expect(w.gps.listening, isTrue);
+        expect(w.tela.last, isTrue);
+      });
+    },
+  );
 
   test('sair da conta desliga o GPS e solta a tela, e posição atrasada não é enviada', () {
     fakeAsync((async) {
@@ -176,10 +182,11 @@ void main() {
 
   group('ficar disponível pede a localização', () {
     final casos = {
-      LocationAccess.denied: 'Permita a localização do celular para ficar disponível.',
-      LocationAccess.deniedForever:
-          'A localização está bloqueada. Libere nas configurações do celular para ficar disponível.',
-      LocationAccess.serviceOff: 'Ligue o GPS do celular para ficar disponível.',
+      LocationAccess.denied:
+          'Permita a localização do celular para ficar disponível.',
+      LocationAccess.deniedForever: 'A localização está bloqueada. Libere nas configurações do celular para ficar disponível.',
+      LocationAccess.serviceOff:
+          'Ligue o GPS do celular para ficar disponível.',
     };
     for (final MapEntry(key: acesso, value: mensagem) in casos.entries) {
       test('$acesso: não fica disponível e diz o que fazer', () async {
@@ -189,7 +196,11 @@ void main() {
         await expectLater(
           w.m.controller.goOnline(),
           throwsA(
-            isA<LocationUnavailable>().having((e) => e.message, 'message', mensagem),
+            isA<LocationUnavailable>().having(
+              (e) => e.message,
+              'message',
+              mensagem,
+            ),
           ),
         );
 
@@ -220,23 +231,26 @@ void main() {
     });
   });
 
-  test('app reaberto já disponível, mas sem permissão: avisa e não manda nada', () {
-    fakeAsync((async) {
-      final w = _mundo(
-        _estado(online: true),
-        gps: FakeGps(access: LocationAccess.deniedForever),
-      );
-      w.m.controller.start();
-      async.elapse(const Duration(seconds: 12));
+  test(
+    'app reaberto já disponível, mas sem permissão: avisa e não manda nada',
+    () {
+      fakeAsync((async) {
+        final w = _mundo(
+          _estado(online: true),
+          gps: FakeGps(access: LocationAccess.deniedForever),
+        );
+        w.m.controller.start();
+        async.elapse(const Duration(seconds: 12));
 
-      expect(w.gps.listening, isFalse);
-      expect(_envios(w.m), 0);
-      expect(
-        w.m.controller.locationProblem,
-        'A localização está bloqueada. Libere nas configurações do celular para ficar disponível.',
-      );
-    });
-  });
+        expect(w.gps.listening, isFalse);
+        expect(_envios(w.m), 0);
+        expect(
+          w.m.controller.locationProblem,
+          'A localização está bloqueada. Libere nas configurações do celular para ficar disponível.',
+        );
+      });
+    },
+  );
 
   test('erro do GPS vira aviso, não derruba, e some quando o sinal volta', () {
     fakeAsync((async) {

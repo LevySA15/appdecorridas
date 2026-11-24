@@ -100,31 +100,6 @@ class _RideScreenState extends State<RideScreen> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
-  // Quadrado, porque o mapa de mentira usa o mesmo lado nos dois eixos (numa caixa mais larga que alta o
-  // toque da direita cairia fora dos 3 km da cidade).
-  Widget _map(RiderRide ride) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 360),
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: CorridaMapView(
-              markers: [
-                MapMarker(MarkerKind.pickup, ride.pickup),
-                MapMarker(MarkerKind.destination, ride.destination),
-                MapMarker(MarkerKind.me, widget.position),
-              ],
-              onTap: widget.onMove,
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-
   List<Widget> _accepted(RiderRide ride) => [
     Text(
       ride.passengerName.isEmpty
@@ -133,8 +108,6 @@ class _RideScreenState extends State<RideScreen> {
       style: Theme.of(context).textTheme.titleLarge,
     ),
     if (ride.pickup.text.isNotEmpty) Text('Embarque: ${ride.pickup.text}'),
-    const SizedBox(height: 8),
-    _map(ride),
     if (widget.onMove case final move?) ...[
       OutlinedButton(
         onPressed: () => move(ride.pickup),
@@ -201,8 +174,6 @@ class _RideScreenState extends State<RideScreen> {
     ),
     if (ride.destination.text.isNotEmpty)
       Text('Destino: ${ride.destination.text}'),
-    const SizedBox(height: 8),
-    _map(ride),
     if (widget.onMove case final move?) ...[
       OutlinedButton(
         onPressed: () => move(ride.destination),
@@ -245,21 +216,46 @@ class _RideScreenState extends State<RideScreen> {
           const SizedBox(width: 12),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      // Mapa por trás e a folha de controles embaixo (o mapa de verdade não desenha direito dentro de uma lista que rola:
+      // fica cinza na web), igual ao app do passageiro.
+      body: Stack(
         children: [
-          if (offer != null)
-            OfferCard(
-              key: ValueKey(offer.rideId),
-              offer: offer,
-              onAccept: () => widget.onAcceptOffer(offer.rideId),
-              onDecline: () => widget.onDeclineOffer(offer.rideId),
+          Positioned.fill(
+            child: CorridaMapView(
+              bottomSpace: 330,
+              markers: [
+                MapMarker(MarkerKind.pickup, ride.pickup),
+                MapMarker(MarkerKind.destination, ride.destination),
+                MapMarker(MarkerKind.me, widget.position),
+              ],
+              onTap: widget.onMove,
             ),
-          Text(
-            '${brl(ride.priceCents)} · ${ride.method == 'cash' ? 'Dinheiro' : 'Pix'}',
           ),
-          const SizedBox(height: 8),
-          ...body,
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: SheetCard(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (offer != null) ...[
+                    OfferCard(
+                      key: ValueKey(offer.rideId),
+                      offer: offer,
+                      onAccept: () => widget.onAcceptOffer(offer.rideId),
+                      onDecline: () => widget.onDeclineOffer(offer.rideId),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Text(
+                    '${brl(ride.priceCents)} · ${ride.method == 'cash' ? 'Dinheiro' : 'Pix'}',
+                  ),
+                  const SizedBox(height: 8),
+                  for (final w in body) ...[w, const SizedBox(height: 8)],
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

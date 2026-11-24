@@ -223,28 +223,33 @@ void main() {
     });
   });
 
-  test('sos pede socorro pela rota do motoqueiro e não precisa reler o estado', () async {
-    final m = await _logado();
-    m.on(
-      'POST',
-      '/v1/rider/rides/r1/sos',
-      (_) => json({'alert_id': 9, 'repeated': false, 'emergency_number': '190'}),
-    );
-    final leiturasAntes = _leituras(m);
+  test(
+    'sos pede socorro pela rota do motoqueiro e não precisa reler o estado',
+    () async {
+      final m = await _logado();
+      m.on(
+        'POST',
+        '/v1/rider/rides/r1/sos',
+        (_) =>
+            json({'alert_id': 9, 'repeated': false, 'emergency_number': '190'}),
+      );
+      final leiturasAntes = _leituras(m);
 
-    final sos = await m.controller.sos('r1');
+      final sos = await m.controller.sos('r1');
 
-    expect((sos.alertId, sos.emergencyNumber), (9, '190'));
-    expect(m.sent('POST', '/v1/rider/rides/r1/sos'), hasLength(1));
-    expect(_leituras(m), leiturasAntes);
-  });
+      expect((sos.alertId, sos.emergencyNumber), (9, '190'));
+      expect(m.sent('POST', '/v1/rider/rides/r1/sos'), hasLength(1));
+      expect(_leituras(m), leiturasAntes);
+    },
+  );
 
   test('sos abre o discador com o 190 uma vez', () async {
     final m = await _logado();
     m.on(
       'POST',
       '/v1/rider/rides/r1/sos',
-      (_) => json({'alert_id': 9, 'repeated': false, 'emergency_number': '190'}),
+      (_) =>
+          json({'alert_id': 9, 'repeated': false, 'emergency_number': '190'}),
     );
 
     await m.controller.sos('r1');
@@ -273,7 +278,8 @@ void main() {
     m.on(
       'POST',
       '/v1/rider/rides/r1/sos',
-      (_) => json({'alert_id': 9, 'repeated': false, 'emergency_number': '190'}),
+      (_) =>
+          json({'alert_id': 9, 'repeated': false, 'emergency_number': '190'}),
     );
 
     final sos = await m.controller.sos('r1');

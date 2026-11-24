@@ -62,14 +62,20 @@ void main() {
     });
   });
 
-  test('o GPS de mentira sempre tem permissão e não emite nada sozinho', () async {
-    final fake = FakeLocationSource();
-    expect(await fake.request(), LocationAccess.granted);
-    expect(await fake.positions().isEmpty, isTrue);
-  });
+  test(
+    'o GPS de mentira sempre tem permissão e não emite nada sozinho',
+    () async {
+      final fake = FakeLocationSource();
+      expect(await fake.request(), LocationAccess.granted);
+      expect(await fake.positions().isEmpty, isTrue);
+    },
+  );
 
-  test('sem tela acesa de verdade, manter ligado não faz nada nem quebra', () async {
-    await NoScreenAwake().keepOn(true);
-    await NoScreenAwake().keepOn(false);
-  });
+  test(
+    'sem tela acesa de verdade, manter ligado não faz nada nem quebra',
+    () async {
+      await NoScreenAwake().keepOn(true);
+      await NoScreenAwake().keepOn(false);
+    },
+  );
 }

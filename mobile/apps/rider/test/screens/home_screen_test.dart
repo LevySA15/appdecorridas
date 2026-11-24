@@ -360,7 +360,8 @@ void main() {
     await _pump(
       tester,
       _estado(online: true),
-      locationProblem: 'Sem sinal de GPS. Você não aparece para os passageiros.',
+      locationProblem:
+          'Sem sinal de GPS. Você não aparece para os passageiros.',
     );
 
     expect(
@@ -375,23 +376,25 @@ void main() {
     expect(find.textContaining('GPS'), findsNothing);
   });
 
-  testWidgets('ficar disponível sem GPS mostra a mensagem que diz o que fazer', (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      _estado(),
-      onGoOnline: () async =>
-          throw const LocationUnavailable('Ligue o GPS do celular para ficar disponível.'),
-    );
+  testWidgets(
+    'ficar disponível sem GPS mostra a mensagem que diz o que fazer',
+    (tester) async {
+      await _pump(
+        tester,
+        _estado(),
+        onGoOnline: () async => throw const LocationUnavailable(
+          'Ligue o GPS do celular para ficar disponível.',
+        ),
+      );
 
-    await tester.tap(find.byType(Switch));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byType(Switch));
+      await tester.pumpAndSettle();
 
-    expect(
-      find.text('Ligue o GPS do celular para ficar disponível.'),
-      findsOneWidget,
-    );
-    expect(find.textContaining('Algo deu errado'), findsNothing);
-  });
+      expect(
+        find.text('Ligue o GPS do celular para ficar disponível.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Algo deu errado'), findsNothing);
+    },
+  );
 }
