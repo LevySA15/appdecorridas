@@ -108,7 +108,7 @@ class _RideScreenState extends State<RideScreen> {
           borderRadius: BorderRadius.circular(20),
           child: AspectRatio(
             aspectRatio: 1,
-            child: FakeMapView(
+            child: CorridaMapView(
               markers: [
                 MapMarker(MarkerKind.pickup, ride.pickup),
                 MapMarker(MarkerKind.destination, ride.destination),

@@ -83,9 +83,11 @@ async function text(page) {
     .filter(Boolean).join(' | '));
 }
 
+// SHOT_JPEG=1 grava JPEG (cerca de 5x menor): para a galeria que vai para uma página só.
 async function shot(page, name) {
-  const file = path.join(OUT, `${name}.png`);
-  await page.screenshot({ path: file });
+  const jpeg = !!process.env.SHOT_JPEG;
+  const file = path.join(OUT, `${name}.${jpeg ? 'jpg' : 'png'}`);
+  await page.screenshot(jpeg ? { path: file, type: 'jpeg', quality: 74 } : { path: file });
   return file;
 }
 
@@ -146,3 +148,4 @@ async function novoMotoqueiro(phone, n) {
   return api;
 }
 module.exports.novoMotoqueiro = novoMotoqueiro;
+module.exports.cpfValido = cpfValido;

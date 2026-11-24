@@ -88,7 +88,8 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: FakeMapPicker(
+            child: CorridaMapPicker(
+              bottomSpace: 300,
               key: ValueKey(_pickerRound),
               onChanged: _onPointsChanged,
             ),
@@ -99,7 +100,8 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
               // a dica não pode engolir o toque: no celular pequeno ela cobre o alto do mapa
               child: IgnorePointer(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  // sobra espaço em cima para a atribuição do mapa de verdade ("© OpenStreetMap")
+                  padding: const EdgeInsets.fromLTRB(16, 34, 16, 16),
                   child: _Hint(
                     loading: _loading,
                     text: 'Toque para marcar a origem e depois o destino.',

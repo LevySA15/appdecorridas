@@ -80,7 +80,7 @@ class ChargeScreen extends StatelessWidget {
                 child: SelectableText(
                   charge.brCode,
                   minLines: 1,
-                maxLines: 4,
+                  maxLines: 4,
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
                 ),
               ),

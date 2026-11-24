@@ -157,7 +157,8 @@ class _RideScreenState extends State<RideScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: FakeMapView(
+            child: CorridaMapView(
+              bottomSpace: 380,
               markers: [
                 MapMarker(MarkerKind.pickup, ride.pickup),
                 MapMarker(MarkerKind.destination, ride.destination),

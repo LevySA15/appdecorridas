@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Os dois apps dentro do navegador, para conferir as telas e o fluxo sem celular (só desenvolvimento).
 #
-#   tool/web.sh build [passenger|rider]   gera os apps para a web (perfil, não release: o release recusa http)
+#   tool/web.sh build [passenger|rider]   gera os apps para a web (perfil, não release: o release recusa http);
+#                                         `MAP=osm tool/web.sh build` usa as ruas de verdade (precisa de internet), o padrão é o mapa de mentira
 #   tool/web.sh up                        servidor descartável (8100) + passageiro (8081) + motoqueiro (8082)
 #   tool/web.sh down                      derruba tudo e apaga o banco descartável
 #   tool/web.sh status
@@ -20,7 +21,7 @@ export PATH="$HOME/development/flutter/bin:$PATH"
 build() {
   local app
   for app in ${1:-passenger rider}; do
-    (cd "$AQUI/apps/$app" && nice -n 10 flutter build web --profile --dart-define="API_URL=http://127.0.0.1:$API_PORT")
+    (cd "$AQUI/apps/$app" && nice -n 10 flutter build web --profile --dart-define="API_URL=http://127.0.0.1:$API_PORT" --dart-define="MAP=${MAP:-fake}")
   done
 }
 

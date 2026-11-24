@@ -80,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          const Positioned.fill(child: FakeMapView(markers: [])),
+          const Positioned.fill(child: CorridaMapView(markers: [])),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(16),
