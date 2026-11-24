@@ -16,7 +16,8 @@ Future<bool> dialNumber(
   Future<bool> Function(Uri uri)? launch,
 }) async {
   final open =
-      launch ?? (Uri uri) => launchUrl(uri, mode: LaunchMode.externalApplication);
+      launch ??
+      (Uri uri) => launchUrl(uri, mode: LaunchMode.externalApplication);
   try {
     return await open(dialUri(number));
   } on Object {

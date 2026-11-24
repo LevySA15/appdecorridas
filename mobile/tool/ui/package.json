@@ -1,0 +1,8 @@
+{
+  "name": "corrida-ui-cenarios",
+  "private": true,
+  "description": "Cenários que abrem os apps Flutter (versão web) num navegador sem janela e fotografam as telas. Ver docs/navegador.md.",
+  "dependencies": {
+    "playwright-core": "1.61.1"
+  }
+}

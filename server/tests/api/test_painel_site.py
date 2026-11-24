@@ -450,3 +450,22 @@ def test_todo_estado_de_corrida_do_servidor_tem_nome_no_painel():
     bloco = fonte[fonte.index("const ESTADOS_DA_CORRIDA"): fonte.index("const FORMAS_DE_PAGAMENTO")]
     faltam = [e.value for e in RideState if e.value not in bloco]
     assert faltam == [], f"estado sem nome em português no painel: {faltam}"
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node para rodar as funções do painel")
+def test_paginas_da_lista_andam_de_50_em_50_e_so_aparecem_quando_precisa():
+    codigo = f"""
+global.document = undefined; global.sessionStorage = {{ getItem: () => 't', setItem() {{}}, removeItem() {{}} }};
+const p = require({str(JS)!r});
+const poucos = p.rodapeDePaginas('corridas', 10);          // primeira página com menos de 50: sem rodapé
+p.paginas.corridas = 2;
+const meio = p.rodapeDePaginas('corridas', 50);            // página 3, cheia: tem "Próxima" ligada
+const fim = p.rodapeDePaginas('corridas', 7);              // última página: "Próxima" desligada
+console.log(JSON.stringify({{ poucos, deslocamento: p.deslocamento('corridas'), meioProx: /Próxima/.test(meio) && !/Próxima<\\/button>/.test('') , meioPagina: /página 3/.test(meio),
+  meioProximaLigada: !/data-act="pagina-proxima"[^>]*disabled/.test(meio), fimProximaDesligada: /data-act="pagina-proxima"[^>]*disabled/.test(fim) }}));
+"""
+    saida = subprocess.run(["node", "-e", codigo], capture_output=True, text=True)
+    assert saida.returncode == 0, saida.stderr
+    r = json.loads(saida.stdout.strip())
+    assert r["poucos"] == "" and r["deslocamento"] == 100
+    assert r["meioPagina"] and r["meioProximaLigada"] and r["fimProximaDesligada"]

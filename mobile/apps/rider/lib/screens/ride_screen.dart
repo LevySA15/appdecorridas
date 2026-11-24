@@ -230,13 +230,16 @@ class _RideScreenState extends State<RideScreen> {
         title: const Text('Corrida'),
         // sempre à vista: numa emergência ninguém vai rolar a tela atrás do botão
         actions: [
-          TextButton(
+          // vermelho cheio e com folga da borda: é o botão que ninguém pode errar de achar
+          FilledButton(
             onPressed: _sos,
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              minimumSize: const Size(0, 36),
             ),
             child: const Text('SOS'),
           ),
+          const SizedBox(width: 12),
         ],
       ),
       body: ListView(

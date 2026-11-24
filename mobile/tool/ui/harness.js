@@ -116,3 +116,33 @@ async function pessoa(phone, role) {
 }
 module.exports.admin = admin;
 module.exports.pessoa = pessoa;
+
+// ---- motoqueiro novo e aprovado, tudo pela API (para os cenários não dependerem de sobras de outros) ----
+const CPFS = ['52998224725', '11144477735', '39053344705', '86288366757', '71428793860', '48839476820', '12345678909', '45317828791', '98765432100'];
+function cpfValido(n) { // gera um CPF válido a partir de n (para cada motoqueiro de teste ter o seu)
+  const base = String(100000000 + (n * 7919) % 899999999).slice(0, 9).split('').map(Number);
+  const dv = (arr) => { let s = arr.reduce((a, d, i) => a + d * (arr.length + 1 - i), 0); const r = (s * 10) % 11; return r === 10 ? 0 : r; };
+  const d1 = dv(base); const d2 = dv([...base, d1]);
+  return [...base, d1, d2].join('');
+}
+async function novoMotoqueiro(phone, n) {
+  const fs = require('fs'); const pth = require('path');
+  const foto = fs.readFileSync(pth.join(__dirname, 'foto-teste.png'));
+  const api = await pessoa(phone, 'rider');
+  const keys = {};
+  for (const kind of ['selfie', 'cnh', 'crlv']) {
+    const r = await fetch(`${API}/v1/rider/documents/${kind}`, { method: 'PUT', headers: { authorization: `Bearer ${api.token}`, 'content-type': 'image/png' }, body: foto });
+    keys[kind] = (await r.json()).key;
+  }
+  const reg = await api.call('POST', '/v1/rider/register', {
+    name: `Moto ${n}`, cpf: cpfValido(n), cnh_number: String(10000000000 + n), plate: `ABC${n % 10}D${String(10 + (n % 90))}`, moto_model: 'Honda CG 160',
+    selfie_key: keys.selfie, cnh_photo_key: keys.cnh, crlv_key: keys.crlv, cnh_expires_on: '2030-12-31', crlv_expires_on: '2030-12-31',
+  });
+  const adm = await admin();
+  const lista = await adm.call('GET', '/v1/admin/riders?status=pending&limit=200');
+  const achou = (Array.isArray(lista) ? lista : []).find((r) => String(r.phone).endsWith(phone.slice(-8)));
+  if (!achou) throw new Error('cadastro não achado: ' + JSON.stringify(reg).slice(0, 200));
+  await adm.call('POST', `/v1/admin/riders/${achou.rider_id}/approve`, {});
+  return api;
+}
+module.exports.novoMotoqueiro = novoMotoqueiro;

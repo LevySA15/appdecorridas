@@ -90,6 +90,24 @@ def test_busca_de_passageiros_por_nome_e_telefone(client, pax, admin):
         assert len(client.get("/v1/admin/passengers", params={"q": busca}, headers=admin.headers).json()) == achou
 
 
+@pytest.mark.parametrize(
+    "busca, achou",
+    [
+        ("75 99999-0001", 1),        # o telefone como o dono copia dele (com espaço e traço)
+        ("(75) 99999-0001", 1),
+        ("+55 75 99999-0001", 1),
+        ("75 99999-0002", 0),
+        ("%", 0),                    # coringa do SQL não casa tudo: é só o texto "%"
+        ("_", 0),
+        ("an%", 0),
+        ("Ana L", 1),
+    ],
+)
+def test_busca_de_passageiros_entende_telefone_formatado_e_nao_trata_coringa_como_coringa(client, pax, admin, busca, achou):
+    achados = client.get("/v1/admin/passengers", params={"q": busca}, headers=admin.headers).json()
+    assert len(achados) == achou, busca
+
+
 def test_devedores_listam_motoqueiro_com_divida_e_passageiro_com_pendencia(client, pax, rider, admin, clock, runtime, session):
     assert client.get("/v1/admin/debtors", headers=admin.headers).json() == {"riders": [], "passengers": []}
     cancelada_tarde(client, pax, rider, clock, runtime)

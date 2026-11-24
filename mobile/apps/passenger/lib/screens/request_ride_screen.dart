@@ -96,11 +96,14 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
           if (quote == null)
             Align(
               alignment: Alignment.topCenter,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: _Hint(
-                  loading: _loading,
-                  text: 'Toque para marcar a origem e depois o destino.',
+              // a dica não pode engolir o toque: no celular pequeno ela cobre o alto do mapa
+              child: IgnorePointer(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _Hint(
+                    loading: _loading,
+                    text: 'Toque para marcar a origem e depois o destino.',
+                  ),
                 ),
               ),
             )

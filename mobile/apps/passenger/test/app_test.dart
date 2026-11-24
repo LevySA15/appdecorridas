@@ -457,8 +457,22 @@ void main() {
 
     await tester.tap(find.text('Perfil'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Sair'));
-    await tester.tap(find.text('Sair'));
+    // a lista só monta o que cabe na tela: no celular pequeno o "Sair" fica mais embaixo
+    final sair = find.descendant(
+      of: find.byType(ProfileScreen),
+      matching: find.text('Sair'),
+    );
+    await tester.scrollUntilVisible(
+      sair,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ProfileScreen),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(sair);
     // o fechamento do tempo real tem um prazo de verdade (`.timeout`): dá tempo real, como nos outros testes
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(seconds: 3)),

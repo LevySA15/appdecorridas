@@ -245,14 +245,15 @@ class TripService:
         if not 1 <= stars <= 5:
             raise ValueError("A nota vai de 1 a 5.")
         ride = repo.get_ride(session, ride_id)
-        if ride.state is not RideState.COMPLETED:
-            raise InvalidTransition("Só dá para avaliar depois que a corrida acaba.")
+        # primeiro quem é (de fora não descobre em que estado a corrida dos outros está), depois o estado
         if user_id == ride.passenger_id:
             to_user = ride.rider_id
         elif user_id == ride.rider_id:
             to_user = ride.passenger_id
         else:
             raise NotYourRide("Essa corrida não é sua.")
+        if ride.state is not RideState.COMPLETED:
+            raise InvalidTransition("Só dá para avaliar depois que a corrida acaba.")
         try:
             with session.begin_nested():
                 session.add(

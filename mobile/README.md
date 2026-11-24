@@ -36,6 +36,10 @@ roda uma sequência inteira (cadastro e aprovação do motoqueiro, corrida com P
 saque) pelo cliente Dart e derruba o servidor. Precisa do PostgreSQL, do Redis e da `.venv` do servidor (ver `server/README.md`).
 Se o contrato quebrar, o pacote e o servidor se afastaram: corrija o lado errado e a `docs/api-v1.md`.
 
+## Ver os apps no navegador
+
+Para conferir telas e o fluxo de uma corrida sem celular: `tool/web.sh build` e `tool/web.sh up`, e os cenários de `tool/ui/` (fotografam as telas). Passo a passo em [`docs/navegador.md`](../docs/navegador.md).
+
 ## GPS do motoqueiro (plano 5D)
 
 O app do motoqueiro tem dois modos de posição:

@@ -721,9 +721,16 @@ def list_passengers(session: Session, q: str | None, limit: int, offset: int) ->
         .limit(limit)
         .offset(offset)
     )
-    if q:
-        like = f"%{q.strip()}%"
-        stmt = stmt.where(UserRow.name.ilike(like) | UserRow.phone.like(like))
+    texto = (q or "").strip()
+    if texto:
+        # `%` e `_` digitados são letras comuns (não coringa); o telefone casa só pelos números, do jeito que o
+        # dono o copia ("75 99999-0001", "(75) 99999-0001", "+55 75 99999-0001").
+        escapado = texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        condicao = UserRow.name.ilike(f"%{escapado}%", escape="\\")
+        numeros = "".join(c for c in texto if c.isdigit())
+        if numeros:
+            condicao = condicao | UserRow.phone.like(f"%{numeros}%")
+        stmt = stmt.where(condicao)
     return [
         {
             "user_id": u.id, "name": u.name, "phone": u.phone, "is_blocked": u.is_blocked,

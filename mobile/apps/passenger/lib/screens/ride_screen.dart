@@ -76,8 +76,8 @@ class _RideScreenState extends State<RideScreen> {
     try {
       final result = await widget.onSos();
       _showMessage(
-        'Emergência: ${result.emergencyNumber}. '
-        '${result.contactNotified ? 'Contato avisado.' : 'Contato não avisado.'}',
+        'Avisamos a central. Se estiver em perigo, ligue ${result.emergencyNumber}. '
+        '${result.contactNotified ? 'Seu contato de emergência foi avisado.' : 'Cadastre um contato de emergência no Perfil para avisarmos alguém.'}',
       );
     } on Exception catch (error) {
       _showMessage(_messageOf(error));
@@ -142,13 +142,16 @@ class _RideScreenState extends State<RideScreen> {
         title: const Text('Sua corrida'),
         // sempre à vista: numa emergência ninguém vai rolar a tela atrás do botão
         actions: [
-          TextButton(
+          // vermelho cheio e com folga da borda: é o botão que ninguém pode errar de achar
+          FilledButton(
             onPressed: _sos,
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              minimumSize: const Size(0, 36),
             ),
             child: const Text('SOS'),
           ),
+          const SizedBox(width: 12),
         ],
       ),
       body: Stack(

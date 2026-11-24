@@ -52,6 +52,28 @@ class StatusScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Center(
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: registration.status == RegistrationStatus.blocked
+                      ? corridaAccent
+                      : Theme.of(context).colorScheme.surfaceContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  registration.status == RegistrationStatus.blocked
+                      ? Icons.lock_outline_rounded
+                      : Icons.hourglass_top_rounded,
+                  size: 36,
+                  color: registration.status == RegistrationStatus.blocked
+                      ? corridaOnAccent
+                      : Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
             for (final line in lines)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),

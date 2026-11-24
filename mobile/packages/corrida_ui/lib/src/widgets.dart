@@ -24,11 +24,17 @@ class SheetCard extends StatelessWidget {
           ),
         ],
       ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-          child: child,
+      // celular pequeno ou letra grande: a folha nunca passa de 80% da tela, o resto rola
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            child: child,
+          ),
         ),
       ),
     );
@@ -126,7 +132,14 @@ class InfoPill extends StatelessWidget {
             Icon(icon, size: 16, color: scheme.onSurfaceVariant),
             const SizedBox(width: 6),
           ],
-          Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
         ],
       ),
     );
@@ -134,16 +147,48 @@ class InfoPill extends StatelessWidget {
 }
 
 /// Aviso com tarja vermelha na esquerda e texto dizendo o que houve (o vermelho nunca vai sozinho: spec, seção 11).
+/// O botão fica ao lado do texto; em tela estreita (ou letra grande) desce para baixo do texto.
 class NoticeCard extends StatelessWidget {
-  const NoticeCard({required this.title, this.body, this.action, super.key});
+  const NoticeCard({
+    this.title,
+    this.body,
+    this.children,
+    this.action,
+    super.key,
+  }) : assert(
+         title != null || children != null,
+         'precisa de um título ou de linhas próprias',
+       );
 
-  final String title;
+  final String? title;
   final String? body;
+
+  /// Linhas próprias no lugar do título e do texto (ex.: vários avisos de documento).
+  final List<Widget>? children;
   final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final text = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children:
+          children ??
+          [
+            Text(
+              title!,
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+            ),
+            if (body != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  body!,
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+              ),
+          ],
+    );
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainer,
@@ -151,32 +196,26 @@ class NoticeCard extends StatelessWidget {
         border: const Border(left: BorderSide(color: corridaAccent, width: 5)),
       ),
       padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final action = this.action;
+          if (action == null) return text;
+          final scaled = MediaQuery.textScalerOf(context).scale(16) / 16;
+          final narrow = constraints.maxWidth < 330 || scaled > 1.2;
+          if (narrow) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
-                if (body != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      body!,
-                      style: TextStyle(color: scheme.onSurfaceVariant),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (action != null) ...[const SizedBox(width: 8), action!],
-        ],
+              children: [text, const SizedBox(height: 10), action],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: text),
+              const SizedBox(width: 8),
+              action,
+            ],
+          );
+        },
       ),
     );
   }

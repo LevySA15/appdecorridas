@@ -28,6 +28,16 @@ const TELAS = {
 };
 let telaAtual = "cadastros";
 let filtros = { cadastros: "pending", corridas: "", passageiros: "" };
+// Listas grandes andam de 50 em 50 (o servidor aceita `limit` e `offset`); mudar o filtro volta para a primeira página.
+const POR_PAGINA = 50;
+const paginas = {};
+function paginaDe(tela) { return paginas[tela] || 0; }
+function deslocamento(tela) { return paginaDe(tela) * POR_PAGINA; }
+function rodapeDePaginas(tela, quantos) {
+  const p = paginaDe(tela);
+  if (p === 0 && quantos < POR_PAGINA) return "";
+  return `<p>${raw(botao("pagina-anterior", tela, "Anterior", "", p === 0 ? "disabled" : ""))} <span class="suave">página ${esc(String(p + 1))}</span> ${raw(botao("pagina-proxima", tela, "Próxima", "", quantos < POR_PAGINA ? "disabled" : ""))}</p>`;
+}
 
 function el(id) { return document.getElementById(id); }
 function aviso(texto, ok) { el("aviso").textContent = texto || ""; el("aviso").className = ok ? "ok" : ""; }
@@ -252,7 +262,7 @@ function campoDoFormulario(nome, info, valor) {
 const VISOES = {
   async cadastros() {
     const estado = filtros.cadastros;
-    const lista = await api("/v1/admin/riders?status=" + encodeURIComponent(estado) + "&limit=100");
+    const lista = await api("/v1/admin/riders?status=" + encodeURIComponent(estado) + "&limit=" + POR_PAGINA + "&offset=" + deslocamento("cadastros"));
     const opcoes = ["pending", "approved", "blocked", "rejected"].map((s) => `<option value="${attr(s)}" ${raw(s === estado ? "selected" : "")}>${esc(s)}</option>`).join("");
     const linhas = lista.map((r) => [
       esc(r.name), esc(r.phone), esc(r.plate + " · " + r.moto_model), esc(situacaoDoCadastro(r)),
@@ -263,27 +273,27 @@ const VISOES = {
         r.status === "blocked" ? botao("rider-unblock", r.rider_id, "Liberar", "bom") : ""].join(" ")),
     ]);
     return `<p>Situação: <select id="filtro-cadastros">${raw(opcoes)}</select></p>` +
-      tabela(["Nome", "Telefone", "Moto", "Situação", "CNH / documento", "Fotos", "Ações"], linhas);
+      tabela(["Nome", "Telefone", "Moto", "Situação", "CNH / documento", "Fotos", "Ações"], linhas) + rodapeDePaginas("cadastros", lista.length);
   },
   async corridas() {
     const estado = filtros.corridas;
-    const lista = await api("/v1/admin/rides?limit=100" + (estado ? "&state=" + encodeURIComponent(estado) : ""));
+    const lista = await api("/v1/admin/rides?limit=" + POR_PAGINA + "&offset=" + deslocamento("corridas") + (estado ? "&state=" + encodeURIComponent(estado) : ""));
     const opcoes = ["", "searching", "accepted", "arrived", "in_progress", "completed", "cancelled", "no_rider"].map((s) => `<option value="${attr(s)}" ${raw(s === estado ? "selected" : "")}>${esc(s ? estadoDaCorrida(s) : "todas")}</option>`).join("");
     const linhas = lista.map((r) => [
       esc(when(r.created_at)), esc(estadoDaCorrida(r.state)), esc(formaDePagamento(r.method)), esc(money(r.price_cents)), esc(r.passenger_name), esc(r.rider_name || "–"),
       esc(r.pickup_text + " → " + r.dest_text), raw(botao("ride-detail", r.ride_id, "Detalhe")),
     ]);
     return `<p>Estado: <select id="filtro-corridas">${raw(opcoes)}</select></p>` +
-      tabela(["Quando", "Estado", "Pagamento", "Preço", "Passageiro", "Motoqueiro", "Trajeto", ""], linhas);
+      tabela(["Quando", "Estado", "Pagamento", "Preço", "Passageiro", "Motoqueiro", "Trajeto", ""], linhas) + rodapeDePaginas("corridas", lista.length);
   },
   async passageiros() {
-    const lista = await api("/v1/admin/passengers?limit=100&q=" + encodeURIComponent(filtros.passageiros));
+    const lista = await api("/v1/admin/passengers?limit=" + POR_PAGINA + "&offset=" + deslocamento("passageiros") + "&q=" + encodeURIComponent(filtros.passageiros));
     const linhas = lista.map((p) => [
       esc(p.name), esc(p.phone), esc(p.is_blocked ? "bloqueado" : "ok"), esc(money(p.unpaid_cents)), esc(money(p.balance_cents)),
       raw(p.is_blocked ? botao("passenger-unblock", p.user_id, "Liberar", "bom") : botao("passenger-block", p.user_id, "Bloquear", "perigo")),
     ]);
     return `<p>Buscar: <input id="busca-passageiros" value="${attr(filtros.passageiros)}"> <button id="buscar-passageiros">Buscar</button></p>` +
-      tabela(["Nome", "Telefone", "Situação", "Deve", "Saldo", "Ações"], linhas);
+      tabela(["Nome", "Telefone", "Situação", "Deve", "Saldo", "Ações"], linhas) + rodapeDePaginas("passageiros", lista.length);
   },
   async dinheiro() {
     const d = await api("/v1/admin/money");
@@ -476,6 +486,10 @@ async function aoClicar(evento) {
   aviso("");
   try {
     if (act === "doc") return await abrirDocumento(id, kind);
+    if (act === "pagina-anterior" || act === "pagina-proxima") {
+      paginas[id] = Math.max(0, paginaDe(id) + (act === "pagina-proxima" ? 1 : -1));
+      return await mostrar(telaAtual);
+    }
     if (act === "ride-detail") {
       const d = await api("/v1/admin/rides/" + encodeURIComponent(id));
       el("detalhe").hidden = false; el("detalhe").textContent = JSON.stringify(d, null, 2);
@@ -489,8 +503,8 @@ async function aoClicar(evento) {
 }
 
 function aoMudar(evento) {
-  if (evento.target.id === "filtro-cadastros") { filtros.cadastros = evento.target.value; mostrar("cadastros"); }
-  if (evento.target.id === "filtro-corridas") { filtros.corridas = evento.target.value; mostrar("corridas"); }
+  if (evento.target.id === "filtro-cadastros") { filtros.cadastros = evento.target.value; paginas.cadastros = 0; mostrar("cadastros"); }
+  if (evento.target.id === "filtro-corridas") { filtros.corridas = evento.target.value; paginas.corridas = 0; mostrar("corridas"); }
 }
 
 function iniciar() {
@@ -507,10 +521,10 @@ function comecar() {
   el("alerta-vivo").onclick = () => { const tela = telaDoAviso; limparAviso(); mostrar(tela); };
   el("menu").onclick = (e) => { const b = e.target.closest("button[data-tela]"); if (b) mostrar(b.dataset.tela); };
   el("tela").addEventListener("click", (e) => {
-    if (e.target.id === "buscar-passageiros") { filtros.passageiros = el("busca-passageiros").value; mostrar("passageiros"); }
+    if (e.target.id === "buscar-passageiros") { filtros.passageiros = el("busca-passageiros").value; paginas.passageiros = 0; mostrar("passageiros"); }
   });
   if (sessionStorage.getItem(TOKEN_KEY)) iniciar(); else mostrarEntrada();
 }
 
 if (typeof document !== "undefined") comecar();
-if (typeof module !== "undefined") module.exports = { esc, attr, money, when, aoClicar, ACOES, CANCELADO, TELAS, VISOES, PARAMETROS, paraCampo, doCampo, coletarBloco, mostrar, descreverAviso, conectarAvisos, aoAviso, limparAviso, situacaoDoCadastro, tipoDoAlerta, fotosDoCadastro, estadoDaCorrida, formaDePagamento };
+if (typeof module !== "undefined") module.exports = { esc, attr, money, when, aoClicar, ACOES, CANCELADO, TELAS, VISOES, PARAMETROS, paraCampo, doCampo, coletarBloco, mostrar, descreverAviso, conectarAvisos, aoAviso, limparAviso, situacaoDoCadastro, tipoDoAlerta, fotosDoCadastro, estadoDaCorrida, formaDePagamento, rodapeDePaginas, deslocamento, paginas };

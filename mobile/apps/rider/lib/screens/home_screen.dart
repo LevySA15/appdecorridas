@@ -126,41 +126,35 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           if (account?.blockedReason == 'entry_pending')
-            Card(
-              child: ListTile(
-                title: Text(
+            NoticeCard(
+              title:
                   'Você fez as ${account!.trialRides} corridas de teste. '
                   'Pague a entrada de ${brl(account.entryFeeCents)} para continuar.',
-                ),
-                trailing: FilledButton(
-                  onPressed: _busy
-                      ? null
-                      : () => _showCharge(widget.onPayEntry),
-                  child: const Text('Pagar entrada'),
-                ),
+              action: FilledButton(
+                onPressed: _busy ? null : () => _showCharge(widget.onPayEntry),
+                child: const Text('Pagar entrada'),
               ),
             ),
           if (account?.blockedReason == 'debt_pending')
-            Card(
-              child: ListTile(
-                title: Text('Taxa a pagar: ${brl(account!.debtToPayCents)}'),
-                trailing: FilledButton(
-                  onPressed: _busy ? null : () => _showCharge(widget.onPayDebt),
-                  child: const Text('Pagar taxa'),
-                ),
+            NoticeCard(
+              title: 'Taxa a pagar: ${brl(account!.debtToPayCents)}',
+              action: FilledButton(
+                onPressed: _busy ? null : () => _showCharge(widget.onPayDebt),
+                child: const Text('Pagar taxa'),
               ),
             ),
           if (warnings.isNotEmpty)
-            Card(
-              child: ListTile(
-                title: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [for (final line in warnings) Text(line)],
-                ),
-                trailing: FilledButton(
-                  onPressed: widget.onRenewDocuments,
-                  child: const Text('Enviar novo'),
-                ),
+            NoticeCard(
+              children: [
+                for (final line in warnings)
+                  Text(
+                    line,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+              ],
+              action: FilledButton(
+                onPressed: widget.onRenewDocuments,
+                child: const Text('Enviar novo'),
               ),
             ),
           // sem estar rodando a oferta pendente já não vale (aceitar dá 409): não aparece
@@ -173,13 +167,11 @@ class _HomeScreenState extends State<HomeScreen> {
               onDecline: () => widget.onDeclineOffer(offer.rideId),
             ),
           if (state.ride != null)
-            Card(
-              child: ListTile(
-                title: const Text('Corrida em andamento'),
-                trailing: FilledButton(
-                  onPressed: widget.onOpenRide,
-                  child: const Text('Abrir corrida'),
-                ),
+            NoticeCard(
+              title: 'Corrida em andamento',
+              action: FilledButton(
+                onPressed: widget.onOpenRide,
+                child: const Text('Abrir corrida'),
               ),
             ),
           if (state.queuedRide != null)
