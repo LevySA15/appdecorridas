@@ -24,11 +24,19 @@ class OsmMapView extends StatefulWidget {
     this.onTap,
     this.bottomSpace = 0,
     this.tileProvider,
+    this.focus,
+    this.interactive = true,
     super.key,
   });
 
+  /// `false` para miniatura dentro de lista: o toque não mexe no mapa (senão brigaria com a rolagem da tela).
+  final bool interactive;
+
   final List<MapMarker> markers;
   final ValueChanged<Place>? onTap;
+
+  /// Quando muda para um ponto novo, a câmera vai até ele (ex.: "estou aqui" achou a posição da pessoa).
+  final Place? focus;
 
   /// Espaço (em pontos) que a folha de baixo cobre: a câmera enquadra os marcadores na parte que sobra.
   final double bottomSpace;
@@ -48,6 +56,14 @@ class _OsmMapViewState extends State<OsmMapView> {
   void didUpdateWidget(covariant OsmMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_sameMarkers(oldWidget.markers, widget.markers)) _frame();
+    final focus = widget.focus;
+    if (focus != null && focus != oldWidget.focus && _ready) {
+      try {
+        _controller.move(_latLng(focus), 16);
+      } on Object {
+        // mapa ainda sem tamanho: o próximo quadro acerta
+      }
+    }
   }
 
   @override
@@ -108,8 +124,10 @@ class _OsmMapViewState extends State<OsmMapView> {
             ? null
             : (_, point) =>
                   onTap(Place(lat: point.latitude, lng: point.longitude)),
-        interactionOptions: const InteractionOptions(
-          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+        interactionOptions: InteractionOptions(
+          flags: widget.interactive
+              ? InteractiveFlag.all & ~InteractiveFlag.rotate
+              : InteractiveFlag.none,
         ),
       ),
       children: [
@@ -258,12 +276,16 @@ class OsmMapPicker extends StatefulWidget {
     required this.onChanged,
     this.bottomSpace = 0,
     this.tileProvider,
+    this.pickup,
     super.key,
   });
 
   final void Function(Place? pickup, Place? destination) onChanged;
   final double bottomSpace;
   final TileProvider? tileProvider;
+
+  /// Quando muda para um ponto novo, ele vira o embarque (e o destino marcado antes sai).
+  final Place? pickup;
 
   @override
   State<OsmMapPicker> createState() => _OsmMapPickerState();
@@ -272,6 +294,32 @@ class OsmMapPicker extends StatefulWidget {
 class _OsmMapPickerState extends State<OsmMapPicker> {
   Place? _pickup;
   Place? _destination;
+
+  @override
+  void initState() {
+    super.initState();
+    _pickup = widget.pickup;
+    if (_pickup != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => widget.onChanged(_pickup, _destination),
+      );
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant OsmMapPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final novo = widget.pickup;
+    if (novo != null && novo != oldWidget.pickup) {
+      setState(() {
+        _pickup = novo;
+        _destination = null;
+      });
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => widget.onChanged(_pickup, _destination),
+      );
+    }
+  }
 
   void _tap(Place place) {
     setState(() {
@@ -289,6 +337,7 @@ class _OsmMapPickerState extends State<OsmMapPicker> {
     return OsmMapView(
       bottomSpace: widget.bottomSpace,
       tileProvider: widget.tileProvider,
+      focus: widget.pickup,
       markers: [
         if (_pickup != null) MapMarker(MarkerKind.pickup, _pickup!),
         if (_destination != null)

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:corrida_ui/corrida_ui.dart';
 
 import '../format.dart';
+import '../my_location.dart';
 
 const _labels = {'pix': 'Pix', 'cash': 'Dinheiro', 'balance': 'Saldo'};
 
@@ -12,8 +13,16 @@ class RequestRideScreen extends StatefulWidget {
   const RequestRideScreen({
     required this.onQuote,
     required this.onConfirm,
+    this.myLocation,
+    this.engine,
     super.key,
   });
+
+  /// Com isto o mapa ganha o botão "Estou aqui" (o embarque vira a posição do celular). `null` esconde o botão.
+  final MyLocation? myLocation;
+
+  /// Só para teste: força o motor do mapa.
+  final MapEngine? engine;
 
   final Future<Quote> Function(Place pickup, Place destination) onQuote;
   final Future<void> Function(String quoteId, String method) onConfirm;
@@ -27,6 +36,28 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
   String? _method;
   var _loading = false;
   var _pickerRound = 0; // muda para o mapa recomeçar sem os pontos antigos
+  Place? _myPlace; // onde a pessoa disse "estou aqui"
+  var _locating = false;
+
+  Future<void> _useMyLocation() async {
+    final source = widget.myLocation;
+    if (source == null || _locating) return;
+    setState(() => _locating = true);
+    try {
+      final place = await source.current();
+      if (!mounted) return;
+      setState(() {
+        _myPlace = place;
+        _quote = null; // um embarque novo pede cotação nova
+      });
+    } on MyLocationUnavailable catch (error) {
+      _showError(error.message);
+    } on Exception catch (error) {
+      _showError(_messageOf(error));
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
 
   String _messageOf(Object error) => switch (error) {
     ApiException(message: final message) => message,
@@ -89,6 +120,8 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
         children: [
           Positioned.fill(
             child: CorridaMapPicker(
+              engine: widget.engine,
+              pickup: _myPlace,
               bottomSpace: 300,
               key: ValueKey(_pickerRound),
               onChanged: _onPointsChanged,
@@ -113,6 +146,26 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
             Align(
               alignment: Alignment.bottomCenter,
               child: SheetCard(child: _buildCotado(quote)),
+            ),
+          if (quote == null && widget.myLocation != null)
+            Positioned(
+              right: 16,
+              bottom: 24,
+              child: SafeArea(
+                child: FloatingActionButton.extended(
+                  onPressed: _locating ? null : _useMyLocation,
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
+                  icon: _locating
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.my_location_rounded),
+                  label: const Text('Estou aqui'),
+                ),
+              ),
             ),
         ],
       ),

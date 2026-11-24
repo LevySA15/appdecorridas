@@ -4,6 +4,7 @@ import 'package:corrida_core/corrida_core.dart';
 import 'package:corrida_ui/corrida_ui.dart';
 import 'package:flutter/material.dart';
 
+import 'my_location.dart';
 import 'passenger_controller.dart';
 import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
@@ -138,6 +139,10 @@ class _SignedInShellState extends State<SignedInShell> {
     _navigatorKey.currentState!.push(
       MaterialPageRoute(
         builder: (_) => RequestRideScreen(
+          // "Estou aqui" só com o mapa de verdade: no desenho de mentira a posição do celular não cai na cidade dele
+          myLocation: defaultMapEngine == MapEngine.osm
+              ? const GeolocatorMyLocation()
+              : null,
           onQuote: widget.controller.quote,
           onConfirm: (quoteId, method) async {
             await widget.controller.requestRide(

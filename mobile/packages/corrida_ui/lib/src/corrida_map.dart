@@ -24,12 +24,16 @@ class CorridaMapView extends StatelessWidget {
     required this.markers,
     this.onTap,
     this.bottomSpace = 0,
+    this.interactive = true,
     this.engine,
     super.key,
   });
 
   final List<MapMarker> markers;
   final ValueChanged<Place>? onTap;
+
+  /// `false` para miniatura numa lista (o mapa de verdade não reage ao dedo).
+  final bool interactive;
 
   /// Quanto da parte de baixo a folha de controles cobre (o mapa de verdade enquadra os marcadores acima dela).
   final double bottomSpace;
@@ -38,7 +42,12 @@ class CorridaMapView extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       (engine ?? defaultMapEngine) == MapEngine.osm
-      ? OsmMapView(markers: markers, onTap: onTap, bottomSpace: bottomSpace)
+      ? OsmMapView(
+          markers: markers,
+          onTap: onTap,
+          bottomSpace: bottomSpace,
+          interactive: interactive,
+        )
       : FakeMapView(markers: markers, onTap: onTap);
 }
 
@@ -47,17 +56,25 @@ class CorridaMapPicker extends StatelessWidget {
   const CorridaMapPicker({
     required this.onChanged,
     this.bottomSpace = 0,
+    this.pickup,
     this.engine,
     super.key,
   });
 
   final void Function(Place? pickup, Place? destination) onChanged;
   final double bottomSpace;
+
+  /// Quando muda para um ponto novo, ele vira o embarque ("estou aqui").
+  final Place? pickup;
   final MapEngine? engine;
 
   @override
   Widget build(BuildContext context) =>
       (engine ?? defaultMapEngine) == MapEngine.osm
-      ? OsmMapPicker(onChanged: onChanged, bottomSpace: bottomSpace)
-      : FakeMapPicker(onChanged: onChanged);
+      ? OsmMapPicker(
+          onChanged: onChanged,
+          bottomSpace: bottomSpace,
+          pickup: pickup,
+        )
+      : FakeMapPicker(onChanged: onChanged, pickup: pickup);
 }

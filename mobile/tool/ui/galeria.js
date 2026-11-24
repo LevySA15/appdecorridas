@@ -22,7 +22,7 @@ const waitText = (page, re, ms = 30000) => page.waitForFunction((src) => {
   const foto = async (ctx, who, name) => { await ctx.page.waitForTimeout(500); await h.shot(ctx.page, `${who}-${tag}-${name}`); };
 
   // ---------- passageiro: entrar ----------
-  const P = await h.phone(b, { dark, url: APP_P });
+  const P = await h.phone(b, { dark, url: APP_P, permissions: ['geolocation'] });
   await P.page.waitForTimeout(1200);
   await foto(P, 'p', '01-entrar');
   await h.type(P.page, 'Telefone', PAX);
@@ -81,10 +81,14 @@ const waitText = (page, re, ms = 30000) => page.waitForFunction((src) => {
   // ---------- passageiro pede (Pix) ----------
   await h.tap(P.page, 'Pedir corrida', { exact: true });
   await P.page.waitForTimeout(1500);
+  await P.page.waitForTimeout(2500);   // os ladrilhos do mapa chegam da internet
   await foto(P, 'p', '05-marcar-no-mapa');
-  await h.tapAt(P.page, 150, 330);
-  await h.tapAt(P.page, 260, 450);
+  await h.tap(P.page, 'Estou aqui');
+  await P.page.waitForTimeout(2500);
+  await foto(P, 'p', '05b-estou-aqui');
+  await h.tapAt(P.page, 330, 600);
   await waitText(P.page, /Pedir corrida/);
+  await P.page.waitForTimeout(2500);
   await foto(P, 'p', '06-cotacao');
   await h.tap(P.page, 'Pix');
   await h.tap(P.page, 'Pedir corrida', { exact: true });

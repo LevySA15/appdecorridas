@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:corrida_core/corrida_core.dart';
 import 'package:flutter/material.dart';
+import 'package:corrida_ui/corrida_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rider/screens/offer_card.dart';
 
@@ -204,5 +205,31 @@ void main() {
     );
     pronto.complete();
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('oferta com os dois pontos mostra o trajeto numa miniatura', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(
+        Offer(
+          rideId: 'r1',
+          priceCents: 700,
+          paymentMethod: 'cash',
+          pickup: const Place(lat: -12.96, lng: -39.26),
+          destination: const Place(lat: -12.97, lng: -39.25),
+          distanceM: 2300,
+          expiresAt: _agoraSegundos + 10,
+        ),
+      ),
+    );
+
+    expect(find.byType(CorridaMapView), findsOneWidget);
+  });
+
+  testWidgets('oferta sem pontos (0, 0) não desenha mapa', (tester) async {
+    await tester.pumpWidget(_app(_oferta()));
+
+    expect(find.byType(CorridaMapView), findsNothing);
   });
 }

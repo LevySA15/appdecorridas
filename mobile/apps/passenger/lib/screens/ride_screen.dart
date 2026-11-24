@@ -212,8 +212,9 @@ class _RideScreenState extends State<RideScreen> {
                             if (rider.rating != null)
                               InfoPill(
                                 icon: Icons.star_rounded,
-                                text:
-                                    rider.rating!.toStringAsFixed(1).replaceAll('.', ','),
+                                text: rider.rating!
+                                    .toStringAsFixed(1)
+                                    .replaceAll('.', ','),
                               ),
                           ],
                         ),
@@ -250,7 +251,9 @@ class _RideScreenState extends State<RideScreen> {
                               icon: Icons.credit_card_outlined,
                               text: ride.payWithBalance
                                   ? 'Saldo do app'
-                                  : (ride.method == 'cash' ? 'Dinheiro' : 'Pix'),
+                                  : (ride.method == 'cash'
+                                        ? 'Dinheiro'
+                                        : 'Pix'),
                             ),
                         ],
                       ),
@@ -262,7 +265,8 @@ class _RideScreenState extends State<RideScreen> {
                         ),
                       ],
                       // sem QR ainda (o motoqueiro não pediu) não há o que mostrar
-                      if (endPayment != null && endPayment.chargeId != null) ...[
+                      if (endPayment != null &&
+                          endPayment.chargeId != null) ...[
                         const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: () => _showCharge(endPayment.chargeId!),

@@ -9,6 +9,11 @@ import '../format.dart';
 /// Uma oferta de corrida com o contador. O contador é só para mostrar: quem decide se a oferta ainda vale é
 /// o servidor (`409 offer_gone`), então "Aceitar" e "Recusar" ficam ligados mesmo com o tempo esgotado.
 /// Nada aqui aceita ou recusa sozinho.
+/// Só desenha o trajeto quando a oferta traz os dois pontos de verdade (a oferta vazia vem com 0, 0).
+bool _hasRoute(Offer offer) =>
+    (offer.pickup.lat != 0 || offer.pickup.lng != 0) &&
+    (offer.destination.lat != 0 || offer.destination.lng != 0);
+
 class OfferCard extends StatefulWidget {
   const OfferCard({
     required this.offer,
@@ -87,9 +92,8 @@ class _OfferCardState extends State<OfferCard> {
           children: [
             Text(
               brl(offer.priceCents),
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontSize: 40,
-              ),
+              style: Theme.of(context).textTheme.headlineMedium
+                  ?.copyWith(fontSize: 40),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -114,6 +118,23 @@ class _OfferCardState extends State<OfferCard> {
                   ),
               ],
             ),
+            if (_hasRoute(offer)) ...[
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: SizedBox(
+                  height: 140,
+                  child: CorridaMapView(
+                    interactive: false,
+                    bottomSpace: 0,
+                    markers: [
+                      MapMarker(MarkerKind.pickup, offer.pickup),
+                      MapMarker(MarkerKind.destination, offer.destination),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             if (offer.pickup.text.isNotEmpty)
               Text('Embarque: ${offer.pickup.text}'),

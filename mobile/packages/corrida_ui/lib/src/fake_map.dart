@@ -73,9 +73,12 @@ Offset _localFromPlace(Place place, Size size) =>
 /// Desenho esquemático da cidade de mentira: o primeiro toque marca a origem, o segundo marca o destino; tocar
 /// de novo depois dos dois só substitui o destino.
 class FakeMapPicker extends StatefulWidget {
-  const FakeMapPicker({required this.onChanged, super.key});
+  const FakeMapPicker({required this.onChanged, this.pickup, super.key});
 
   final void Function(Place? pickup, Place? destination) onChanged;
+
+  /// Quando muda para um ponto novo, ele vira o embarque (e o destino marcado antes sai).
+  final Place? pickup;
 
   @override
   State<FakeMapPicker> createState() => _FakeMapPickerState();
@@ -84,6 +87,32 @@ class FakeMapPicker extends StatefulWidget {
 class _FakeMapPickerState extends State<FakeMapPicker> {
   Place? _pickup;
   Place? _destination;
+
+  @override
+  void initState() {
+    super.initState();
+    _pickup = widget.pickup;
+    if (_pickup != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => widget.onChanged(_pickup, _destination),
+      );
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant FakeMapPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final novo = widget.pickup;
+    if (novo != null && novo != oldWidget.pickup) {
+      setState(() {
+        _pickup = novo;
+        _destination = null;
+      });
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => widget.onChanged(_pickup, _destination),
+      );
+    }
+  }
 
   void _handleTapDown(TapDownDetails details, Size size) {
     final point = _placeFromLocal(details.localPosition, size);
