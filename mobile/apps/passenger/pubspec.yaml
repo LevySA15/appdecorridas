@@ -16,6 +16,7 @@ dependencies:
     path: ../../packages/corrida_ui
 
 dev_dependencies:
+  flutter_launcher_icons: ^0.14.4
   flutter_test:
     sdk: flutter
   http: ^1.2.0
@@ -24,3 +25,17 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+# Ícone do app (gerado por `dart run flutter_launcher_icons`; as imagens saem de `tool/ui/gerar_icones.js`)
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#D92D27"
+  adaptive_icon_foreground: "assets/icon/icon_fg.png"
+  min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    background_color: "#D92D27"
+    theme_color: "#D92D27"

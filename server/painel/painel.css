@@ -42,4 +42,14 @@ legend { font-weight: 800; padding: 0 8px; }
 .campo textarea { grid-column: 1 / -1; }
 fieldset > button { margin-top: 10px; background: var(--acento); color: var(--no-acento); border-color: var(--acento); border-radius: 99px; }
 pre { white-space: pre-wrap; background: var(--cartao); border: 1px solid var(--linha); border-radius: 14px; padding: 12px; overflow: auto; }
-@media (max-width: 640px) { th:nth-child(n+5), td:nth-child(n+5) { display: none; } main { padding: 12px; } }
+@media (max-width: 720px) {
+  main { padding: 12px; }
+  /* celular: título e "Sair" na primeira linha, abas numa faixa que rola de lado */
+  header { padding: 10px 12px; gap: 8px 12px; }
+  h1 { flex: 1; }
+  nav { order: 3; flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  nav button { flex: none; white-space: nowrap; }
+  /* tabela larga: rola de lado em vez de esconder colunas (o botão "Detalhe" é a última) */
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+  .campo { grid-template-columns: 1fr; }
+}

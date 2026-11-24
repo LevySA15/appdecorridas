@@ -1,11 +1,11 @@
 {
-    "name": "passenger",
-    "short_name": "passenger",
+    "name": "Recôncavo Passageiro",
+    "short_name": "Passageiro",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#D92D27",
+    "theme_color": "#D92D27",
+    "description": "Recôncavo Passageiro: app de corrida por moto no Recôncavo.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

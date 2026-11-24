@@ -29,8 +29,8 @@ A sessão dura 180 dias. `role: "admin"` só entra se o número já foi criado c
 
 | Rota | Corpo | Resposta |
 |---|---|---|
-| `POST /v1/passenger/quotes` | `{"pickup": {lat,lng,text}, "destination": {lat,lng,text}}` | preço: `quote_id, price_cents, reason, distance_m, duration_s, expires_at, pickup, destination, eta_seconds` (estimativa, `null` sem moto livre), `nearby_riders`, `payment_methods` (`["pix","cash"]`, ou só `["cash"]` com o Pix fora do ar; `"balance"` entra no fim quando o saldo cobre o preço inteiro) |
-| `POST /v1/passenger/rides` | `{"quote_id","method": "pix"\|"cash"\|"balance"}` | 201 com a corrida (abaixo). `balance` é uma corrida Pix paga com o saldo (veja "Saldo"); 403 `not_allowed` se o saldo não cobre o preço da cotação ou o recurso está desligado |
+| `POST /v1/passenger/quotes` | `{"pickup": {lat,lng,text}, "destination": {lat,lng,text}}` | preço: `quote_id, price_cents, reason, distance_m, duration_s, expires_at, pickup, destination, eta_seconds` (estimativa, `null` sem moto livre), `nearby_riders`, `payment_methods` (`["pix","cash"]`, ou só `["cash"]` com o Pix fora do ar; `"balance"` entra no fim quando o saldo cobre o preço inteiro). **429** `too_many_requests` depois de 20 cotações no mesmo minuto (por passageiro; protege o mapa pago) |
+| `POST /v1/passenger/rides` | `{"quote_id","method": "pix"\|"cash"\|"balance"}` | 201 com a corrida (abaixo). `balance` é uma corrida Pix paga com o saldo (veja "Saldo"); 403 `not_allowed` se o saldo não cobre o preço da cotação ou o recurso está desligado; **429** `too_many_requests` depois de 8 pedidos no mesmo minuto |
 | `POST /v1/passenger/rides/{id}/cancel` | | `{"refund", "fee_cents", "fee", "refund_to", "balance_cents"}` (veja "Cancelamento tardio" abaixo) |
 | `POST /v1/passenger/fees/pay` | | paga a taxa de cancelamento pendente: `{"paid": true}` se o saldo cobriu tudo, senão `{"paid": false, "charge_id","amount_cents","br_code"}` (Pix do valor inteiro). 409 `nothing_to_pay` |
 | `POST /v1/passenger/rides/{id}/fee/appeal` | `{"text"}` (3 a 500 letras) | 204. 404 sem taxa; 403 `not_your_ride`; 409 `appeal_not_allowed` (já pedido ou passou de 7 dias) |

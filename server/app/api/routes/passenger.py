@@ -11,10 +11,20 @@ from app.api.schemas import PlaceIn
 from app.api.views import passenger_history, passenger_ride_view, passenger_state, quote_view
 from app.db import repositories as repo
 from app.domain.types import PaymentMethod
-from app.services.auth import AuthUser, normalize_phone
+from app.services.auth import AuthUser, TooManyRequests, normalize_phone
 from app.services.quotes import NotAllowed
 
 router = APIRouter(prefix="/v1/passenger", tags=["passageiro"])
+
+# Quem cota ou pede corrida sem parar gasta o mapa pago (Google) e a fila dos motoqueiros: um passageiro de verdade
+# não chega nem perto destes números (cotar de novo a cada ajuste do ponto é o uso mais intenso).
+QUOTES_PER_MINUTE = 20
+RIDE_REQUESTS_PER_MINUTE = 8
+
+
+def _slow_down(runtime, what: str, passenger_id: str, limit: int) -> None:
+    if not runtime.limiter.hit(f"{what}:{passenger_id}", limit, 60, runtime.clock()):
+        raise TooManyRequests("Calma! Muitas tentativas seguidas. Espere um minuto e tente de novo.")
 
 
 class QuoteIn(BaseModel):
@@ -48,6 +58,7 @@ class ContactIn(BaseModel):
 @router.post("/quotes")
 def create_quote(body: QuoteIn, request: Request, user: AuthUser = Depends(passenger_user)) -> dict:
     runtime = get_runtime(request)
+    _slow_down(runtime, "quote", user.user_id, QUOTES_PER_MINUTE)
 
     def work(unit):
         quote = unit.quotes.create_quote(
@@ -66,6 +77,7 @@ def create_quote(body: QuoteIn, request: Request, user: AuthUser = Depends(passe
 @router.post("/rides", status_code=201)
 def request_ride(body: RideIn, request: Request, user: AuthUser = Depends(passenger_user)) -> dict:
     runtime = get_runtime(request)
+    _slow_down(runtime, "ride-request", user.user_id, RIDE_REQUESTS_PER_MINUTE)
 
     def work(unit):
         with_balance = body.method == "balance"        # corrida Pix quitada com o saldo no aceite da moto

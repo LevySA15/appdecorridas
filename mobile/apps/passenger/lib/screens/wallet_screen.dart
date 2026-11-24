@@ -52,6 +52,10 @@ class _WalletScreenState extends State<WalletScreen> {
         ),
         actions: [
           TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Confirmar'),
           ),
@@ -93,6 +97,10 @@ class _WalletScreenState extends State<WalletScreen> {
           ),
           actions: [
             TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
               onPressed: () => Navigator.of(context).pop(true),
               child: const Text('Confirmar'),
             ),
@@ -128,6 +136,10 @@ class _WalletScreenState extends State<WalletScreen> {
           decoration: const InputDecoration(labelText: 'Por que você discorda'),
         ),
         actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Enviar'),
