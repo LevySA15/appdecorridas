@@ -53,6 +53,17 @@ def create_app(runtime=None, *, run_background: bool = False, scheduler: Schedul
     app.state.runtime = runtime
     install_error_handlers(app)
     install_security_headers(app)
+    if dev:
+        # Só no desenvolvimento: deixa o app aberto no navegador (localhost:<porta>) chamar a API. A API usa token no
+        # cabeçalho (sem cookie), e servidor público roda com DEV_ROUTES=off, que não monta isto.
+        from fastapi.middleware.cors import CORSMiddleware
+
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
     app.include_router(auth_routes.router)
     app.include_router(rider_routes.router)
     app.include_router(admin_routes.router)

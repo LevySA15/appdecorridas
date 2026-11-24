@@ -22,11 +22,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="arquivo onde escrever URL e ADMIN_PHONE quando estiver pronto")
     parser.add_argument("--redis-db", type=int, default=12, help="banco do Redis (esvaziado no fim)")
+    parser.add_argument("--port", type=int, default=None, help="porta fixa (padrão: uma livre qualquer)")
     args = parser.parse_args()
     stop = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     signal.signal(signal.SIGINT, lambda *_: stop.set())
-    with Sandbox(fast=True, redis_db=args.redis_db) as box:
+    with Sandbox(fast=True, redis_db=args.redis_db, port=args.port) as box:
         out = Path(args.out)
         out.write_text(f"URL={box.url}\nADMIN_PHONE='{ADMIN_PHONE}'\n", encoding="utf-8")
         stop.wait()
