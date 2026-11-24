@@ -9,6 +9,16 @@ Os dois apps desenham o mapa por trás de um único ponto (`corrida_ui`: `Corrid
 
 Escolha à mão: `flutter run --dart-define=MAP=osm` (ou `=fake`). O app do motoqueiro continua escolhendo o GPS por `--dart-define=GPS=real|fake`.
 
+## Ver o mapa de verdade no seu celular agora (USB, servidor no computador)
+
+O build de depuração usa o desenho de mentira por padrão; peça o mapa de verdade (o celular precisa de internet para os ladrilhos, além do cabo):
+
+    adb reverse tcp:8000 tcp:8000
+    cd mobile/apps/passenger && flutter run -d <id do celular> --dart-define=MAP=osm
+    cd mobile/apps/rider     && flutter run -d <id do celular> --dart-define=MAP=osm --dart-define=GPS=real   # GPS de verdade (sem isto o motoqueiro "anda" tocando no mapa)
+
+No passageiro, toque em "Estou aqui" para o embarque virar a sua posição (o Android pede a permissão de localização). Servidor sem `GOOGLE_MAPS_API_KEY` (ver limite 2 abaixo).
+
 ## Limites do `osm` (leia antes de abrir ao público)
 
 1. **O servidor de ladrilhos do OpenStreetMap (`tile.openstreetmap.org`) é para uso leve.** Serve ao teste fechado (algumas pessoas). Para
