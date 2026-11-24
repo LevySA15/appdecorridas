@@ -75,3 +75,10 @@ porque o passageiro muda de destino, mais uma parte para o tempo de chegada) e *
 - Sem o Google nos endereços (se continuar o Nominatim/OpenStreetMap), tire a coluna "Endereços": rotas sozinhas ficam grátis até 3.300 corridas por mês e custam cerca de US$ 25 em 5.000.
 - Em 20 mil corridas por mês o Google fica perto de **R$ 0,16 por corrida**, perto dos R$ 0,19 da spec (que supunha 7 rotas e sem endereços). A taxa da empresa de R$ 0,70 por corrida cobre isso, mas o Pix (R$ 0,50) e o Google juntos já a consomem.
 - Faltam nesta conta: a ficha do lugar escolhido na busca de endereço (ainda não existe no app), o WhatsApp do código de login e a hospedagem.
+
+### Para o começo: cerca de 1.500 corridas por mês (volume informado pelo Levy em 24/11/2026)
+
+- **Custo esperado: R$ 0.** Dá cerca de 4.500 rotas e 6.000 endereços por mês, abaixo dos 10 mil grátis de cada um. Passa a pagar só acima de **2.500 corridas por mês** (os endereços estouram primeiro; as rotas, em 3.300).
+- **Se minhas premissas estiverem erradas:** com o dobro de chamadas (7 rotas e 8 endereços por corrida) fica em US$ 12,50 (cerca de R$ 68); com o triplo, US$ 65 (cerca de R$ 350).
+- **Teto do servidor:** a média é de 150 rotas por dia. Sugestão: `MAPS_DAILY_CALL_LIMIT=500` no `.env` (pico de mais de 3 vezes a média), que limita o gasto com rotas a **US$ 25 por mês** mesmo se um passageiro (ou um erro) ficar pedindo cotação sem parar. O padrão do código (800) continua valendo se nada for definido.
+- **Alerta de gasto no Google:** crie um de R$ 50 por mês (e não R$ 300, como está em `docs/instalacao.md`), para avisar logo se algo sair do previsto. O Google exige cartão no faturamento mesmo dentro da cota grátis.
