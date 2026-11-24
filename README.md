@@ -18,7 +18,7 @@ numa máquina na internet, não para o público.
 | `server/deploy/` | Arquivos para instalar o servidor: serviço, HTTPS (Caddy), backup, restauração e modelo de configuração. |
 | `server/simulator/` | Motoqueiros e passageiros de mentira que fazem corridas inteiras pela API. |
 | `mobile/` | Apps Flutter: `apps/passenger`, `apps/rider` e os pacotes `corrida_core` (API, sessão, tempo real) e `corrida_ui` (telas e peças comuns). Leia `mobile/README.md`. |
-| `docs/` | Contrato da API (`api-v1.md`), guia de instalação (`instalacao.md`), simulador, pesquisa de taxas e o roteiro dos planos. |
+| `docs/` | Contrato da API (`api-v1.md`), guia de instalação (`instalacao.md`), simulador, os apps no navegador (`navegador.md`), o mapa (`mapa.md`), pesquisa de taxas e o roteiro dos planos. |
 
 ## Por onde começar
 
@@ -27,6 +27,7 @@ numa máquina na internet, não para o público.
 - **O que já foi feito e o que falta:** `docs/superpowers/plans/2026-10-08-00-roteiro-dos-planos.md` (cada plano tem o seu arquivo
   na mesma pasta, e cada um termina com a lista do que ficou de fora).
 - **Contrato entre servidor e apps:** `docs/api-v1.md`.
+- **Ver os apps sem celular (navegador, fotos de cada tela):** `docs/navegador.md`. **Mapa e endereços, e o que checar antes de abrir ao público:** `docs/mapa.md`.
 
 ## Testes
 
