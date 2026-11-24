@@ -1,5 +1,7 @@
 import 'package:corrida_core/corrida_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:corrida_ui/corrida_ui.dart';
 
@@ -74,5 +76,76 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('atualiza sozinha'), findsNothing);
+  });
+
+  testWidgets(
+    'mostra o QR do codigo e copiar poe o codigo na area de transferencia',
+    (tester) async {
+      String? copiado;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copiado = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await tester.pumpWidget(
+        const MaterialApp(home: ChargeScreen(charge: _charge)),
+      );
+
+      expect(find.byType(QrImageView), findsOneWidget);
+      await tester.tap(find.text('Copiar código'));
+      await tester.pump();
+
+      expect(copiado, '00020126...');
+      expect(find.text('Código copiado.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('sem codigo nao desenha QR nem botao de copiar', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ChargeScreen(
+          charge: Charge(chargeId: 'c3', amountCents: 100, purpose: 'ride'),
+        ),
+      ),
+    );
+
+    expect(find.byType(QrImageView), findsNothing);
+    expect(find.text('Copiar código'), findsNothing);
+  });
+
+  testWidgets('cabe em celular pequeno com letra grande', (tester) async {
+    tester.view.devicePixelRatio = 2;
+    tester.view.physicalSize = const Size(640, 1136);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(1.5)),
+          child: child!,
+        ),
+        home: ChargeScreen(
+          charge: const Charge(
+            chargeId: 'c4',
+            amountCents: 1850,
+            brCode: '00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-4266141740005204000053039865802BR5913Fulano de Tal6008BRASILIA62070503***63041D3D',
+            purpose: 'end',
+          ),
+          onDone: () {},
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
   });
 }
