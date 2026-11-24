@@ -5,6 +5,9 @@ export 'src/charge_screen.dart';
 export 'src/emergency_dialer.dart';
 export 'src/corrida_map.dart';
 export 'src/fake_map.dart';
+export 'src/google_map.dart'
+    show GoogleMapView, GoogleMapPicker, googleMapsApiKey, googleDarkMapStyle;
+export 'src/map_picker.dart' show MapPicker;
 export 'src/osm_map.dart'
     show OsmMapView, OsmMapPicker, osmTileUrl, osmTileProviderForTests;
 export 'src/login_screen.dart';

@@ -19,7 +19,9 @@ dependencies:
   qr_flutter: ^4.1.0
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
+  google_maps_flutter: ^2.19.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  google_maps_flutter_platform_interface: ^2.18.0

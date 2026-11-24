@@ -149,7 +149,8 @@ No **seu computador**, em cada app (o endereço precisa ser `https://`; o app de
     cd ../rider && flutter build apk --release --dart-define=API_URL=https://corrida.seudominio.com.br
 
 O app de release já usa o **mapa de verdade** (ruas do OpenStreetMap, só para o teste fechado) e, no app do motoqueiro, o GPS de verdade. **Atenção:**
-com o mapa do OpenStreetMap, deixe o servidor **sem** `GOOGLE_MAPS_API_KEY` (os termos do Google não deixam usar as rotas deles num app que mostra outro mapa); ver `docs/mapa.md`.
+com o mapa do OpenStreetMap, deixe o servidor **sem** `GOOGLE_MAPS_API_KEY` (os termos do Google não deixam usar as rotas deles num app que mostra outro mapa). Para o **mapa do Google** nos apps, acrescente
+`--dart-define-from-file=../../chaves.json` (a chave do Google para o app, `docs/mapa.md`, seção "Mapa do Google nos apps") e ligue a chave do servidor (passo abaixo): os dois juntos.
 O passageiro ganha o botão "Estou aqui" (pede a permissão de localização na hora).
 
 O arquivo fica em `build/app/outputs/flutter-apk/app-release.apk` de cada app. Mande para os celulares do teste (o Android pede para
@@ -226,7 +227,7 @@ tempo vêm das ruas de verdade. Você só precisa fazer isto quando for testar e
 2. Ligue o faturamento do projeto (o Google pede um cartão; o uso pequeno cai na cota grátis).
 3. Em "APIs e serviços", ative **só** a **Routes API**.
 4. Em "Credenciais", crie uma **chave de API** e restrinja: "APIs" = só a Routes API; "Restrições de aplicativo" = endereços IP, com o IP do servidor.
-5. Em "Faturamento > Orçamentos e alertas", crie um alerta (por exemplo R$ 300 por mês) para o Google avisar por e-mail se o gasto subir.
+5. Em "Faturamento > Orçamentos e alertas", crie um alerta (para 1.500 corridas por mês, **R$ 50 por mês** basta; ver `docs/mapa.md`, "Quanto custa o Google") para o Google avisar por e-mail se o gasto subir.
 6. No servidor, abra o arquivo de configuração e tire o `#` da linha da chave, colando a chave depois do `=`:
 
        nano /etc/app-corrida/app.env
@@ -238,7 +239,7 @@ tempo vêm das ruas de verdade. Você só precisa fazer isto quando for testar e
 O que o servidor faz sozinho para proteger você:
 
 - Chama o Google **uma vez por cotação** e guarda a resposta (a mesma rota não é cobrada duas vezes).
-- Tem um **teto de chamadas por dia** (`MAPS_DAILY_CALL_LIMIT`, padrão 800, perto de US$ 70 por mês). Passou do teto, usa a estimativa até o dia seguinte.
+- Tem um **teto de chamadas por dia** (`MAPS_DAILY_CALL_LIMIT`, padrão 800, perto de US$ 70 por mês; para 1.500 corridas por mês use **500**, no máximo US$ 25). Passou do teto, usa a estimativa até o dia seguinte.
 - Se o Google falhar (sem internet, chave errada, cota), **o passageiro continua pedindo moto**: o preço sai pela estimativa e o motivo aparece no registro
   (`journalctl -u app-corrida | grep "Google Maps"`). Depois de 3 falhas seguidas o servidor para de tentar por 1 minuto.
 - `MAPS_TRAVEL_MODE=TWO_WHEELER` pede ao Google o cálculo de **moto**. Não confirmei que ele existe para o Brasil: teste, e se o Google recusar o servidor avisa no registro e usa

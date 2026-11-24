@@ -1,22 +1,46 @@
 import 'package:corrida_core/corrida_core.dart';
-import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 import 'package:flutter/material.dart';
 
 import 'fake_map.dart';
+import 'google_map.dart';
 import 'osm_map.dart';
 
-/// Qual mapa os apps desenham. `--dart-define=MAP=osm` usa as ruas do OpenStreetMap, `--dart-define=MAP=fake` o desenho
-/// de mentira (sem internet, sempre igual: é o dos testes). Sem a opção: o app de release usa o mapa de verdade e o de
-/// depuração (`flutter run`) e os testes o de mentira.
+/// Qual mapa os apps desenham: `--dart-define=MAP=google` o do Google (precisa de `GOOGLE_MAPS_API_KEY`), `MAP=osm` as ruas
+/// do OpenStreetMap, `MAP=fake` o desenho de mentira (sem internet, sempre igual: é o dos testes).
+///
+/// Sem `MAP`: com `--dart-define=GOOGLE_MAPS_API_KEY=...` o mapa é o do Google; senão o app de release usa o OpenStreetMap
+/// e o de depuração (`flutter run`) e os testes o de mentira. Na web o Google não está ligado (a página de teste do
+/// navegador não carrega o script do Google): lá `google` vira OpenStreetMap.
 const _mapChoice = String.fromEnvironment('MAP');
 
-enum MapEngine { fake, osm }
+enum MapEngine { fake, osm, google }
 
-MapEngine get defaultMapEngine => switch (_mapChoice) {
-  'osm' => MapEngine.osm,
-  'fake' => MapEngine.fake,
-  _ => kReleaseMode ? MapEngine.osm : MapEngine.fake,
-};
+MapEngine get defaultMapEngine => resolveMapEngine(
+  choice: _mapChoice,
+  hasGoogleKey: googleMapsApiKey.isNotEmpty,
+  release: kReleaseMode,
+  web: kIsWeb,
+);
+
+/// A regra de [defaultMapEngine] com os dados à mão (para testar sem recompilar com outras opções).
+MapEngine resolveMapEngine({
+  required String choice,
+  required bool hasGoogleKey,
+  required bool release,
+  required bool web,
+}) {
+  final engine = switch (choice) {
+    'google' => MapEngine.google,
+    'osm' => MapEngine.osm,
+    'fake' => MapEngine.fake,
+    _ =>
+      hasGoogleKey
+          ? MapEngine.google
+          : (release ? MapEngine.osm : MapEngine.fake),
+  };
+  return engine == MapEngine.google && web ? MapEngine.osm : engine;
+}
 
 /// Mapa para ver (marcadores e, se [onTap], toque para "andar"): o de mentira ou o de verdade conforme [engine].
 class CorridaMapView extends StatelessWidget {
@@ -44,17 +68,26 @@ class CorridaMapView extends StatelessWidget {
   final MapEngine? engine;
 
   @override
-  Widget build(BuildContext context) =>
-      (engine ?? defaultMapEngine) == MapEngine.osm
-      ? OsmMapView(
-          markers: markers,
-          onTap: onTap,
-          bottomSpace: bottomSpace,
-          interactive: interactive,
-          framePadding:
-              framePadding ?? const EdgeInsets.fromLTRB(56, 96, 56, 56),
-        )
-      : FakeMapView(markers: markers, onTap: onTap);
+  Widget build(BuildContext context) {
+    final padding = framePadding ?? const EdgeInsets.fromLTRB(56, 96, 56, 56);
+    return switch (engine ?? defaultMapEngine) {
+      MapEngine.google => GoogleMapView(
+        markers: markers,
+        onTap: onTap,
+        bottomSpace: bottomSpace,
+        interactive: interactive,
+        framePadding: padding,
+      ),
+      MapEngine.osm => OsmMapView(
+        markers: markers,
+        onTap: onTap,
+        bottomSpace: bottomSpace,
+        interactive: interactive,
+        framePadding: padding,
+      ),
+      MapEngine.fake => FakeMapView(markers: markers, onTap: onTap),
+    };
+  }
 }
 
 /// Mapa para escolher embarque e destino.
@@ -75,12 +108,17 @@ class CorridaMapPicker extends StatelessWidget {
   final MapEngine? engine;
 
   @override
-  Widget build(BuildContext context) =>
-      (engine ?? defaultMapEngine) == MapEngine.osm
-      ? OsmMapPicker(
-          onChanged: onChanged,
-          bottomSpace: bottomSpace,
-          pickup: pickup,
-        )
-      : FakeMapPicker(onChanged: onChanged, pickup: pickup);
+  Widget build(BuildContext context) => switch (engine ?? defaultMapEngine) {
+    MapEngine.google => GoogleMapPicker(
+      onChanged: onChanged,
+      bottomSpace: bottomSpace,
+      pickup: pickup,
+    ),
+    MapEngine.osm => OsmMapPicker(
+      onChanged: onChanged,
+      bottomSpace: bottomSpace,
+      pickup: pickup,
+    ),
+    MapEngine.fake => FakeMapPicker(onChanged: onChanged, pickup: pickup),
+  };
 }

@@ -1,2 +1,4 @@
 .web-run/
 tool/ui/node_modules/
+# chave do Google Maps para `--dart-define-from-file=chaves.json` (não vai para o GitHub)
+chaves.json

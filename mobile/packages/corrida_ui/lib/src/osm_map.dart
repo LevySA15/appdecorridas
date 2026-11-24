@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'fake_map.dart' show MapMarker, MarkerKind, cityCenter;
+import 'map_picker.dart';
 import 'theme.dart';
 
 /// Servidor de ladrilhos do OpenStreetMap: serve para **desenvolvimento e teste fechado** (poucas pessoas). Antes de abrir ao
@@ -306,8 +307,8 @@ class _MarkerGlyph extends StatelessWidget {
 }
 
 /// Escolher origem e destino no mapa de verdade: o primeiro toque marca o embarque, o segundo o destino, e tocar de novo
-/// só troca o destino (igual ao `FakeMapPicker`).
-class OsmMapPicker extends StatefulWidget {
+/// só troca o destino (igual ao `FakeMapPicker`; a regra mora em [MapPicker]).
+class OsmMapPicker extends StatelessWidget {
   const OsmMapPicker({
     required this.onChanged,
     this.bottomSpace = 0,
@@ -324,62 +325,15 @@ class OsmMapPicker extends StatefulWidget {
   final Place? pickup;
 
   @override
-  State<OsmMapPicker> createState() => _OsmMapPickerState();
-}
-
-class _OsmMapPickerState extends State<OsmMapPicker> {
-  Place? _pickup;
-  Place? _destination;
-
-  @override
-  void initState() {
-    super.initState();
-    _pickup = widget.pickup;
-    if (_pickup != null) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => widget.onChanged(_pickup, _destination),
-      );
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant OsmMapPicker oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final novo = widget.pickup;
-    if (novo != null && !identical(novo, oldWidget.pickup)) {
-      setState(() {
-        _pickup = novo;
-        _destination = null;
-      });
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => widget.onChanged(_pickup, _destination),
-      );
-    }
-  }
-
-  void _tap(Place place) {
-    setState(() {
-      if (_pickup == null) {
-        _pickup = place;
-      } else {
-        _destination = place;
-      }
-    });
-    widget.onChanged(_pickup, _destination);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return OsmMapView(
-      bottomSpace: widget.bottomSpace,
-      tileProvider: widget.tileProvider,
-      focus: widget.pickup,
-      markers: [
-        if (_pickup != null) MapMarker(MarkerKind.pickup, _pickup!),
-        if (_destination != null)
-          MapMarker(MarkerKind.destination, _destination!),
-      ],
-      onTap: _tap,
-    );
-  }
+  Widget build(BuildContext context) => MapPicker(
+    onChanged: onChanged,
+    pickup: pickup,
+    builder: (context, markers, onTap, focus) => OsmMapView(
+      bottomSpace: bottomSpace,
+      tileProvider: tileProvider,
+      focus: focus,
+      markers: markers,
+      onTap: onTap,
+    ),
+  );
 }

@@ -209,7 +209,7 @@ Feito em 21/11/2026 (`2026-11-21-07a-rotas-do-google-no-servidor.md`; desenho em
 
 **Achado de custo:** o servidor chama o mapa **uma vez por cotação** (mais uma vez, rara, para a moto que está terminando outra corrida), muito menos que os ~7 cálculos por corrida da spec (seção 10.3), porque o tempo de chegada mostrado na cotação é estimativa própria (linha reta × 1,3), não passa pelo mapa.
 
-**Ainda não feito:** mapa dentro dos apps (`google_maps_flutter`, chave no manifesto do Android), busca de endereço (Places), GPS do passageiro, tempo de chegada da cotação pelo Google (dobraria o gasto), trânsito em tempo real. **Limite conhecido:** a chamada ao Google acontece dentro da transação do banco da cotação (até 3 s); com muitos passageiros cotando ao mesmo tempo e o Google lento, as conexões do banco seguram por esse tempo (a pausa depois de 3 falhas limita o estrago). Para o teste fechado, sem problema.
+**Ainda não feito:** ~~mapa dentro dos apps (`google_maps_flutter`, chave no manifesto do Android)~~ (feito em 24/11/2026, falta ver com a chave e num celular), busca de endereço (Places), GPS do passageiro, tempo de chegada da cotação pelo Google (dobraria o gasto), trânsito em tempo real. **Limite conhecido:** a chamada ao Google acontece dentro da transação do banco da cotação (até 3 s); com muitos passageiros cotando ao mesmo tempo e o Google lento, as conexões do banco seguram por esse tempo (a pausa depois de 3 falhas limita o estrago). Para o teste fechado, sem problema.
 
 ## Itens que sobraram do plano 3
 

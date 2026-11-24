@@ -1,13 +1,34 @@
 # O mapa dos apps
 
-Os dois apps desenham o mapa por trás de um único ponto (`corrida_ui`: `CorridaMapView` e `CorridaMapPicker`), que escolhe entre dois motores:
+Os dois apps desenham o mapa por trás de um único ponto (`corrida_ui`: `CorridaMapView` e `CorridaMapPicker`), que escolhe entre três motores:
 
 | Motor | O que é | Quando |
 |---|---|---|
 | `fake` | Desenho de mentira da cidade (ruas, avenidas, parque, rio). Sem internet, sempre igual. | Testes, `flutter run` e o navegador (`tool/web.sh`). Padrão fora do release. |
-| `osm` | Ruas de verdade do OpenStreetMap, com os mesmos pinos e o trajeto. Mexe e dá zoom com os dedos; a câmera enquadra embarque e destino. | Padrão do app de **release**. Em qualquer build: `--dart-define=MAP=osm`. |
+| `osm` | Ruas de verdade do OpenStreetMap, com os mesmos pinos e o trajeto. Mexe e dá zoom com os dedos; a câmera enquadra embarque e destino. | Padrão do app de **release** sem chave do Google. Em qualquer build: `--dart-define=MAP=osm`. |
+| `google` | Mapa do Google (Maps SDK para Android), com os mesmos pinos, o trajeto, o estilo escuro e a câmera enquadrando embarque e destino. | Sempre que o app é compilado com `--dart-define=GOOGLE_MAPS_API_KEY=...` (ou `MAP=google`). **Só no celular:** na web (navegador de teste) `google` vira `osm`. |
 
-Escolha à mão: `flutter run --dart-define=MAP=osm` (ou `=fake`). O app do motoqueiro continua escolhendo o GPS por `--dart-define=GPS=real|fake`.
+Escolha à mão: `flutter run --dart-define=MAP=osm` (ou `=fake`, `=google`). O app do motoqueiro continua escolhendo o GPS por `--dart-define=GPS=real|fake`.
+Regra completa (`resolveMapEngine`): `MAP` escolhido ganha de tudo; sem `MAP`, com chave do Google = `google`, sem chave o release usa `osm` e o resto `fake`.
+
+## Mapa do Google nos apps (o que fazer para ligar)
+
+O código está pronto e testado com um Google de mentira (`packages/corrida_ui/test/google_map_test.dart`), mas **ainda não foi visto com a chave de verdade nem num celular**: falta só a chave.
+
+1. No Google Cloud (o mesmo projeto das rotas serve), ative **Maps SDK for Android**.
+2. Crie uma **segunda chave** (a do servidor, só com Routes API e restrita por IP, não pode ir para o celular). Restrinja esta: "Restrições de aplicativo" = **apps Android**, com duas entradas: `com.reconcavo.passenger` e `com.reconcavo.rider`, cada uma com o **SHA-1** da chave que assina o APK (hoje o release é assinado com a chave de depuração; no computador onde você compila: `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep SHA1`); "APIs" = só Maps SDK for Android.
+3. Guarde a chave num arquivo que **não vai para o GitHub**: `mobile/chaves.json` com `{"GOOGLE_MAPS_API_KEY": "cole-a-chave"}` (já está no `.gitignore`).
+4. Rode ou compile com o arquivo (o Gradle põe a chave no manifesto do Android sozinho):
+
+       cd mobile/apps/passenger && flutter run -d <id do celular> --dart-define-from-file=../../chaves.json
+       cd mobile/apps/rider     && flutter run -d <id do celular> --dart-define-from-file=../../chaves.json --dart-define=GPS=real
+       flutter build apk --release --dart-define=API_URL=https://corrida.seudominio.com.br --dart-define-from-file=../../chaves.json
+
+5. No servidor, ligue `GOOGLE_MAPS_API_KEY` (a chave **do servidor**, a da Routes API) e `MAPS_DAILY_CALL_LIMIT=500`; ver `docs/instalacao.md` e a conta em "Quanto custa o Google" abaixo.
+6. Sinais de que deu certo: o mapa mostra as ruas do Google com o logotipo "Google" no canto de baixo, acima da folha de controles; **mapa cinza, sem ruas ou com aviso de desenvolvimento = chave errada ou restrição errada** (pacote ou SHA-1 diferente do APK instalado; veja `adb logcat | grep -i "Google Maps"`).
+
+Como o mapa foi feito: o padding do próprio mapa leva a altura da folha de baixo (`bottomSpace`), assim a câmera enquadra os marcadores na parte livre e o logotipo do Google fica à vista, como os termos pedem;
+os pinos são desenhados em código (PNG) iguais aos do OpenStreetMap; a miniatura de trajeto na oferta do motoqueiro não recebe toque (a lista continua rolando).
 
 ## Ver o mapa de verdade no seu celular agora (USB, servidor no computador)
 
@@ -25,15 +46,14 @@ No passageiro, toque em "Estou aqui" para o embarque virar a sua posição (o An
    abrir ao público é preciso um provedor com contrato (MapTiler, Stadia, Mapbox…) ou o mapa do Google; a URL e o nome do app que se identifica
    ficam em `packages/corrida_ui/lib/src/osm_map.dart` (`osmTileUrl`, `osmUserAgentPackage`). A atribuição "© OpenStreetMap" já aparece no canto.
 2. **Mapa do Google no servidor × mapa de outro fornecedor no app.** Com `GOOGLE_MAPS_API_KEY` ligada, o servidor calcula as rotas pela Routes API
-   (plano 7A). Os termos do Google proíbem usar os serviços deles num aplicativo que mostra mapa de outro fornecedor. Então: **teste fechado com
-   `osm` = servidor sem a chave (estimativa em linha reta, que é o padrão)**; ao ligar a chave do Google, o app inteiro deve passar a mostrar o
-   mapa do Google (`google_maps_flutter`, ainda não feito: precisa da chave e de um celular) — ou o servidor passar a usar rotas de um motor livre.
-   Decisão do Levy quando for abrir ao público.
+   (plano 7A). Os termos do Google proíbem usar os serviços deles num aplicativo que mostra mapa de outro fornecedor. Então: **app com `osm` = servidor
+   sem a chave (estimativa em linha reta, que é o padrão)**; **app com `google` (seção acima) = servidor com a chave**. Nunca o contrário.
 3. O trajeto desenhado é uma linha reta entre embarque e destino (não é a rota das ruas).
 4. Sem busca de endereço (digitar para procurar): o passageiro toca no mapa ou usa "Estou aqui" (o servidor responde "fora da área de atendimento" se o ponto estiver longe de Santo Antônio de Jesus).
    Cada ponto marcado ganha o **endereço escrito** ("Rua Severo Vieira - São Cristóvão") pelo Nominatim, o serviço de endereços do OpenStreetMap: uma consulta por ponto, no máximo uma por segundo, e se falhar o pedido
    segue sem endereço. **Privacidade (LGPD):** as coordenadas do embarque e do destino vão para o servidor do OpenStreetMap; entra na política de privacidade e na conversa com o advogado, e antes de abrir ao público
-   o serviço de endereços também precisa de um provedor com contrato (`packages`: `apps/passenger/lib/address_lookup.dart`).
+   o serviço de endereços também precisa de um provedor com contrato (`packages`: `apps/passenger/lib/address_lookup.dart`). **Com o mapa do Google o endereço escrito continua vindo do Nominatim**: trocar
+   para o Geocoding do Google (pelo servidor, que guarda a chave) é o próximo passo e já está na conta de custo (4 endereços por corrida).
 5. Os ladrilhos vêm da internet: sem sinal o mapa fica cinza (os pinos e o resto da tela funcionam).
 
 Armadilhas já pagas (não repita): **(1)** enquadrar a câmera com `fitCamera` dentro do `onMapReady` deixa o mapa sem os ladrilhos do zoom novo (cinza, ou borrado) — a primeira imagem
