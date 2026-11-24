@@ -148,6 +148,10 @@ No **seu computador**, em cada app (o endereço precisa ser `https://`; o app de
     cd mobile/apps/passenger && flutter build apk --release --dart-define=API_URL=https://corrida.seudominio.com.br
     cd ../rider && flutter build apk --release --dart-define=API_URL=https://corrida.seudominio.com.br
 
+O app de release já usa o **mapa de verdade** (ruas do OpenStreetMap, só para o teste fechado) e, no app do motoqueiro, o GPS de verdade. **Atenção:**
+com o mapa do OpenStreetMap, deixe o servidor **sem** `GOOGLE_MAPS_API_KEY` (os termos do Google não deixam usar as rotas deles num app que mostra outro mapa); ver `docs/mapa.md`.
+O passageiro ganha o botão "Estou aqui" (pede a permissão de localização na hora).
+
 O arquivo fica em `build/app/outputs/flutter-apk/app-release.apk` de cada app. Mande para os celulares do teste (o Android pede para
 permitir "instalar apps de fontes desconhecidas"). Mais detalhes em `mobile/README.md`.
 

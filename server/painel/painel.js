@@ -281,7 +281,7 @@ const VISOES = {
     const opcoes = ["", "searching", "accepted", "arrived", "in_progress", "completed", "cancelled", "no_rider"].map((s) => `<option value="${attr(s)}" ${raw(s === estado ? "selected" : "")}>${esc(s ? estadoDaCorrida(s) : "todas")}</option>`).join("");
     const linhas = lista.map((r) => [
       esc(when(r.created_at)), esc(estadoDaCorrida(r.state)), esc(formaDePagamento(r.method)), esc(money(r.price_cents)), esc(r.passenger_name), esc(r.rider_name || "–"),
-      esc(r.pickup_text + " → " + r.dest_text), raw(botao("ride-detail", r.ride_id, "Detalhe")),
+      esc((r.pickup_text || "ponto no mapa") + " → " + (r.dest_text || "ponto no mapa")), raw(botao("ride-detail", r.ride_id, "Detalhe")),
     ]);
     return `<p>Estado: <select id="filtro-corridas">${raw(opcoes)}</select></p>` +
       tabela(["Quando", "Estado", "Pagamento", "Preço", "Passageiro", "Motoqueiro", "Trajeto", ""], linhas) + rodapeDePaginas("corridas", lista.length);

@@ -164,8 +164,22 @@ class _WalletScreenState extends State<WalletScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
+            'Saldo',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          Text(
             brl(state.balanceCents),
-            style: Theme.of(context).textTheme.headlineMedium,
+            style: Theme.of(context).textTheme.headlineMedium
+                ?.copyWith(fontSize: 40),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'O saldo paga corridas e taxas. Uma devolução que não chega ao seu Pix também cai aqui.',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 16),
           Row(
@@ -185,18 +199,30 @@ class _WalletScreenState extends State<WalletScreen> {
             ],
           ),
           if (state.recentFees.isNotEmpty) ...[
-            const Divider(height: 32),
-            const Text('Taxas de cancelamento recentes'),
+            const SizedBox(height: 28),
+            Text(
+              'Taxas de cancelamento recentes',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
             for (final fee in state.recentFees)
-              ListTile(
-                title: Text(brl(fee.feeCents)),
-                subtitle: Text(fee.appealState),
-                trailing: fee.canAppeal
-                    ? TextButton(
-                        onPressed: () => _appealFee(fee),
-                        child: const Text('Pedir recurso'),
-                      )
-                    : null,
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Card(
+                  child: ListTile(
+                    title: Text(
+                      brl(fee.feeCents),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text(fee.appealState),
+                    trailing: fee.canAppeal
+                        ? TextButton(
+                            onPressed: () => _appealFee(fee),
+                            child: const Text('Pedir recurso'),
+                          )
+                        : null,
+                  ),
+                ),
               ),
           ],
         ],

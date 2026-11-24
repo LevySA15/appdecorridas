@@ -101,31 +101,53 @@ class _HistoryScreenState extends State<HistoryScreen> {
       return const Center(child: Text('Você ainda não fez corridas.'));
     }
     return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       children: [
         for (final ride in _rides)
-          ListTile(
-            onTap: () => widget.onOpenReceipt(ride),
-            title: Text(formatRideDate(ride.createdAt)),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(rideStateLabel(ride.state)),
-                Text(
-                  ride.pickupText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Card(
+              child: ListTile(
+                onTap: () => widget.onOpenReceipt(ride),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
                 ),
-                Text(
-                  '→ ${ride.destinationText}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                title: Text(
+                  formatRideDate(ride.createdAt),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
-              ],
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(rideStateLabel(ride.state)),
+                    // corrida marcada no mapa não tem endereço escrito: a linha só ficaria com a seta
+                    if (ride.pickupText.trim().isNotEmpty)
+                      Text(
+                        ride.pickupText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    if (ride.destinationText.trim().isNotEmpty)
+                      Text(
+                        '→ ${ride.destinationText}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+                // só a corrida concluída teve preço cobrado
+                trailing: ride.state == RideState.completed
+                    ? Text(
+                        brl(ride.priceCents),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                      )
+                    : null,
+              ),
             ),
-            // só a corrida concluída teve preço cobrado
-            trailing: ride.state == RideState.completed
-                ? Text(brl(ride.priceCents))
-                : null,
           ),
         if (_hasMore)
           Padding(
