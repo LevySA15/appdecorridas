@@ -43,6 +43,22 @@ class PassengerApi {
     ),
   );
 
+  /// O endereço escrito de um ponto do mapa (`GET /v1/passenger/address`): o servidor pergunta ao Google e guarda a chave.
+  /// `null` quando o servidor não sabe (sem chave do Google, sem endereço ali, teto do dia).
+  Future<String?> addressOf(Place place) async {
+    final reply = _map(
+      await client.get(
+        '/v1/passenger/address',
+        query: {
+          'lat': place.lat.toStringAsFixed(6),
+          'lng': place.lng.toStringAsFixed(6),
+        },
+      ),
+    );
+    final text = reply['text'];
+    return text is String && text.trim().isNotEmpty ? text.trim() : null;
+  }
+
   /// [method]: `pix`, `cash` ou `balance` (corrida Pix paga com o saldo, só se a cotação ofereceu).
   Future<PassengerRide> requestRide({
     required String quoteId,

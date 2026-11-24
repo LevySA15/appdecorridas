@@ -189,11 +189,12 @@ def build_maps(settings: Settings) -> MapsProvider:
         log.info("Mapa: estimativa em linha reta (sem GOOGLE_MAPS_API_KEY).")
         return FakeMaps()
     log.info(
-        "Mapa: rotas do Google (teto de %d chamadas por dia, modo %s).",
-        settings.maps_daily_call_limit, settings.maps_travel_mode,
+        "Mapa: rotas e endereços do Google (teto de %d rotas e %d endereços por dia, modo %s).",
+        settings.maps_daily_call_limit, settings.geocode_daily_call_limit, settings.maps_travel_mode,
     )
     return GoogleMaps(
-        settings.google_maps_api_key, daily_limit=settings.maps_daily_call_limit, travel_mode=settings.maps_travel_mode
+        settings.google_maps_api_key, daily_limit=settings.maps_daily_call_limit,
+        geocode_daily_limit=settings.geocode_daily_call_limit, travel_mode=settings.maps_travel_mode,
     )
 
 

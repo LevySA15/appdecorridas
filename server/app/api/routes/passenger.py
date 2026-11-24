@@ -10,6 +10,7 @@ from app.api.deps import get_runtime, passenger_user
 from app.api.schemas import PlaceIn
 from app.api.views import passenger_history, passenger_ride_view, passenger_state, quote_view
 from app.db import repositories as repo
+from app.domain.geo import GeoPoint
 from app.domain.types import PaymentMethod
 from app.services.auth import AuthUser, TooManyRequests, normalize_phone
 from app.services.quotes import NotAllowed
@@ -20,6 +21,8 @@ router = APIRouter(prefix="/v1/passenger", tags=["passageiro"])
 # não chega nem perto destes números (cotar de novo a cada ajuste do ponto é o uso mais intenso).
 QUOTES_PER_MINUTE = 20
 RIDE_REQUESTS_PER_MINUTE = 8
+# O endereço escrito é pedido duas vezes por cotação (embarque e destino): o dobro das cotações.
+ADDRESS_LOOKUPS_PER_MINUTE = 40
 
 
 def _slow_down(runtime, what: str, passenger_id: str, limit: int) -> None:
@@ -72,6 +75,22 @@ def create_quote(body: QuoteIn, request: Request, user: AuthUser = Depends(passe
         return quote_view(quote, methods)
 
     return runtime.run(work)
+
+
+@router.get("/address")
+def point_address(
+    request: Request,
+    lat: float = Query(ge=-90, le=90),
+    lng: float = Query(ge=-180, le=180),
+    user: AuthUser = Depends(passenger_user),
+) -> dict:
+    """O endereço escrito de um ponto do mapa (`{"text": "Rua X, 12 - Bairro"}`, ou `text` nulo se não souber).
+
+    O servidor é quem fala com o Google (a chave não vai para o celular) e quem guarda o teto de gasto; sem a chave do
+    Google responde sempre `text` nulo e o app segue sem endereço."""
+    runtime = get_runtime(request)
+    _slow_down(runtime, "address", user.user_id, ADDRESS_LOOKUPS_PER_MINUTE)
+    return {"text": runtime.maps.describe(GeoPoint(lat, lng))}
 
 
 @router.post("/rides", status_code=201)

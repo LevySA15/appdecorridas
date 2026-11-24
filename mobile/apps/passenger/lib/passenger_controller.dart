@@ -81,6 +81,9 @@ class PassengerController extends ChangeNotifier {
   Future<Quote> quote(Place pickup, Place destination) =>
       api.quote(pickup, destination);
 
+  /// O endereço escrito de um ponto, pelo servidor (Google). `null` se ele não souber.
+  Future<String?> addressOf(Place place) => api.addressOf(place);
+
   Future<void> requestRide({
     required String quoteId,
     required String method,

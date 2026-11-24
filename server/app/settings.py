@@ -23,7 +23,8 @@ class Settings:
     mode: str = "production"                # "dev" liga os adaptadores falsos, os únicos que existem até o plano 7
     dev_routes: bool = True                 # "off" não monta /v1/dev/*, /docs e /openapi.json (servidor aberto na internet)
     google_maps_api_key: str | None = None  # com chave, as rotas vêm do Google; sem chave, a estimativa em linha reta
-    maps_daily_call_limit: int = 800        # teto de chamadas ao Google por dia (protege a fatura)
+    maps_daily_call_limit: int = 800        # teto de chamadas de rota ao Google por dia (protege a fatura)
+    geocode_daily_call_limit: int = 600     # teto de chamadas de endereço escrito ao Google por dia
     maps_travel_mode: str = "DRIVE"         # DRIVE ou TWO_WHEELER (moto; a testar no Brasil)
 
 
@@ -67,15 +68,15 @@ def _parse_switch(name: str, raw: str | None, *, default: bool) -> bool:
 _TRAVEL_MODES = ("DRIVE", "TWO_WHEELER")
 
 
-def _parse_daily_limit(raw: str | None) -> int:
+def _parse_daily_limit(raw: str | None, name: str = "MAPS_DAILY_CALL_LIMIT", default: int | None = None) -> int:
     if raw is None:
-        return Settings.maps_daily_call_limit
+        return Settings.maps_daily_call_limit if default is None else default
     try:
         value = int(raw.strip())
     except ValueError:
         value = 0
     if value < 1:
-        raise RuntimeError(f"MAPS_DAILY_CALL_LIMIT deve ser um número inteiro maior que zero (veio {raw!r})")
+        raise RuntimeError(f"{name} deve ser um número inteiro maior que zero (veio {raw!r})")
     return value
 
 
@@ -114,5 +115,8 @@ def load_settings(
         dev_routes=dev_routes,
         google_maps_api_key=(optional("GOOGLE_MAPS_API_KEY") or "").strip() or None,
         maps_daily_call_limit=_parse_daily_limit(optional("MAPS_DAILY_CALL_LIMIT")),
+        geocode_daily_call_limit=_parse_daily_limit(
+            optional("GEOCODE_DAILY_CALL_LIMIT"), "GEOCODE_DAILY_CALL_LIMIT", Settings.geocode_daily_call_limit
+        ),
         maps_travel_mode=_parse_travel_mode(optional("MAPS_TRAVEL_MODE")),
     )

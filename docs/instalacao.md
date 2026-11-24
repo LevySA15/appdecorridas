@@ -225,8 +225,8 @@ tempo vêm das ruas de verdade. Você só precisa fazer isto quando for testar e
 
 1. Entre no Google Cloud (console.cloud.google.com) com a sua conta e crie um projeto (por exemplo "app-corrida").
 2. Ligue o faturamento do projeto (o Google pede um cartão; o uso pequeno cai na cota grátis).
-3. Em "APIs e serviços", ative **só** a **Routes API**.
-4. Em "Credenciais", crie uma **chave de API** e restrinja: "APIs" = só a Routes API; "Restrições de aplicativo" = endereços IP, com o IP do servidor.
+3. Em "APIs e serviços", ative **só** a **Routes API** e a **Geocoding API** (a segunda escreve o endereço dos pontos; sem ela o app segue sem endereço escrito).
+4. Em "Credenciais", crie uma **chave de API** e restrinja: "APIs" = só a Routes API e a Geocoding API; "Restrições de aplicativo" = endereços IP, com o IP do servidor.
 5. Em "Faturamento > Orçamentos e alertas", crie um alerta (para 1.500 corridas por mês, **R$ 50 por mês** basta; ver `docs/mapa.md`, "Quanto custa o Google") para o Google avisar por e-mail se o gasto subir.
 6. No servidor, abra o arquivo de configuração e tire o `#` da linha da chave, colando a chave depois do `=`:
 
@@ -234,11 +234,13 @@ tempo vêm das ruas de verdade. Você só precisa fazer isto quando for testar e
        # GOOGLE_MAPS_API_KEY=cole-a-chave-aqui   (sem o # na frente)
        systemctl restart app-corrida
 
-7. Conferir que ligou: `journalctl -u app-corrida -n 50 | grep Mapa` deve mostrar "Mapa: rotas do Google". Se mostrar "estimativa em linha reta", a chave não foi lida.
+7. Conferir que ligou: `journalctl -u app-corrida -n 50 | grep Mapa` deve mostrar "Mapa: rotas e endereços do Google". Se mostrar "estimativa em linha reta", a chave não foi lida.
 
 O que o servidor faz sozinho para proteger você:
 
 - Chama o Google **uma vez por cotação** e guarda a resposta (a mesma rota não é cobrada duas vezes).
+- O endereço escrito de cada ponto (`GET /v1/passenger/address`, só quando os apps usam o mapa do Google) tem **teto e pausa próprios**
+  (`GEOCODE_DAILY_CALL_LIMIT`, padrão 600 por dia, no máximo cerca de US$ 40 por mês), guarda o resultado por 24 horas e limita cada passageiro a 40 consultas por minuto; sem a Geocoding API ligada, o pedido segue sem endereço escrito.
 - Tem um **teto de chamadas por dia** (`MAPS_DAILY_CALL_LIMIT`, padrão 800, perto de US$ 70 por mês; para 1.500 corridas por mês use **500**, no máximo US$ 25). Passou do teto, usa a estimativa até o dia seguinte.
 - Se o Google falhar (sem internet, chave errada, cota), **o passageiro continua pedindo moto**: o preço sai pela estimativa e o motivo aparece no registro
   (`journalctl -u app-corrida | grep "Google Maps"`). Depois de 3 falhas seguidas o servidor para de tentar por 1 minuto.

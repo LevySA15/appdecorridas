@@ -44,5 +44,8 @@ def test_readme_do_servidor_aponta_para_o_guia():
 
 def test_guia_explica_o_mapa_de_verdade():
     texto = _texto()
-    for termo in ("GOOGLE_MAPS_API_KEY", "Routes API", "MAPS_DAILY_CALL_LIMIT", "TWO_WHEELER", "Mapa: rotas do Google"):
+    for termo in (
+        "GOOGLE_MAPS_API_KEY", "Routes API", "Geocoding API", "MAPS_DAILY_CALL_LIMIT", "GEOCODE_DAILY_CALL_LIMIT",
+        "TWO_WHEELER", "Mapa: rotas e endereços do Google",
+    ):
         assert termo in texto, f"o guia não fala de {termo!r}"

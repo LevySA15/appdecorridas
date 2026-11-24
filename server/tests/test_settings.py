@@ -110,6 +110,18 @@ def test_teto_de_chamadas_torto_da_erro_claro(tmp_path, teto):
         load_settings(env_path=_env(tmp_path), environ={"MAPS_DAILY_CALL_LIMIT": teto})
 
 
+def test_teto_de_enderecos_tem_padrao_e_le_do_ambiente(tmp_path):
+    assert load_settings(env_path=_env(tmp_path), environ={}).geocode_daily_call_limit == 600
+    settings = load_settings(env_path=_env(tmp_path), environ={"GEOCODE_DAILY_CALL_LIMIT": "250"})
+    assert settings.geocode_daily_call_limit == 250
+
+
+@pytest.mark.parametrize("teto", ["0", "-5", "abc", "1.5"])
+def test_teto_de_enderecos_torto_da_erro_claro(tmp_path, teto):
+    with pytest.raises(RuntimeError, match="GEOCODE_DAILY_CALL_LIMIT"):
+        load_settings(env_path=_env(tmp_path), environ={"GEOCODE_DAILY_CALL_LIMIT": teto})
+
+
 def test_modo_de_viagem_invalido_da_erro_claro(tmp_path):
     with pytest.raises(RuntimeError, match="MAPS_TRAVEL_MODE"):
         load_settings(env_path=_env(tmp_path), environ={"MAPS_TRAVEL_MODE": "BICYCLE"})

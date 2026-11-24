@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:corrida_core/corrida_core.dart';
@@ -179,6 +180,77 @@ void main() {
       expect(recebidos.single.text, '');
       expect(find.text('Pedir corrida'), findsOneWidget);
       expect(find.textContaining('De: '), findsNothing);
+    });
+  });
+
+  group('endereço pelo servidor (mapa do Google)', () {
+    const ponto = Place(lat: -12.96, lng: -39.26);
+
+    test('devolve o texto do servidor', () async {
+      Place? pedido;
+      final lookup = ServerAddressLookup((place) async {
+        pedido = place;
+        return 'Rua Severo Vieira, 120 - São Cristóvão';
+      });
+      expect(
+        await lookup.describe(ponto),
+        'Rua Severo Vieira, 120 - São Cristóvão',
+      );
+      expect(pedido, ponto);
+    });
+
+    test(
+      'servidor sem endereço ou com erro: segue sem endereço (nunca levanta)',
+      () async {
+        expect(
+          await ServerAddressLookup((_) async => null).describe(ponto),
+          isNull,
+        );
+        expect(
+          await ServerAddressLookup(
+            (_) async => throw ApiException(
+              status: 429,
+              code: 'too_many_requests',
+              message: 'Calma!',
+            ),
+          ).describe(ponto),
+          isNull,
+        );
+        expect(
+          await ServerAddressLookup((_) async => throw StateError('rede'))
+              .describe(ponto),
+          isNull,
+        );
+      },
+    );
+
+    test('demora demais: desiste e segue sem endereço', () async {
+      final lookup = ServerAddressLookup(
+        (_) => Completer<String?>().future,
+        timeout: const Duration(milliseconds: 20),
+      );
+      expect(await lookup.describe(ponto), isNull);
+    });
+  });
+
+  group('quem escreve o endereço de cada mapa', () {
+    final servidor = ServerAddressLookup((_) async => 'do servidor');
+    final nominatim = NominatimAddressLookup(
+      client: MockClient((_) async => http.Response('', 404)),
+    );
+
+    test('Google usa o servidor, OpenStreetMap o Nominatim, o desenho de mentira nenhum', () {
+      AddressLookup? para(MapEngine engine) =>
+          addressLookupFor(engine, server: servidor, nominatim: nominatim);
+      expect(para(MapEngine.google), same(servidor));
+      expect(para(MapEngine.osm), same(nominatim));
+      expect(para(MapEngine.fake), isNull);
+    });
+
+    test('"Estou aqui" vale para o mapa do Google e o OpenStreetMap, não para o desenho de mentira', () {
+      expect(usesRealMap(MapEngine.google), isTrue);
+      expect(usesRealMap(MapEngine.osm), isTrue);
+      expect(usesRealMap(MapEngine.fake), isFalse);
     });
   });
 }

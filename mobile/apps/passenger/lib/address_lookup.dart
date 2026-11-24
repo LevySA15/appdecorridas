@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:corrida_core/corrida_core.dart';
+import 'package:corrida_ui/corrida_ui.dart' show MapEngine;
 import 'package:http/http.dart' as http;
 
 /// Descobre o endereço escrito de um ponto do mapa ("Avenida Barros e Almeida - São Cristóvão"), para o motoqueiro, o recibo e o
@@ -93,3 +94,36 @@ class NominatimAddressLookup implements AddressLookup {
     }
   }
 }
+
+/// O endereço escrito pelo **servidor** (que pergunta ao Google e guarda a chave e o teto de gasto): é o serviço do mapa do
+/// Google. Falha, demora ou servidor sem a chave do Google = `null`, e o pedido segue sem endereço.
+class ServerAddressLookup implements AddressLookup {
+  ServerAddressLookup(this._fetch, {this.timeout = const Duration(seconds: 6)});
+
+  final Future<String?> Function(Place place) _fetch;
+  final Duration timeout;
+
+  @override
+  Future<String?> describe(Place place) async {
+    try {
+      return await _fetch(place).timeout(timeout);
+    } on Object {
+      return null; // sem internet, lento, servidor sem Google: segue sem endereço
+    }
+  }
+}
+
+/// Quem escreve o endereço de cada tipo de mapa: o mapa do Google usa o servidor (o Google só deixa usar os serviços dele
+/// com o mapa dele), o OpenStreetMap usa o Nominatim, e o desenho de mentira não tem endereço (os pontos não são de lugar nenhum).
+AddressLookup? addressLookupFor(
+  MapEngine engine, {
+  required AddressLookup server,
+  required AddressLookup nominatim,
+}) => switch (engine) {
+  MapEngine.google => server,
+  MapEngine.osm => nominatim,
+  MapEngine.fake => null,
+};
+
+/// "Estou aqui" (GPS do celular) vale para qualquer mapa de verdade; no desenho de mentira a posição do celular não cai na cidade dele.
+bool usesRealMap(MapEngine engine) => engine != MapEngine.fake;

@@ -63,8 +63,8 @@ class PassengerApp extends StatelessWidget {
 
 /// A navegação de quem já entrou: uma pilha própria que começa na tela inicial e reage à corrida
 /// terminando do outro lado (`state.ride` virando `null`) e a `trip_completed` (abre avaliar).
-/// Um só serviço de endereços para o app inteiro (ele espaça as consultas: no máximo uma por segundo).
-final _addressLookup = NominatimAddressLookup();
+/// Um só serviço de endereços do OpenStreetMap para o app inteiro (ele espaça as consultas: no máximo uma por segundo).
+final _nominatim = NominatimAddressLookup();
 
 class SignedInShell extends StatefulWidget {
   const SignedInShell({required this.controller, super.key});
@@ -143,14 +143,16 @@ class _SignedInShellState extends State<SignedInShell> {
     _navigatorKey.currentState!.push(
       MaterialPageRoute(
         builder: (_) => RequestRideScreen(
-          // "Estou aqui" só com o mapa de verdade: no desenho de mentira a posição do celular não cai na cidade dele
-          myLocation: defaultMapEngine == MapEngine.osm
+          // "Estou aqui" só com o mapa de verdade (Google ou OpenStreetMap)
+          myLocation: usesRealMap(defaultMapEngine)
               ? const GeolocatorMyLocation()
               : null,
-          // endereço escrito só com o mapa de verdade (no desenho de mentira os pontos não são de lugar nenhum)
-          addressLookup: defaultMapEngine == MapEngine.osm
-              ? _addressLookup
-              : null,
+          // endereço escrito: o servidor (Google) no mapa do Google, o Nominatim no OpenStreetMap, nenhum no desenho de mentira
+          addressLookup: addressLookupFor(
+            defaultMapEngine,
+            server: ServerAddressLookup(widget.controller.addressOf),
+            nominatim: _nominatim,
+          ),
           onQuote: widget.controller.quote,
           onConfirm: (quoteId, method) async {
             await widget.controller.requestRide(

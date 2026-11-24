@@ -119,7 +119,7 @@ def test_modelo_de_configuracao_e_aceito_pelo_servidor_e_nao_e_ignorado_pelo_git
 
 def test_modelo_de_configuracao_explica_o_mapa_de_verdade_em_linhas_comentadas():
     texto = (DEPLOY / "app.env.example").read_text(encoding="utf-8")
-    for chave in ("# GOOGLE_MAPS_API_KEY=", "# MAPS_DAILY_CALL_LIMIT=", "# MAPS_TRAVEL_MODE="):
+    for chave in ("# GOOGLE_MAPS_API_KEY=", "# MAPS_DAILY_CALL_LIMIT=", "# GEOCODE_DAILY_CALL_LIMIT=", "# MAPS_TRAVEL_MODE="):
         assert chave in texto
     assert not parse_env_file(DEPLOY / "app.env.example").get("GOOGLE_MAPS_API_KEY")      # sem chave de verdade no git
 

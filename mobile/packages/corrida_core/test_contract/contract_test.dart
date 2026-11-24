@@ -213,6 +213,18 @@ void main() {
     expect(moto.account, isNull);
   });
 
+  test('2b. endereço escrito: o servidor descartável não tem chave do Google e responde sem texto', () async {
+    expect(await passageiro.addressOf(origem), isNull);
+    // motoqueiro não usa esta rota (só o passageiro)
+    await expectLater(
+      RiderApi(joao.api).client.get(
+        '/v1/passenger/address',
+        query: {'lat': '-12.96', 'lng': '-39.26'},
+      ),
+      throwsA(isA<ApiException>().having((e) => e.status, 'status', 403)),
+    );
+  });
+
   test('3. cadastro do motoqueiro, aprovação pelo administrador e ficar disponível', () async {
     final chaves = <DocKind, String>{};
     for (final tipo in DocKind.values) {

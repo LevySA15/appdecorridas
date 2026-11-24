@@ -15,7 +15,11 @@ class StraightLineEta:
 
 
 class FakeMaps(StraightLineEta):
-    """Mapa falso: a rua é 30% mais longa que a linha reta e a rota é um segmento só."""
+    """Mapa falso: a rua é 30% mais longa que a linha reta e a rota é um segmento só. Sem endereço escrito: inventar
+    rua num recibo seria pior do que deixar em branco."""
+
+    def describe(self, point: GeoPoint) -> str | None:
+        return None
 
     def route(self, origin: GeoPoint, destination: GeoPoint) -> Route:
         distance = haversine_m(origin, destination) * 1.3

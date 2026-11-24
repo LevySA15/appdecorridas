@@ -27,6 +27,24 @@ O código está pronto e testado com um Google de mentira (`packages/corrida_ui/
 5. No servidor, ligue `GOOGLE_MAPS_API_KEY` (a chave **do servidor**, a da Routes API) e `MAPS_DAILY_CALL_LIMIT=500`; ver `docs/instalacao.md` e a conta em "Quanto custa o Google" abaixo.
 6. Sinais de que deu certo: o mapa mostra as ruas do Google com o logotipo "Google" no canto de baixo, acima da folha de controles; **mapa cinza, sem ruas ou com aviso de desenvolvimento = chave errada ou restrição errada** (pacote ou SHA-1 diferente do APK instalado; veja `adb logcat | grep -i "Google Maps"`).
 
+### Endereço escrito pelo Google
+
+Com o mapa do Google, o endereço escrito dos pontos ("Rua Severo Vieira, 120 - São Cristóvão") vem da **Geocoding API do Google, pelo servidor**: o app chama `GET /v1/passenger/address?lat=&lng=` e o servidor pergunta ao Google.
+Assim a chave fica só no servidor, o gasto tem teto e o resultado fica guardado.
+
+| Mapa do app | Quem escreve o endereço |
+|---|---|
+| `google` | o servidor (Google). Precisa da **Geocoding API** ligada na chave do servidor |
+| `osm` | Nominatim (OpenStreetMap), direto do celular |
+| `fake` | ninguém (os pontos do desenho de mentira não são de lugar nenhum) |
+
+- **Teto e pausa próprios:** `GEOCODE_DAILY_CALL_LIMIT` (padrão 600 por dia, no máximo cerca de US$ 40 por mês), pausa de 60 s depois de 3 falhas seguidas, tudo separado das rotas (um problema no endereço não para o preço, e vice-versa).
+- **Cache de 24 horas** por ponto (arredondado a 1 m: pontos vizinhos não herdam o número da casa); o mesmo ponto pedido de novo não é cobrado.
+- **Limite por passageiro:** 40 consultas por minuto (duas por cotação, e cotações são no máximo 20 por minuto).
+- **Falha nunca trava o pedido:** sem a chave do Google, sem internet, teto do dia, API desligada ou "nenhum resultado" = o pedido segue sem endereço escrito (a cotação não espera por isso). O servidor registra o motivo (`journalctl -u app-corrida | grep "Google Maps"`) sem nunca escrever a chave.
+- **Frase:** rua + número + bairro, em português; só entram resultados de rua, bairro ou lugar (sem "plus codes").
+- Sem a chave do Google o servidor responde sempre `{"text": null}` (nunca inventa endereço): num app com mapa do Google e servidor sem chave, ninguém vê endereço escrito.
+
 Como o mapa foi feito: o padding do próprio mapa leva a altura da folha de baixo (`bottomSpace`), assim a câmera enquadra os marcadores na parte livre e o logotipo do Google fica à vista, como os termos pedem;
 os pinos são desenhados em código (PNG) iguais aos do OpenStreetMap; a miniatura de trajeto na oferta do motoqueiro não recebe toque (a lista continua rolando).
 
@@ -52,8 +70,8 @@ No passageiro, toque em "Estou aqui" para o embarque virar a sua posição (o An
 4. Sem busca de endereço (digitar para procurar): o passageiro toca no mapa ou usa "Estou aqui" (o servidor responde "fora da área de atendimento" se o ponto estiver longe de Santo Antônio de Jesus).
    Cada ponto marcado ganha o **endereço escrito** ("Rua Severo Vieira - São Cristóvão") pelo Nominatim, o serviço de endereços do OpenStreetMap: uma consulta por ponto, no máximo uma por segundo, e se falhar o pedido
    segue sem endereço. **Privacidade (LGPD):** as coordenadas do embarque e do destino vão para o servidor do OpenStreetMap; entra na política de privacidade e na conversa com o advogado, e antes de abrir ao público
-   o serviço de endereços também precisa de um provedor com contrato (`packages`: `apps/passenger/lib/address_lookup.dart`). **Com o mapa do Google o endereço escrito continua vindo do Nominatim**: trocar
-   para o Geocoding do Google (pelo servidor, que guarda a chave) é o próximo passo e já está na conta de custo (4 endereços por corrida).
+   o serviço de endereços também precisa de um provedor com contrato (`packages`: `apps/passenger/lib/address_lookup.dart`). **Com o mapa do Google o endereço escrito vem do Google, pelo servidor** (seção abaixo), e o Nominatim
+   não é usado.
 5. Os ladrilhos vêm da internet: sem sinal o mapa fica cinza (os pinos e o resto da tela funcionam).
 
 Armadilhas já pagas (não repita): **(1)** enquadrar a câmera com `fitCamera` dentro do `onMapReady` deixa o mapa sem os ladrilhos do zoom novo (cinza, ou borrado) — a primeira imagem
@@ -95,6 +113,8 @@ porque o passageiro muda de destino, mais uma parte para o tempo de chegada) e *
 - Sem o Google nos endereços (se continuar o Nominatim/OpenStreetMap), tire a coluna "Endereços": rotas sozinhas ficam grátis até 3.300 corridas por mês e custam cerca de US$ 25 em 5.000.
 - Em 20 mil corridas por mês o Google fica perto de **R$ 0,16 por corrida**, perto dos R$ 0,19 da spec (que supunha 7 rotas e sem endereços). A taxa da empresa de R$ 0,70 por corrida cobre isso, mas o Pix (R$ 0,50) e o Google juntos já a consomem.
 - Faltam nesta conta: a ficha do lugar escolhido na busca de endereço (ainda não existe no app), o WhatsApp do código de login e a hospedagem.
+- Os 4 endereços por corrida desta conta agora são de verdade: `GET /v1/passenger/address` (Geocoding Essentials, US$ 5 por mil depois dos 10 mil grátis), com cache de 24 h e teto `GEOCODE_DAILY_CALL_LIMIT`.
+  O teto padrão (600 por dia = 18 mil por mês) custa no máximo **US$ 40 por mês**; para 1.500 corridas por mês (6.000 por mês, cerca de 200 por dia) pode ficar no padrão.
 
 ### Para o começo: cerca de 1.500 corridas por mês (volume informado pelo Levy em 24/11/2026)
 

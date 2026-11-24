@@ -81,6 +81,49 @@ void main() {
     });
   });
 
+  group('addressOf', () {
+    test(
+      'pede o endereço do ponto (coordenadas na consulta) e lê o texto',
+      () async {
+        final m = mundo(
+          (r) => json({'text': ' Rua Severo Vieira, 120 - São Cristóvão '}),
+        );
+        final texto = await m.api.addressOf(rua);
+        expect(texto, 'Rua Severo Vieira, 120 - São Cristóvão');
+        expect(m.requisicoes.single.method, 'GET');
+        expect(m.requisicoes.single.url.path, '/v1/passenger/address');
+        expect(m.requisicoes.single.url.queryParameters, {
+          'lat': '-12.960000',
+          'lng': '-39.260000',
+        });
+      },
+    );
+
+    test('texto nulo, vazio ou fora do formato vira null', () async {
+      for (final corpo in [
+        {'text': null},
+        {'text': '  '},
+        {'text': 42},
+        <String, Object?>{},
+      ]) {
+        final m = mundo((r) => json(corpo));
+        expect(await m.api.addressOf(rua), isNull, reason: '$corpo');
+      }
+    });
+
+    test(
+      'erro do servidor levanta ApiException (quem chama segue sem endereço)',
+      () async {
+        final m = mundo(
+          (r) => json({
+            'error': {'code': 'too_many_requests', 'message': 'Calma!'},
+          }, 429),
+        );
+        await expectLater(m.api.addressOf(rua), throwsA(isA<ApiException>()));
+      },
+    );
+  });
+
   test(
     'requestRide manda a cotação e a forma de pagar, inclusive o saldo',
     () async {

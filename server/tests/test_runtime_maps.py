@@ -22,5 +22,5 @@ def test_com_chave_o_mapa_e_o_do_google_com_teto_e_modo_da_configuracao(caplog):
     )
     mapa = build_maps(settings)
     assert isinstance(mapa, GoogleMaps)
-    assert (mapa.daily_limit, mapa.travel_mode) == (5, "TWO_WHEELER")
-    assert "rotas do Google" in caplog.text and "CHAVE-SECRETA-123" not in caplog.text
+    assert (mapa.daily_limit, mapa.geocode_daily_limit, mapa.travel_mode) == (5, 600, "TWO_WHEELER")
+    assert "rotas e endereços do Google" in caplog.text and "CHAVE-SECRETA-123" not in caplog.text
